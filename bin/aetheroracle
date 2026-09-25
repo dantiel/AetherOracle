@@ -1,0 +1,219 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# =============================================================
+# AetherOracle CLI — the console entry point to the one oracle,
+# everywhere. One brain, many voices.
+#
+# Two tiers:
+#
+#   LINK tier (pure Ruby stdlib — runs on ANY platform with Ruby,
+#   macOS / Windows / Linux, no gems, no bundle):
+#       aetheroracle peers                      discover oracle peers on the LAN
+#       aetheroracle heartbeat [port]           probe one peer's heartbeat
+#       aetheroracle invoke <peer> "prompt"     route a turn to a remote oracle
+#
+#   BRAIN tier (needs the ruby/ gems — `bundle install` first;
+#   runs where the calculating space itself lives):
+#       aetheroracle ask "prompt"               local oracle turn
+#       aetheroracle server                     start the daemon (limen.rb)
+#       aetheroracle config                     show configuration
+#       aetheroracle task <action>              task ledger (list/show/create)
+#
+# The link tier speaks the same wire contract as ruby/aether_link.rb
+# (scan 4550..4610, GET /aether/heartbeat, POST /aether/invoke), so a
+# Windows/Linux box reaches the brain running on a Mac — the aether is
+# everywhere, and the voice finds it.
+# =============================================================
+
+require 'net/http'
+require 'json'
+
+SCAN_RANGE = (4550..4610).freeze
+HEARTBEAT_PATH = '/aether/heartbeat'.freeze
+INVOKE_PATH = '/aether/invoke'.freeze
+CONNECT_TIMEOUT = 2
+READ_TIMEOUT = 180
+
+def self.http_get(port, path, timeout: CONNECT_TIMEOUT)
+  uri = URI("http://127.0.0.1:#{port}#{path}")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.open_timeout = timeout
+  http.read_timeout = READ_TIMEOUT
+  res = http.get(uri.path)
+  return nil unless res.code.to_i == 200
+
+  JSON.parse(res.body, symbolize_names: true)
+rescue StandardError
+  nil
+end
+
+def self.heartbeat(port)
+  http_get(port, HEARTBEAT_PATH)
+end
+
+def self.peers
+  SCAN_RANGE.filter_map do |port|
+    info = heartbeat(port)
+    name = info && (info[:name] || info['name'])
+    next unless name
+
+    {
+      port: port,
+      name: name,
+      busy: info[:busy] || info['busy'] || false,
+      version: info[:version] || info['version'],
+      path: info[:path] || info['path'],
+      capabilities: info[:capabilities] || info['capabilities'] || []
+    }
+  end
+end
+
+def self.find_peer(peer)
+  list = peers
+  # Exact name match first, then case-insensitive, then by port.
+  list.find { |p| p[:name] == peer } ||
+    list.find { |p| p[:name].downcase == peer.downcase } ||
+    begin
+      port = Integer(peer, exception: false)
+      port && port.between?(SCAN_RANGE.begin, SCAN_RANGE.end) ? { port: port, name: nil } : nil
+    end
+end
+
+def self.print_peers
+  list = peers
+  if list.empty?
+    warn 'No oracle peers found on the LAN (scanned 4550..4610).'
+    warn 'Start a brain with: aetheroracle server'
+    exit 1
+  end
+
+  puts format('%-6s %-32s %-10s %-8s', 'PORT', 'NAME', 'BUSY', 'VERSION')
+  puts '-' * 66
+  list.each do |p|
+    puts format('%-6d %-32s %-10s %-8s', p[:port], p[:name], p[:busy] ? 'yes' : 'no', p[:version] || '?')
+  end
+end
+
+def self.probe_heartbeat(args)
+  port = (args.first || 4567).to_i
+  info = heartbeat(port)
+  if info.nil?
+    warn "No heartbeat on 127.0.0.1:#{port}"
+    exit 1
+  end
+  puts JSON.pretty_generate(info)
+end
+
+def self.invoke_peer(args)
+  if args.empty?
+    warn 'Usage: aetheroracle invoke <peer> "prompt"'
+    exit 1
+  end
+
+  peer = args.shift
+  prompt = args.join(' ').strip
+  prompt = $stdin.read.strip if prompt.empty? && !$stdin.tty?
+
+  if prompt.empty?
+    warn 'No prompt given. Usage: aetheroracle invoke <peer> "prompt"'
+    warn '  or: echo "prompt" | aetheroracle invoke <peer>'
+    exit 1
+  end
+
+  target = find_peer(peer)
+  if target.nil?
+    warn "No peer found: #{peer}"
+    exit 1
+  end
+
+  uri = URI("http://127.0.0.1:#{target[:port]}#{INVOKE_PATH}")
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.open_timeout = CONNECT_TIMEOUT
+  http.read_timeout = READ_TIMEOUT
+  req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
+  req.body = { prompt: prompt, type: 'chat', from_context: 'aetheroracle-cli' }.to_json
+
+  res = http.request(req)
+  unless res.code.to_i == 200
+    warn "invoke failed: HTTP #{res.code}"
+    exit 1
+  end
+
+  body = JSON.parse(res.body, symbolize_names: true)
+  if body[:error]
+    warn "oracle error: #{body[:error]}"
+    exit 1
+  elsif body[:busy]
+    warn 'oracle busy'
+    exit 1
+  end
+
+  puts(body[:answer] || body['answer'] || body[:html] || body['html'])
+rescue StandardError => e
+  warn "invoke failed: #{e.message}"
+  exit 1
+end
+
+def self.exec_brain(command, args)
+  ruby_bin = ENV['RUBY'] || 'ruby'
+  cli = File.expand_path(File.join(__dir__, '..', 'ruby', 'cli.rb'))
+  unless File.exist?(cli)
+    warn "brain not found at #{cli}"
+    exit 1
+  end
+
+  exec(ruby_bin, cli, command, *args)
+rescue Errno::ENOENT => e
+  warn "could not start ruby: #{e.message}"
+  warn 'Install Ruby (https://rubyinstaller.org on Windows), then:'
+  warn '  cd AetherOracle/ruby && bundle install'
+  exit 1
+end
+
+def self.print_help
+  puts <<~HELP
+    AetherOracle — one oracle, many voices.
+
+    Usage: aetheroracle <command> [options]
+
+    LINK tier (any platform with Ruby — no gems):
+      peers                      discover oracle peers on the LAN (4550..4610)
+      heartbeat [port]           probe one peer's heartbeat (default 4567)
+      invoke <peer> "prompt"     route a turn to a remote oracle
+
+    BRAIN tier (needs `bundle install` in ruby/):
+      ask "prompt"               local oracle turn
+      server                     start the daemon (limen.rb)
+      config                     show configuration
+      task <action>              task ledger (list / show <id> / create <title>)
+
+    Examples:
+      aetheroracle peers
+      aetheroracle invoke "AetherCodex" "summarize the current project"
+      echo "what is the aether?" | aetheroracle invoke mac-oracle
+      aetheroracle ask "refactor this with --file app.rb"
+
+    The link tier speaks the ruby/aether_link.rb contract — a Windows/Linux
+    box reaches the brain on a Mac over the same wire. The aether is everywhere.
+  HELP
+end
+
+command = ARGV.shift
+case command
+when 'peers', 'discover', 'ls'
+  print_peers
+when 'heartbeat', 'hb'
+  probe_heartbeat(ARGV)
+when 'invoke', 'ask-peer', 'link'
+  invoke_peer(ARGV)
+when 'ask', 'server', 'config', 'task', 'logs', 'repl'
+  exec_brain(command, ARGV)
+when 'help', '-h', '--help', nil
+  print_help
+else
+  warn "unknown command: #{command}"
+  warn ''
+  print_help
+  exit 1
+end

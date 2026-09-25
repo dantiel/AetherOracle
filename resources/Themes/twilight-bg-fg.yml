@@ -1,0 +1,279 @@
+# Converted from TextMate theme: Twilight BG FG
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Themes.tmbundle/Themes/Twilight BG FG.tmTheme
+name: twilight-bg-fg
+kind: light
+sourceEditorBackground: "0x000000"
+class: theme.dark.twilight-bg-fg
+tags: [light, dark, twilight-bg-fg]
+
+# Global editor colors
+editor:
+  background: "0x000000"
+  foreground: "0xA6A6A6"
+  caret: "0xA7A7A7"
+  selection: "0xDDF0FF33"
+  lineHighlight: "0xFFFFFF12"
+  invisibles: "0xFFFFFF21"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.75
+glassBlurStrength: 0.65
+glassStyle: regular
+textShadowStrength: 0.7
+lineSpacing: 4.5
+editorBackgroundOpacity: 0.8
+sidebarBackgroundOpacity: 0.9
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x000000"
+rulerForeground: "0xA6A6A6"
+sourceRulerBackground: "0x000000"
+rulerSeparator: "0x00000066"
+sidebarAccent: "0xDDF0FF"
+sidebarForeground: "0xFFFFFF"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0x555759"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x000000"
+  foreground: "0xA6A6A6"
+  baseText: "0xA6A6A6"
+  accent: "0xDDF0FF"
+  complementary: "0xFFECDD"
+  codeBackground: "0x1A1A1A"
+  codeForeground: "0xA6A6A6"
+  shine: "0x89959E"
+  glassTint: 0.75
+  glassMaterial: menu
+
+scopes:
+  plain: "0xA6A6A6"
+  tag: "0xA6A6A6"
+  entity:
+    background: "0x9B703F21"
+    bold: false
+    italic: false
+    underline: false
+  markup: "0xA6A6A6"
+  string:
+    background: "0x8F9D6A21"
+    bold: false
+    italic: false
+    underline: false
+  comment:
+    background: "0x5F5A6040"
+    bold: false
+    italic: false
+    underline: false
+  keyword:
+    background: "0xCDA86921"
+    bold: false
+    italic: false
+    underline: false
+  storage:
+    background: "0xF9EE9821"
+    bold: false
+    italic: false
+    underline: false
+  support:
+    background: "0x9B859D21"
+    bold: false
+    italic: false
+    underline: false
+  constant:
+    background: "0xCF6A4C21"
+  variable:
+    background: "0x7587A621"
+  attribute: "0xA6A6A6"
+  punctuation: "0xA6A6A6"
+  text source: "0xFFFFFF"
+  preprocessor: "0xA6A6A6"
+  string constant:
+    background: "0xDDF2A421"
+  string variable:
+    background: "0x8A9A9521"
+  meta.tag:
+    background: "0xAC885B21"
+  meta.diff:
+    background: "0x92DAFF80"
+    italic: true
+  meta.source: "0xFFFFFF"
+  string.regexp:
+    background: "0xE9C06221"
+  markup.changed:
+    background: "0xFFFB9280"
+  markup.deleted:
+    background: "0xFFA79280"
+  declaration.tag:
+    background: "0xAC885B21"
+  invalid.illegal:
+    background: "0xF8F8F821"
+  markup.inserted:
+    background: "0xABFF9280"
+  meta.tag entity:
+    background: "0xAC885B21"
+  support.constant:
+    background: "0xCF6A4C21"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    background: "0xDAD08521"
+    bold: false
+    italic: false
+    underline: false
+  invalid.deprecated:
+    background: "0xD2A8A121"
+    italic: true
+    underline: true
+  meta.round-brackets:
+    background: "0xFFFFFF0D"
+  string.quoted source:
+    background: "0xDAEFA30D"
+    bold: false
+    italic: false
+    underline: false
+  declaration.tag entity:
+    background: "0xAC885B21"
+  declaration.xml-processing:
+    background: "0x49494921"
+  meta.property-value constant:
+    background: "0xCA784021"
+  declaration.xml-processing entity:
+    background: "0x49494921"
+  declaration.xml-processing string:
+    background: "0x49494921"
+  meta.tag.inline:
+    background: "0xE0C58921"
+  meta.diff.header:
+    background: "0x92DAFF80"
+    italic: true
+  meta.source.embedded:
+    color: "0x665235"
+    background: "0xB0B3BA14"
+  other.preprocessor.c:
+    background: "0x8996A821"
+  text.html.ruby source: "0xFFFFFF"
+  declaration.tag.inline:
+    background: "0xE0C58921"
+  meta.tag.inline entity:
+    background: "0xE0C58921"
+  source entity.name.tag:
+    background: "0xE0C58921"
+  other.preprocessor.c entity:
+    background: "0xAFC4DB21"
+  entity.other.inherited-class:
+    background: "0x9B5C2E21"
+    italic: true
+  declaration.tag.inline entity:
+    background: "0xE0C58921"
+  source entity.other.attribute-name:
+    background: "0xE0C58921"
+  meta.round-brackets meta.round-brackets:
+    background: "0xFFFFFF0D"
+  meta.constructor.argument.css:
+    background: "0x8F9D6A21"
+  support.type.property-name.css:
+    background: "0xC5AF7521"
+  string.regexp source.ruby.embedded:
+    background: "0xCF7D3421"
+  string.regexp constant.character.escaped:
+    background: "0xCF7D3421"
+  declaration.sgml.html declaration.doctype:
+    background: "0x49494921"
+  declaration.sgml.html declaration.doctype entity:
+    background: "0x49494921"
+  declaration.sgml.html declaration.doctype string:
+    background: "0x49494921"
+  string.regexp string.regexp.arbitrary-repitition:
+    background: "0xCF7D3421"
+  meta.round-brackets meta.round-brackets meta.round-brackets:
+    background: "0xFFFFFF0D"
+  meta.selector.css entity.name.tag:
+    background: "0xCDA86921"
+  meta.preprocessor.at-rule keyword.control.at-rule:
+    background: "0x8693A521"
+  meta.property-value support.constant.named-color.css:
+    background: "0xCA784021"
+  meta.property-group support.constant.property-value.css:
+    background: "0xF9EE9821"
+  meta.property-value support.constant.property-value.css:
+    background: "0xF9EE9821"
+  meta.round-brackets meta.round-brackets meta.round-brackets meta.round-brackets:
+    background: "0xFFFFFF0D"
+  meta.selector.css entity.other.attribute-name.id:
+    background: "0x8B98AB21"
+  meta.selector.css entity.other.attribute-name.class:
+    background: "0x9B703F21"
+  meta.round-brackets meta.round-brackets meta.round-brackets meta.round-brackets meta.round-brackets:
+    background: "0xFFFFFF0D"
+  meta.selector.css entity.other.attribute-name.tag.pseudo-class:
+    background: "0x8F9D6A21"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xA6A6A6"
+  markup.heading:
+    color: "0xA6A6A6"
+    bold: true
+  markup.heading.1:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xA6A6A6"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xA6A6A6"
+    bold: true
+  markup.italic:
+    color: "0xA6A6A6"
+    italic: true
+  markup.link:
+    color: "0xA6A6A6"
+    underline: true
+  markup.link.url:
+    color: "0xA6A6A6"
+    underline: true
+  markup.code.block:
+    color: "0xA6A6A6"
+    background: "0x000000"
+  markup.code.inline:
+    color: "0xA6A6A6"
+    background: "0x000000"
+  markup.quote:
+    color: "0xA6A6A6"
+    italic: true
+    background: "0x000000"
+  markup.rule:
+    color: "0xA6A6A6"
+    bold: true
+  markup.strikethrough:
+    color: "0xA6A6A6"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xA6A6A6"
+    bold: true
+

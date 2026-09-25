@@ -1,0 +1,789 @@
+# Converted from TextMate theme: Solarized (Dark)
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Solarized.tmbundle/Themes/Solarized (dark).tmTheme
+name: solarized-dark
+kind: dark
+sourceEditorBackground: "0x002B36"
+class: theme.dark.solarized
+tags: [dark, solarized]
+
+# Global editor colors
+editor:
+  background: "0x002B36"
+  foreground: "0x839496"
+  caret: "0x819090"
+  selection: "0x073642"
+  lineHighlight: "0x073642"
+  invisibles: "0x073642"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.3
+editorBackgroundOpacity: 0.77
+sidebarBackgroundOpacity: 0.88
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x073642"
+rulerForeground: "0xFFFFFF"
+sourceRulerBackground: "0x073642"
+rulerSeparator: "0x586E75"
+sidebarAccent: "0x7C959C"
+sidebarForeground: "0xFFFFFF"
+gutterSelectionBackground: "0x586E75"
+gutterSelectionForeground: "0x93A1A1"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x214B56"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x002B36"
+  foreground: "0x839496"
+  baseText: "0x140099"
+  accent: "0x859900"
+  complementary: "0x140099"
+  codeBackground: "0x001F27"
+  codeForeground: "0x839496"
+  shine: "0xB3C061"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0x839496"
+  tag: "0x839496"
+  entity: "0x839496"
+  markup: "0x839496"
+  string: "0x2AA198"
+  comment:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  invalid: "0xFFFFFF"
+  keyword: "0x859900"
+  storage:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  support: "0x839496"
+  attribute: "0x839496"
+  punctuation: "0x839496"
+  preprocessor: "0x839496"
+  meta.diff:
+    color: "0xE0EDDD"
+    background: "0xB58900"
+    italic: true
+  other.add: "0x2AA198"
+  source.css: "0xDC322F"
+  other.remove:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  source.shell:
+    color: "0x268BD2"
+    bold: false
+    italic: false
+    underline: false
+  support.type: "0x859900"
+  string.regexp: "0xDC322F"
+  support.class: "0x859900"
+  constant.other: "0xCB4B16"
+  markup.changed:
+    color: "0xCB4B16"
+    background: "0xEEE8D5"
+    bold: false
+    italic: false
+    underline: false
+  markup.deleted:
+    color: "0xDC322F"
+    background: "0xEEE8D5"
+    bold: false
+    italic: false
+    underline: false
+  variable.other: "0x268BD2"
+  markup.inserted:
+    color: "0x219186"
+    background: "0xEEE8D5"
+  constant.numeric: "0xD33682"
+  support.constant: "0xFFFFFF"
+  support.function: "0x268BD2"
+  constant.language: "0xB58900"
+  meta.preprocessor: "0xB58900"
+  variable.language: "0x268BD2"
+  constant.character: "0xCB4B16"
+  variable.parameter: "0xFFFFFF"
+  sublimelinter.notes:
+    color: "0xEEE8D5"
+    background: "0xEEE8D5"
+  meta.array.php: "0x586E75"
+  storage.type.c:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  text.html.ruby:
+    color: "0xCB4B16"
+    bold: true
+  entity.name.tag:
+    color: "0x268BD2"
+    bold: true
+  meta.class.ruby: "0x859900"
+  storage.type.js: "0x268BD2"
+  meta.brace.round: "0x93A1A1"
+  meta.diff.header:
+    color: "0xE0EDDD"
+    background: "0xB58900"
+    italic: true
+  meta.function.js: "0xB58900"
+  storage.type.php: "0x859900"
+  entity.name.class: "0x268BD2"
+  keyword.other.new: "0xDC322F"
+  meta.selector.css:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  support.class.php: "0x839496"
+  comment.block.html:
+    color: "0x839496"
+    italic: true
+  constant.numeric.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  support.class.ruby:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  text.html meta.tag:
+    color: "0x657B83"
+    bold: false
+    italic: false
+    underline: false
+  constant.numeric.js: "0x2AA198"
+  constant.numeric.php: "0x2AA198"
+  entity.name.function: "0x268BD2"
+  keyword.control.ruby:
+    color: "0x859900"
+    bold: true
+  keyword.other.phpdoc:
+    color: "0x93A1A1"
+    bold: false
+    italic: false
+    underline: false
+  markup.bold.markdown:
+    color: "0x839496"
+    bold: true
+  string.quoted.double: "0x2AA198"
+  string.quoted.single: "0x2AA198"
+  constant.numeric.ruby: "0x2AA198"
+  markup.quote.markdown: "0x6C71C4"
+  other.package.exclude:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  support.function.perl: "0x859900"
+  constant.language.ruby: "0x2AA198"
+  keyword.operator.class:
+    color: "0x839496"
+    bold: false
+    italic: false
+    underline: false
+  markup.italic.markdown:
+    color: "0x839496"
+    italic: true
+  meta.function-call.php: "0x839496"
+  meta.property-name.css:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  support.constant.color: "0x2AA198"
+  support.other.variable: "0xFFFFFF"
+  support.type.exception: "0xCB4B16"
+  variable.language.ruby: "0x2AA198"
+  markup.heading.markdown: "0x268BD2"
+  meta.property-value.css:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  meta.separator.markdown: "0xD33682"
+  source.java comment.block:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  support.function.construct: "0xDC322F"
+  entity.other.attribute-name: "0x93A1A1"
+  entity.other.inherited-class: "0xFFFFFF"
+  keyword.other.special-method: "0xCB4B16"
+  sublimelinter.outline.illegal:
+    color: "0x93A1A1"
+    background: "0x93A1A1"
+  sublimelinter.outline.warning:
+    color: "0x839496"
+    background: "0x839496"
+  punctuation.definition.variable: "0x859900"
+  sublimelinter.outline.violation:
+    color: "0x657B83"
+    background: "0x657B83"
+  sublimelinter.underline.illegal:
+    background: "0xDC322F"
+  sublimelinter.underline.warning:
+    background: "0xB58900"
+  text.restructuredtext markup.raw: "0x2AA198"
+  sublimelinter.underline.violation:
+    background: "0xCB4B16"
+  punctuation.separator.continuation: "0xDC322F"
+  entity.name.tag.css:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  meta.brace.curly.js: "0x268BD2"
+  meta.brace.square.js: "0x268BD2"
+  keyword.other.new.php: "0xCB4B16"
+  meta.group.braces.tex:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  string.other.math.tex:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.function.c:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.type.class: "0x268BD2"
+  keyword.other.unit.css:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  storage.type.class.php: "0xB58900"
+  support.function.C99.c:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.function.js: "0xB58900"
+  support.function.dom.js: "0xB58900"
+  entity.name.function.php: "0x93A1A1"
+  keyword.control.def.ruby:
+    color: "0x859900"
+    bold: true
+  source.css.embedded.html:
+    color: "0x839496"
+    italic: true
+  storage.type.function.js: "0x268BD2"
+  entity.name.function.ruby: "0x268BD2"
+  keyword.control.ref.latex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  keyword.other.import.java:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  markup.heading.1.markdown: "0x268BD2"
+  markup.heading.2.markdown: "0x268BD2"
+  markup.heading.3.markdown: "0x268BD2"
+  markup.heading.4.markdown: "0x268BD2"
+  markup.heading.5.markdown: "0x268BD2"
+  markup.heading.6.markdown: "0x268BD2"
+  markup.raw.block.markdown: "0x2AA198"
+  meta.preprocessor.macro.c:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  meta.tag.metadata.doctype:
+    color: "0x93A1A1"
+    italic: true
+  storage.type.class.python:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  storage.type.function.php: "0xCB4B16"
+  support.function.be.latex:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  variable.other.loop.shell:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  constant.other.symbol.ruby:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.class.ruby: "0x859900"
+  keyword.operator.class.php: "0xB58900"
+  markup.raw.inline.markdown: "0x2AA198"
+  meta.image.inline.markdown:
+    color: "0x586E75"
+    italic: true
+  meta.scope.case-body.shell:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  comment.line.percentage.tex:
+    italic: true
+  constant.character.math.tex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.label.latex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  keyword.other.important.css: "0xDC322F"
+  meta.preprocessor.c.include:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  meta.scope.case-block.shell:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  variable.other.normal.shell: "0xCB4B16"
+  variable.other.property.php: "0x93A1A1"
+  meta.scope.for-in-loop.shell:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  storage.modifier.extends.php: "0xB58900"
+  storage.modifier.import.java:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  storage.type.function.python:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  support.function.general.tex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  variable.other.constant.ruby:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  comment.line.number-sign.perl:
+    color: "0x586E75"
+    italic: true
+  keyword.control.import.python: "0xCB4B16"
+  markup.list.numbered.markdown: "0x859900"
+  meta.function-call.object.php: "0x839496"
+  meta.function-call.static.php: "0x839496"
+  punctuation.section.group.tex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  support.function.any-method.c:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  support.type.exception.python: "0xB58900"
+  comment.line.number-sign.shell:
+    italic: true
+  constant.character.escape.perl: "0xDC322F"
+  keyword.operator.index-end.php: "0xDC322F"
+  markup.underline.link.markdown:
+    color: "0x586E75"
+    italic: true
+  meta.other.inherited-class.php:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.tag.end: "0x586E75"
+  storage.modifier.global.python:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  support.function.builtin.shell: "0x859900"
+  support.function.construct.php: "0xB58900"
+  support.function.section.latex:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  support.type.property-name.css:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  variable.other.predefined.perl: "0xB58900"
+  markup.list.unnumbered.markdown: "0xB58900"
+  punctuation.definition.tag.html: "0x586E75"
+  punctuation.terminator.rule.css:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  keyword.operator.comparison.perl: "0xB58900"
+  keyword.operator.index-start.php: "0xDC322F"
+  punctuation.definition.array.end: "0xDC322F"
+  punctuation.definition.tag.begin: "0x586E75"
+  punctuation.section.embedded.end: "0xDC322F"
+  keyword.other.special-method.ruby: "0x859900"
+  punctuation.definition.string.end: "0xDC322F"
+  punctuation.section.embedded.ruby: "0xDC322F"
+  variable.parameter.function.latex:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.array.begin: "0xDC322F"
+  punctuation.definition.comment.tex:
+    italic: true
+  punctuation.section.embedded.begin: "0xDC322F"
+  punctuation.definition.raw.markdown: "0xDC322F"
+  punctuation.definition.string.begin: "0xDC322F"
+  punctuation.separator.key-value.css:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.bold.markdown: "0xDC322F"
+  punctuation.definition.link.markdown: "0x586E75"
+  punctuation.definition.variable.perl: "0xB58900"
+  punctuation.definition.variable.ruby:
+    color: "0x268BD2"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.section.property-list.css: "0x6C71C4"
+  punctuation.terminator.expression.php: "0x839496"
+  punctuation.definition.arguments.latex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.italic.markdown: "0xDC322F"
+  punctuation.definition.constant.markdown: "0x586E75"
+  punctuation.definition.metadata.markdown: "0x586E75"
+  punctuation.definition.blockquote.markdown: "0x6C71C4"
+  punctuation.definition.logical-expression.shell:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.tag.style.html:
+    bold: false
+    italic: false
+    underline: false
+  entity.name.type.class.php: "0x839496"
+  entity.name.type.class.ruby:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  source.php.embedded.block.html: "0xCB4B16"
+  constant.other.general.math.tex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.import.define.c:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.import.include.c:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  string.other.link.title.markdown: "0x93A1A1"
+  constant.other.color.rgb-value.css:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.attribute-name.id.css:
+    color: "0x268BD2"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.import.from.python: "0xCB4B16"
+  keyword.control.import.include.php: "0xCB4B16"
+  text.html meta.tag entity.name.tag:
+    color: "0x268BD2"
+    bold: true
+  entity.name.function.preprocessor.c:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.end.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  text.html.markdown markup.raw.inline: "0x2AA198"
+  variable.other.readwrite.global.perl: "0xB58900"
+  entity.other.attribute-name.class.css:
+    color: "0x268BD2"
+    bold: false
+    italic: false
+    underline: false
+  meta.class.java storage.modifier.java:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.begin.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.end.tex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.end.perl: "0x2AA198"
+  punctuation.definition.string.end.ruby: "0xDC322F"
+  string.other.link.description.markdown: "0x93A1A1"
+  meta.tag.metadata.doctype string.quoted:
+    color: "0x93A1A1"
+    italic: true
+  punctuation.definition.string.begin.tex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.end.shell:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  meta.function.method.with-arguments.ruby: "0x657B83"
+  punctuation.definition.constant.math.tex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.parameters.end.js: "0x93A1A1"
+  punctuation.definition.string.begin.perl: "0x2AA198"
+  punctuation.definition.string.begin.ruby: "0xDC322F"
+  text.html.markdown meta.dummy.line-break:
+    color: "0xE0EDDD"
+    background: "0xB58900"
+  punctuation.definition.string.begin.shell:
+    color: "0x859900"
+    bold: false
+    italic: false
+    underline: false
+  variable.parameter.definition.label.latex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.arguments.end.latex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.parameters.begin.js: "0x93A1A1"
+  punctuation.definition.string.end.markdown: "0x586E75"
+  entity.other.attribute-name.pseudo-class.css:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  meta.property-value.css constant.numeric.css:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.arguments.begin.latex:
+    color: "0xDC322F"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.string.begin.markdown: "0x586E75"
+  entity.other.attribute-name.pseudo-element.css:
+    color: "0xCB4B16"
+    bold: false
+    italic: false
+    underline: false
+  text.tex.latex constant.other.math.tex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  text.html.basic source.js.embedded.html:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  meta.tag.metadata.script entity.name.tag:
+    italic: true
+  meta.tag.metadata.doctype entity.name.tag:
+    color: "0x93A1A1"
+    italic: true
+  meta.array.php support.function.construct.php:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  text.html.basic entity.other.attribute-name.html: "0x657B83"
+  text.html.ruby punctuation.definition.string.end:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  text.html.ruby punctuation.definition.string.begin:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  text.html.basic punctuation.section.property-list.css:
+    bold: false
+    italic: false
+    underline: false
+  text.html.ruby meta.tag.inline.any.html:
+    color: "0x839496"
+    bold: false
+    italic: false
+    underline: false
+  text.tex.latex constant.other.general.math.tex:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  source.css.embedded.html string.quoted.double.html:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  meta.array.empty.php support.function.construct.php:
+    color: "0xB58900"
+    bold: false
+    italic: false
+    underline: false
+  text.html meta.tag string punctuation.definition.string.*.html:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  source.css.embedded.html entity.name.tag.style.html:
+    italic: true
+  meta.preprocessor.c.include punctuation.definition.string.end.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  meta.preprocessor.c.include punctuation.definition.string.begin.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  meta.preprocessor.c.include string.quoted.other.lt-gt.include.c:
+    color: "0x2AA198"
+    bold: false
+    italic: false
+    underline: false
+  comment.block meta.documentation.tag.param.javadoc keyword.other.documentation.param.javadoc:
+    color: "0x586E75"
+    bold: false
+    italic: false
+    underline: false
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0x839496"
+  markup.heading:
+    color: "0x859900"
+    bold: true
+  markup.heading.1:
+    color: "0x859900"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x859900"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x859900"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x859900"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x859900"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x859900"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0x839496"
+    bold: true
+  markup.italic:
+    color: "0x839496"
+    italic: true
+  markup.link:
+    color: "0x2AA198"
+    underline: true
+  markup.link.url:
+    color: "0x2AA198"
+    underline: true
+  markup.code.block:
+    color: "0x586E75"
+    background: "0x00232E"
+  markup.code.inline:
+    color: "0x586E75"
+    background: "0x00232E"
+  markup.quote:
+    color: "0x586E75"
+    italic: true
+    background: "0x05303B"
+  markup.rule:
+    color: "0x586E75"
+    bold: true
+  markup.strikethrough:
+    color: "0x586E75"
+    strikethrough: true
+  markup.list.checked:
+    color: "0x268BD2"
+    bold: true
+

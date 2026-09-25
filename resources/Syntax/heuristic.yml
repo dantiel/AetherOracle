@@ -1,0 +1,128 @@
+# Heuristic syntax rules — regex-based fallback tokenizer
+# Rules are applied in declaration order — comments/strings BEFORE operators/punctuation.
+# Doc-comment patterns (///, /**) must precede their non-doc equivalents (//, /*)
+# so the "covered" index prevents the shorter pattern from claiming the doc variant.
+
+rules:
+  # ── Markdown: fenced code blocks (long, must match first) ──
+  # Match from opening ``` to closing ``` with explicit start-of-line anchors.
+  - scope: markup.code.block
+    pattern: '(?m)^```[^\n]*(?:\n(?!```\s*$).*)*\n```\s*$'
+  - scope: markup.code.block
+    pattern: '(?m)^~~~[^\n]*(?:\n(?!~~~\s*$).*)*\n~~~\s*$'
+
+  # ── Markdown: ATX headings (before # comment rule) ──
+  - scope: markup.heading.6
+    pattern: '^#{6}\s+.*$'
+  - scope: markup.heading.5
+    pattern: '^#{5}\s+.*$'
+  - scope: markup.heading.4
+    pattern: '^#{4}\s+.*$'
+  - scope: markup.heading.3
+    pattern: '^#{3}\s+.*$'
+  - scope: markup.heading.2
+    pattern: '^#{2}\s+.*$'
+  - scope: markup.heading.1
+    pattern: '^#{1}\s+.*$'
+
+  # ── Markdown: setext headings ──
+  - scope: markup.heading.1
+    pattern: '^=+\s*$'
+  - scope: markup.heading.2
+    pattern: '^-+\s*$'
+
+  # ── Markdown: blockquote ──
+  - scope: markup.quote
+    pattern: '^>\s+.+$'
+
+  # ── Markdown: thematic break ──
+  - scope: markup.rule
+    pattern: '^(---|\*\*\*|___)\s*$'
+
+  # ── Markdown: emphasis (bold before italic — longer patterns first) ──
+  # Triple-star: produces BOTH strong + emphasis (bold italic)
+  - scope: markup.bold
+    pattern: '\*\*\*(.+?)\*\*\*'
+  - scope: markup.italic
+    pattern: '\*\*\*(.+?)\*\*\*'
+  - scope: markup.bold
+    pattern: '___(.+?)___'
+  - scope: markup.italic
+    pattern: '___(.+?)___'
+  # Double-star/double-underscore: strong only
+  - scope: markup.bold
+    pattern: '(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)'
+  - scope: markup.bold
+    pattern: '(?<!_)__(?!_)(.+?)(?<!_)__(?!_)'
+  # Single-star/single-underscore: emphasis only
+  - scope: markup.italic
+    pattern: '(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)'
+  - scope: markup.italic
+    pattern: '(?<!_)_(?!_)(.+?)(?<!_)_(?!_)'
+
+  # ── Markdown: strikethrough ──
+  - scope: markup.strikethrough
+    pattern: '~~.+?~~'
+
+  # ── Markdown: inline code (before generic string backtick) ──
+  - scope: markup.code.inline
+    pattern: "`[^`\\n]+`"
+
+  # ── Markdown: links ──
+  - scope: markup.link.url
+    pattern: '\]\([^)]+\)'
+  - scope: markup.link
+    pattern: '\[[^\]]+\]\('
+
+  # ── Markdown: image ──
+  - scope: markup.link
+    pattern: '\![^\]]*\]\[[^\]]+\]'
+
+  # ── Markdown: list markers ──
+  - scope: punctuation
+    pattern: '^\s*[-*+]\s'
+  - scope: punctuation
+    pattern: '^\s*\d+\.\s'
+
+  # ── Code (all languages) ──
+  # Doc comments MUST precede regular comments — order is priority.
+  - scope: comment
+    pattern: '///.*'
+  - scope: comment
+    pattern: '/\*\*[\s\S]*?\*/'
+  - scope: comment
+    pattern: '//.*'
+  - scope: comment
+    pattern: '/\*[\s\S]*?\*/'
+  - scope: comment
+    pattern: '#.*'
+  - scope: string
+    pattern: '"(?:[^"\\]|\\.)*"'
+  - scope: string
+    pattern: '''(?:[^''\\]|\\.)*'''
+  - scope: constant.numeric
+    pattern: '\b\d+\.?\d*(?:[eE][+-]?\d+)?\b'
+  # Keywords — TextMate-compatible scope name (themes have `keyword`)
+  - scope: keyword
+    pattern: '\b(if|else|for|while|do|switch|case|default|break|continue|return|throw|try|catch|finally|new|delete|typeof|instanceof|class|struct|enum|protocol|extension|func|var|let|const|import|export|from|as|is|guard|defer|where|in|of|public|private|internal|fileprivate|open|static|final|override|mutating|nonmutating|convenience|required|optional|throws|rethrows|async|await|yield|def|end|module|begin|rescue|ensure|unless|then|elsif|when)\b'
+  # Boolean literals + nil/null → constant.language (most themes define this)
+  - scope: constant.language
+    pattern: '\b(true|false|nil|null|undefined)\b'
+  # Built-in variables → variable.language (themes: variable.language or variable)
+  - scope: variable.language
+    pattern: '\b(self|super)\b'
+  # Types → entity.name.class (themes define this for class/struct/enum/type names)
+  - scope: entity.name.class
+    pattern: '(?<=[^.!?\n]\s)\b[A-Z][a-zA-Z0-9]*\b'
+  # Array/generic types → match capitalized words after `[` or `<`
+  - scope: entity.name.class
+    pattern: '(?<=[\[<])\b[A-Z][a-zA-Z0-9]*\b'
+  # Functions → entity.name.function (functions/methods)
+  - scope: entity.name.function
+    pattern: '\b(?!if|for|while|switch|catch|return|import|export|guard|defer)[a-z_]\w*(?=\s*\()'
+  # Operators → keyword (most themes color operators like keywords)
+  - scope: keyword
+    pattern: '[+\-*/%=<>&|^~?:]+|->|=>|\.{2,3}'
+  # Punctuation
+  - scope: punctuation
+    pattern: '[{}()\[\];,.]'

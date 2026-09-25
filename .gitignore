@@ -1,0 +1,15 @@
+# Bundled gems (per-machine, platform-specific — never committed)
+ruby/.vendor_bundle/
+ruby/vendor/
+ruby/.bundle/
+
+# Local oracle state / memory / logs
+.tm-ai/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# OS cruft
+.DS_Store
+Thumbs.db

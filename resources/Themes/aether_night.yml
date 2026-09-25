@@ -1,0 +1,167 @@
+# AetherNight — deep twilight, barely a light, funky violet spark
+name: AetherNight
+kind: dark
+class: theme.dark.aethernight
+tags: [aether, signature, dark, twilight, funky]
+
+# Global editor colors
+editor:
+  background: "0x06070D"
+  foreground: "0x8E94A0"
+  caret: "0xB48CFF"
+  selection: "0x1B2433"
+  lineHighlight: "0x0C0E15"
+  invisibles: "0x11131A"
+
+# ── AetherCodex Chrome (high transparency, barely a light) ──
+glassTintColor: "0x1A1030"
+glassTint: 0.30
+glassBlurStrength: 0.35
+glassStyle: clear
+textShadowStrength: 0.4
+lineSpacing: 4.5
+editorBackgroundOpacity: 0.38
+sidebarBackgroundOpacity: 0.42
+rootBlurMaterial: hudWindow
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: toolTip
+
+# ── Gutter & Sidebar (barely perceptible twilight surfaces) ──
+rulerBackground: "0x07080F"
+rulerForeground: "0x5A6068"
+rulerSeparator: "0x1E1E2E66"
+sidebarAccent: "0x6E5A96"
+sidebarForeground: "0x8E94A0"
+gutterSelectionBackground: "0x1E2436"
+gutterSelectionForeground: "0xB0B6C2"
+gutterSelectionBorder: "0x4A5A8E"
+sidebarBackground: "0x0D0C16"
+
+# ── Pythia Oracle Chamber (first-class curated) ──
+# The chamber mirrors the near-black void, but lets one twilight violet accent
+# + a dim amber complementary breathe — and a lifted violet shine so tool-call
+# results glow without breaking the dark.
+pythia:
+  background: "0x06070D"
+  foreground: "0x8E94A0"
+  baseText: "0xB0A06E"
+  accent: "0x8C7AB8"
+  complementary: "0xB0A06E"
+  codeBackground: "0x080A10"
+  codeForeground: "0x8E94A0"
+  shine: "0xC0A8E8"
+  glassTint: 0.30
+  glassMaterial: toolTip
+
+scopes:
+  keyword:
+    color: "0x9D8FBE"
+    bold: true
+  keyword.type: "0x8E86A8"
+  operator: "0x7A8AA0"
+  string: "0x5A7A96"
+  string.escape: "0x6E7A96"
+  number: "0xB0965E"
+  comment:
+    color: "0x39424E"
+    italic: true
+  type: "0x6E92B0"
+  support.type: "0x8E86A8"
+  function: "0x7A8FA6"
+  support.function: "0x7A6E9E"
+  variable: "0x9AA0AA"
+  variable.language: "0x5E7A96"
+  variable.instance: "0x6E92B0"
+  variable.class: "0x8E86A8"
+  variable.global: "0xA67A8E"
+  constant: "0x7FA06F"
+  constant.symbol: "0x7FA06F"
+  support.constant: "0x6E9E6E"
+  property: "0x7E8CA0"
+  entity.name.class: "0x7FA8C8"
+  entity.name.function: "0x7A8FA6"
+  entity.name.tag: "0x6E92B0"
+  entity.name.type.namespace: "0x6E8AA8"
+  entity.other.attribute-name: "0x8E86A8"
+  entity.other.inherited-class:
+    color: "0x7FA8C8"
+    italic: true
+  variable.other: "0x9AA0AA"
+  variable.parameter:
+    color: "0x9AA0AA"
+    italic: true
+  variable.function: "0x7A8FA6"
+  constant.other: "0x7FA06F"
+  constant.language: "0x5E7A96"
+  constant.character: "0x5A7A96"
+  storage: "0x8E86A8"
+  storage.type: "0x8E86A8"
+  punctuation: "0x4A525C"
+  tag: "0x6E92B0"
+  attribute: "0x8E86A8"
+  preprocessor: "0x7A8A6E"
+  invalid:
+    color: "0xB0485E"
+    background: "0x1A080C"
+  plain: "0x8E94A0"
+  markup.heading:
+    color: "0x8C9AC0"
+    bold: true
+    fontSize: 1.5
+  markup.heading.1:
+    color: "0xA0A8CC"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x9AA4C6"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x94A0C2"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x909CBE"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x8C9AC0"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x8C9AC0"
+    bold: true
+    fontSize: 1.0
+  markup:
+    color: "0x8E86A8"
+  markup.link:
+    color: "0x6E9ED0"
+    underline: true
+  markup.link.url:
+    color: "0x5E86B0"
+    underline: true
+  markup.italic:
+    color: "0x8E94A0"
+    italic: true
+  markup.bold:
+    color: "0xB0B6C2"
+    bold: true
+  markup.strikethrough:
+    color: "0x5A525E"
+    strikethrough: true
+  markup.quote:
+    color: "0x6E6E86"
+    italic: true
+    background: "0x0A0A12"
+  markup.rule:
+    color: "0x3E3E52"
+    bold: true
+  markup.code.block:
+    color: "0x7E96B0"
+    background: "0x080C12"
+  markup.code.inline:
+    color: "0x7E96B0"
+    background: "0x080C12"
+  markup.list.checked:
+    color: "0x6E9E6E"
+    bold: true

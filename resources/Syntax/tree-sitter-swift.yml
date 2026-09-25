@@ -1,0 +1,105 @@
+# Tree-sitter Swift grammar → TokenScope mapping
+# Maps tree-sitter node types to our TokenScope enum.
+# Covers tree-sitter-swift LANGUAGE_VERSION 10.
+
+# ── Declarations ──
+function_declaration: function
+lambda_literal: function
+class_declaration: type
+struct_declaration: type
+enum_declaration: type
+protocol_declaration: type
+extension_declaration: type
+actor_declaration: type
+typealias_declaration: type
+associatedtype_declaration: type
+
+# ── Identifiers ──
+type_identifier: type
+self_expression: variableLanguage
+super_expression: variableLanguage
+
+# ── Keyword leaf nodes ──
+if: keyword
+else: keyword
+for: keyword
+while: keyword
+repeat: keyword
+switch: keyword
+case: keyword
+default: keyword
+break: keyword
+continue: keyword
+return: keyword
+throw: keyword
+try: keyword
+catch: keyword
+throws: keyword
+rethrows: keyword
+async: keyword
+await: keyword
+in: keyword
+where: keyword
+let: keyword
+var: keyword
+func: keyword
+class: keyword
+struct: keyword
+enum: keyword
+protocol: keyword
+extension: keyword
+import: keyword
+guard: keyword
+defer: keyword
+is: keyword
+as: keyword
+mutating: keyword
+nonmutating: keyword
+static: keyword
+final: keyword
+override: keyword
+public: keyword
+private: keyword
+internal: keyword
+fileprivate: keyword
+open: keyword
+convenience: keyword
+required: keyword
+optional: keyword
+didSet: keyword
+willSet: keyword
+get: keyword
+set: keyword
+subscript: keyword
+init: keyword
+deinit: keyword
+operator: keyword
+precedencegroup: keyword
+associativity: keyword
+some: keyword
+any: keyword
+
+# ── Literals ──
+line_string_literal: string
+multiline_string_literal: string
+string_special: string.escape
+integer_literal: constant.numeric
+real_literal: constant.numeric
+boolean_literal: constant
+nil: constant
+
+# ── Comments ──
+comment: comment
+multiline_comment: comment
+doc_comment: comment
+doc_multiline_comment: comment
+
+# ── Operators ──
+custom_operator: operator
+assignment: operator
+prefix_operator: operator
+postfix_operator: operator
+infix_operator: operator
+
+# ── Attributes ──
+attribute: preprocessor

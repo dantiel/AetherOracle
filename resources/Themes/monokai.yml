@@ -1,0 +1,198 @@
+# Converted from TextMate theme: Monokai
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Monokai.tmbundle/Themes/Monokai.tmTheme
+name: monokai
+kind: dark
+sourceEditorBackground: "0x272822"
+class: theme.dark.monokai
+tags: [dark, monokai]
+
+# Global editor colors
+editor:
+  background: "0x272822"
+  foreground: "0xF8F8F2"
+  caret: "0xF8F8F0"
+  selection: "0x49483E"
+  lineHighlight: "0x49483E"
+  invisibles: "0x49483E"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.2
+editorBackgroundOpacity: 0.76
+sidebarBackgroundOpacity: 0.87
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x49483E"
+rulerForeground: "0xFFFFFF"
+sourceRulerBackground: "0x49483E"
+rulerSeparator: "0x75715E"
+sidebarAccent: "0xFB9BBE"
+sidebarForeground: "0xF8F8F2"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x715758"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x272822"
+  foreground: "0xF8F8F2"
+  baseText: "0x25F9AC"
+  accent: "0xF92672"
+  complementary: "0x25F9AC"
+  codeBackground: "0x1C1D18"
+  codeForeground: "0xF8F8F2"
+  shine: "0xFB78A8"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xF8F8F2"
+  tag: "0xF8F8F2"
+  entity: "0xF8F8F2"
+  markup: "0xF8F8F2"
+  string: "0xE6DB74"
+  comment: "0x75715E"
+  invalid:
+    color: "0xF8F8F0"
+    background: "0xF92672"
+    bold: false
+    italic: false
+    underline: false
+  keyword: "0xF92672"
+  storage:
+    color: "0xF92672"
+    bold: false
+    italic: false
+    underline: false
+  support: "0xF8F8F2"
+  variable:
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0xF8F8F2"
+  punctuation: "0xF8F8F2"
+  preprocessor: "0xF8F8F2"
+  storage.type:
+    color: "0x66D9EF"
+    italic: true
+  support.type:
+    color: "0x66D9EF"
+    italic: true
+  support.class:
+    color: "0x66D9EF"
+    italic: true
+  constant.other: "0xAE81FF"
+  constant.numeric: "0xAE81FF"
+  support.constant:
+    color: "0x66D9EF"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    color: "0x66D9EF"
+    bold: false
+    italic: false
+    underline: false
+  constant.language: "0xAE81FF"
+  constant.character: "0xAE81FF"
+  invalid.deprecated:
+    color: "0xF8F8F0"
+    background: "0xAE81FF"
+  variable.parameter:
+    color: "0xFD971F"
+    italic: true
+  entity.name.tag:
+    color: "0xF92672"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.class:
+    color: "0xA6E22E"
+    underline: true
+  entity.name.function:
+    color: "0xA6E22E"
+    bold: false
+    italic: false
+    underline: false
+  support.other.variable:
+    bold: false
+    italic: false
+    underline: false
+  entity.other.attribute-name:
+    color: "0xA6E22E"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    color: "0xA6E22E"
+    italic: true
+    underline: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xF8F8F2"
+  markup.heading:
+    color: "0xF92672"
+    bold: true
+  markup.heading.1:
+    color: "0xF92672"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xF92672"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xF92672"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xF92672"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xF92672"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xF92672"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xF8F8F2"
+    bold: true
+  markup.italic:
+    color: "0xF8F8F2"
+    italic: true
+  markup.link:
+    color: "0xE6DB74"
+    underline: true
+  markup.link.url:
+    color: "0xE6DB74"
+    underline: true
+  markup.code.block:
+    color: "0x75715E"
+    background: "0x1F201A"
+  markup.code.inline:
+    color: "0x75715E"
+    background: "0x1F201A"
+  markup.quote:
+    color: "0x75715E"
+    italic: true
+    background: "0x2C2D27"
+  markup.rule:
+    color: "0x75715E"
+    bold: true
+  markup.strikethrough:
+    color: "0x75715E"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xA6E22E"
+    bold: true
+

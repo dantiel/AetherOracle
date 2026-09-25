@@ -1,0 +1,1176 @@
+# frozen_string_literal: true
+
+require_relative '../argonaut/aether_scopes'
+require_relative 'scriptorium'
+require_relative 'metaprogramming_utils'
+
+
+
+# Live status broadcaster for real-time AI feedback
+module HorologiumAeternum
+  @websocket = nil
+  @undo_stack = []  # Stack for undo operations: [{path, old_content, uuid, timestamp}, ...]
+  @max_undo_entries = 50  # Limit memory usage
+  @read_stamps = {} # absolute path → mtime: the context's own last-read timestamp (§6 self-control)
+
+
+  def self.tool_call(_type, name, args = {}, uuid: nil)
+    send_status('tool_call', { tool: name, args: args }, uuid:)
+  end
+
+
+  def self.tool_completed(_type, name, result = {}, uuid: nil)
+    send_status('tool_completed', { tool: name, result: result }, uuid:)
+  end
+
+
+  def self.display_bytes(bytes)
+    if 1024 > bytes
+      "#{bytes} Bytes"
+    else
+      kilobytes = bytes / 1024.0
+      '%.2f KB' % kilobytes
+    end
+  end
+
+
+  def self.set_websocket(ws)
+    @websocket = ws
+  end
+
+
+  def self.send(method, type, data = {}, uuid: nil)
+    return unless @websocket
+
+    begin
+      uuid ||= Thread.current[:aether_tool_uuid] || SecureRandom.uuid
+
+      result = { type: type, data: data, timestamp: Time.now.to_f, uuid: uuid }
+
+      payload = {
+        method: method,
+        result: result
+      }.to_json
+      @websocket.send payload
+      # Force immediate WebSocket flush
+      if @websocket.respond_to?(:instance_variable_get) && @websocket.instance_variable_get(:@driver).respond_to?(:flush)
+        @websocket.instance_variable_get(:@driver)&.flush
+      end
+      # Also try explicit sync
+      $stdout.flush if $stdout.respond_to? :flush
+      uuid
+    rescue StandardError => e
+      warn "Failed to send status: #{e.message}"
+      nil
+    end
+  end
+
+
+  def self.send_status(type, data = {}, uuid: nil, **_)
+    # Ephemeral turns (flash conjuration) breathe silently: the flag suppresses
+    # every status frame so a one-shot never leaks into Pythia's shared stream.
+    return if Thread.current[:aether_silent]
+    send 'status', type, data, uuid:
+  end
+
+
+  def self.tool_starting(tool_name, args = {}, uuid: nil)
+    send_status('tool_starting', { tool: tool_name, args: args }, uuid:)
+  end
+
+
+  def self.oracle_revelation(content, uuid: nil)
+    raw = content.to_s
+    send_status('oracle_revelation', {
+                  content: Scriptorium.html_with_syntax_highlight(raw),
+                  raw_content: raw
+                }, uuid:)
+  end
+
+
+  def self.oracle_conjuration_revelation(message, content, uuid: nil)
+    send_status('oracle_conjuration_revelation', {
+                  message: Scriptorium.html("🏛️ #{message}"),
+                  content: Scriptorium.html_with_syntax_highlight(content.to_s)
+                }, uuid:)
+  end
+
+
+  def self.task_evaluated(task_id:, title:, current_step:, total_steps:, alchemical_stage:, status:, step_results_count:, uuid: nil)
+    send_status('task_evaluated', {
+                  message: Scriptorium.html("📊 Task Evaluation: #{title}"),
+                  task_id: task_id,
+                  title: title,
+                  current_step: current_step,
+                  total_steps: total_steps,
+                  alchemical_stage: alchemical_stage,
+                  status: status,
+                  step_results_count: step_results_count
+                }, uuid:)
+  end
+
+
+  def self.oracle_conjuration(prompt, uuid: nil)
+    send_status('oracle_conjuration', {
+                  message: Scriptorium.html('🏛️ Oracle Conjuration'),
+                  content: Scriptorium.html_with_syntax_highlight(prompt.to_s)
+                }, uuid:)
+  end
+
+
+  def self.history(history, uuid: nil)
+    entries_html = history.map do |entry|
+      puts "entry #{entry}"
+      {
+        prompt:    Scriptorium.html_with_syntax_highlight(entry[:prompt]),
+        answer:    Scriptorium.html_with_syntax_highlight(entry[:answer]),
+        completed: Scriptorium.html("🎯 Response ready with **#{entry[:tool_call_count] || 0}** " \
+                                    "tools executed in #{(entry[:execution_time] || 0).round 2}s")
+      }
+    end
+
+    send_status('history', {
+                  message: Scriptorium.html("**#{history.count}** history entries found."),
+                  content: entries_html
+                }, uuid:)
+  end
+
+
+  def self.tool_completed(tool_name, result, uuid: nil, execution_time: nil)
+    send_status('tool_completed', { tool: tool_name, result: result, execution_time: execution_time }, uuid:)
+  end
+
+
+  def self.test_pulse(uuid: nil)
+    send_status('thinking', { message: '🔮 System pulse test...' }, uuid:)
+    sleep 0.5
+    send_status('completed', { summary: 'Pulse successful - streaming verified' }, uuid:)
+  end
+
+
+  def self.file_reading(path, range = nil, uuid: nil)
+    if range
+      send_status('file_reading', {
+                    message: Scriptorium.html("📖 Reading #{create_file_link path, nil,
+                                                                             range[0]} (lines #{range[0]}-#{range[1]})"),
+                    path:    path,
+                    range:   range
+                  }, uuid:)
+    else
+      send_status('file_reading', {
+                    message: Scriptorium.html("📖 Reading #{create_file_link path}"),
+                    path:    path
+                  }, uuid:)
+    end
+  end
+
+
+  def self.file_read_complete(path, bytes_read, range = nil, content = '', uuid: nil, execution_time: nil)
+    type = Scriptorium.language_tag_from_path path
+    line_numbers = content.lines.each_with_index.map { |line, i| "#{i + 1}: #{line}" }.join if range
+    if range
+      send_status('file_read_complete', {
+                    message: Scriptorium.html("✅ 📖 Read #{display_bytes bytes_read} from " \
+                                              "#{create_file_link path, nil, range[0]} " \
+                                              "(lines #{range[0]}-#{range[1]})"),
+                    path:    path,
+                    bytes:   bytes_read,
+                    range:   range,
+                    content: Scriptorium.html_with_syntax_highlight("```#{type}\n#{content}\n```"),
+                    execution_time: execution_time
+                  }, uuid:)
+    else
+      send_status('file_read_complete', {
+                    message: Scriptorium.html("✅ 📖 Read #{display_bytes bytes_read} from " \
+                                              "#{create_file_link path}"),
+                    path:    path,
+                    bytes:   bytes_read,
+                    content: Scriptorium.html_with_syntax_highlight("```#{type}\n#{content}\n```"),
+                    execution_time: execution_time
+                  }, uuid:)
+    end
+  end
+
+
+  def self.file_read_fail(path, error_message, _range = nil, uuid: nil)
+    send_status('file_read_fail', {
+                  message: Scriptorium.html("❌ Reading failed on #{create_file_link path}"),
+                  path:    path,
+                  error:   error_message
+                }, uuid:)
+  end
+
+
+  # Vorfahrtsregeln §6 — Selbstkontrolle. The context carries its own last-read
+  # timestamp and checks it against the file's mtime before cutting. Three
+  # states: :trust (unchanged → identical), :danger (moved → stale knowledge),
+  # :unknown (never read here). No watcher, no lock — only self-knowledge.
+  def self.stamp_read(path)
+    abs = File.expand_path(path.to_s, Argonaut.project_root)
+    @read_stamps[abs] = File.mtime(abs) if File.exist?(abs)
+  rescue StandardError
+    nil
+  end
+
+
+  def self.stamp_write(path)
+    abs = File.expand_path(path.to_s, Argonaut.project_root)
+    @read_stamps[abs] = File.mtime(abs) if File.exist?(abs)
+  rescue StandardError
+    nil
+  end
+
+
+  def self.self_check(path)
+    abs = File.expand_path(path.to_s, Argonaut.project_root)
+    return :unknown unless @read_stamps.key?(abs)
+    current = begin
+      File.mtime(abs)
+    rescue StandardError
+      nil
+    end
+    return :unknown if current.nil?
+    current == @read_stamps[abs] ? :trust : :danger
+  end
+
+
+  # Vorfahrtsregeln §6 — run_command-Saum. Kein stehender Watcher: ein einziges
+  # Vor/Nach-mtime-Diff über die eigenen read-stamps. Im Befehlsfenster darf der
+  # Æther nicht Schritt für Schritt beobachten — aber er darf sprechen, wenn ein
+  # bereits gelesener Pfad sich bewegt hat. Reine Erkennung + Meldung; der
+  # veraltete Stempel bleibt bewusst stehen, damit self_check die Wacht bis zum
+  # nächsten Schnitt trägt.
+  def self.read_stamps_snapshot
+    @read_stamps.dup
+  end
+
+
+  def self.detect_drift(before)
+    return [] unless before
+
+    drifted = []
+    before.each do |abs, stamp|
+      current = begin
+        File.mtime(abs)
+      rescue StandardError
+        nil
+      end
+      next if current == stamp
+
+      drifted << { path: abs, read_at: stamp, moved_at: current }
+    end
+    drifted
+  end
+
+
+  def self.file_creating(path, bytes, uuid: nil)
+    send_status('file_creating', {
+                  message: Scriptorium.html("✏️ Creating #{create_file_link path} (#{display_bytes bytes})"),
+                  path:    path,
+                  bytes:   bytes
+                }, uuid:)
+  end
+
+
+  def self.file_created(path, bytes, content = '', uuid: nil)
+    type = Scriptorium.language_tag_from_path path
+    send_status('file_created', {
+                  message: Scriptorium.html("✅ ✏️ Created #{create_file_link path} (#{display_bytes bytes} written)"),
+                  path:    path,
+                  bytes:   bytes,
+                  content: Scriptorium.html_with_syntax_highlight("```#{type}\n#{content}\n```")
+                }, uuid:)
+  end
+
+
+  def self.temp_file_created(path, content, bytes, domain: nil, uuid: nil)
+    message = if domain
+                Scriptorium.html "✅ 📄 Created temporary file #{create_file_link path} (#{display_bytes bytes}) in domain #{domain[0..8]}..."
+              else
+                Scriptorium.html "✅ 📄 Created temporary file #{create_file_link path} (#{display_bytes bytes})"
+              end
+
+    type = Scriptorium.language_tag_from_path path
+
+    send_status('temp_file_created', {
+                  message:   message,
+                  content:   Scriptorium.html_with_syntax_highlight("```#{type}\n#{content}\n```"),
+                  path:,
+                  bytes:,
+                  domain:,
+                  temporary: true
+                }, uuid:)
+  end
+
+
+  def self.temp_domain_created(domain_id, uuid: nil)
+    send_status('temp_domain_created', {
+                  message: Scriptorium.html("🏗️ Created temporary file domain #{domain_id[0..8]}..."),
+                  domain:  domain_id
+                }, uuid:)
+  end
+
+
+  def self.temp_domain_cleaned(domain_id, cleaned_files, error_files, uuid: nil)
+    message = if error_files.empty?
+                Scriptorium.html "🧹 Cleaned temporary file domain #{domain_id[0..8]}... (#{cleaned_files.size} files)"
+              else
+                Scriptorium.html "⚠️ Partially cleaned temporary file domain #{domain_id[0..8]}... (#{cleaned_files.size} cleaned, #{error_files.size} errors)"
+              end
+
+    send_status('temp_domain_cleaned', {
+                  message: message,
+                  domain:  domain_id,
+                  cleaned: cleaned_files,
+                  errors:  error_files
+                }, uuid:)
+  end
+
+
+  def self.file_patching(path, diff_content, diff_lines, uuid: nil)
+    send_status('file_patching', {
+                  message:    Scriptorium.html("🔧 Applying patch to #{create_file_link path} (#{diff_lines} diff lines)"),
+                  path:       path,
+                  diff:       Scriptorium.html_with_syntax_highlight(
+                    "```diff\n#{diff_content}\n```"
+                  ),
+                  expandable: true
+                }, uuid:)
+  end
+
+
+  def self.file_patched(path, old_content, new_content, uuid: nil)
+    # Store undo information
+    undo_entry = {
+      path: path,
+      old_content: old_content,
+      uuid: uuid,
+      timestamp: Time.now.to_i
+    }
+    
+    # Add to undo stack (limit size)
+    @undo_stack.unshift(undo_entry)
+    @undo_stack = @undo_stack.first(@max_undo_entries)
+    
+    # Generate undo token for this operation
+    undo_token = Digest::SHA256.hexdigest("#{path}:#{uuid}:#{undo_entry[:timestamp]}")[0..15]
+    
+    html_diff_content = Scriptorium.hunk_based_character_diff old_content, new_content, path
+
+    send_status('file_patched', {
+                  message:    Scriptorium.html("✅ 🔧 Patch applied to #{create_file_link path}"),
+                  path:       path,
+                  diff:       "<pre class=\"diff\"><code>#{html_diff_content}</code></pre>",
+                  expandable: true,
+                  undo_token: undo_token  # Send token for undo button
+                }, uuid:)
+  end
+
+
+  def self.file_patched_fail(path, error, diff_content, uuid: nil)
+    render_error = lambda { |err|
+      msg = err[:message] || err[:error] || err.inspect
+      msg += "\n\n**Similarity score:** #{err[:similarity_score]}" if err[:similarity_score]
+      msg
+    }
+
+    error_message = if error.is_a? Hash
+                      error = error.deep_symbolize_keys
+                      render_error.call error
+                    elsif error.is_a? Array
+                      "\n" + (error.map { |err| "* #{render_error.call err}" }.join "\n") + "\n"
+                    else
+                      "```\n#{error}\n```"
+                    end
+    send_status('file_patched_fail', {
+                  message: Scriptorium.html("❌ Patch failed on #{create_file_link path}"),
+                  path:    path,
+                  diff:    Scriptorium.html_with_syntax_highlight("#{error_message}\n\n```diff\n#{diff_content}\n```"),
+                  error:   error_message
+                }, uuid:)
+  end
+
+
+  # Execute undo for a patch operation
+  def self.undo_patch(undo_token)
+    # Find matching undo entry
+    entry_index = @undo_stack.find_index do |entry|
+      expected_token = Digest::SHA256.hexdigest("#{entry[:path]}:#{entry[:uuid]}:#{entry[:timestamp]}")[0..15]
+      expected_token == undo_token
+    end
+    
+    unless entry_index
+      send_status('undo_failed', {
+        message: "⚠️ Undo token not found or expired",
+        undo_token: undo_token
+      })
+      return { error: "Undo token not found or expired" }
+    end
+    
+    # Retrieve and remove the entry
+    entry = @undo_stack.delete_at(entry_index)
+    path = entry[:path]
+    old_content = entry[:old_content]
+    
+    begin
+      # Restore the old content
+      Argonaut.write path, old_content
+      
+      send_status('undo_completed', {
+        message: Scriptorium.html("↩️ Undone: restored #{create_file_link path}"),
+        path: path
+      })
+      
+      { ok: true, path: path }
+    rescue StandardError => e
+      send_status('undo_failed', {
+        message: Scriptorium.html("❌ Undo failed: #{e.message}"),
+        path: path,
+        undo_token: undo_token
+      })
+      { error: "Undo failed: #{e.message}" }
+    end
+  end
+
+
+  def self.symbolic_patch_start(path, operation, uuid: nil)
+    send_status('symbolic_patch_start', {
+                  message:   Scriptorium.html("🔮 Starting symbolic **#{operation.hermetic_humanize}** on #{create_file_link path}"),
+                  path:      path,
+                  operation: operation
+                }, uuid:)
+  end
+
+
+  def self.symbolic_patch_fail(path, operation, error, uuid: nil)
+    # Format error details for better display with syntax highlighting
+    error_display = if error.is_a? Hash
+                      "\n\n**Error details:**\n```json\n#{JSON.pretty_generate error}\n```"
+                    else
+                      "\n\n**Error:** #{error}"
+                    end
+
+    send_status('symbolic_patch_fail', {
+                  message:   Scriptorium.html("❌ Symbolic **#{operation.hermetic_humanize}** failed on #{create_file_link path}#{error_display}"),
+                  path:      path,
+                  operation: operation,
+                  error:     error
+                }, uuid:)
+  end
+
+
+  def self.symbolic_patch_complete(path, operation, result, uuid: nil)
+    # Add debugging output
+    puts '[DEBUG] symbolic_patch_complete called with:'
+    puts "  path: #{path}"
+    puts "  operation: #{operation}"
+    puts "  result: #{result.inspect.truncate 500}"
+
+    # Format the result for better display - show actual changes made with proper syntax highlighting
+    result_display = if result.is_a?(Hash) && result[:success]
+                       if result[:result] && !result[:result].empty?
+                         formatSymbolicPatchResult result[:result], path, operation,
+                                                   result[:patterns]
+                       else
+                         Scriptorium.html "\n\n**Operation completed successfully**"
+                       end
+                     else
+                       Scriptorium.html "\n\n**Result:** #{result.inspect}"
+                     end
+
+    # Get count for display - handle both Array and other types
+    count = if result.is_a?(Hash) && result[:result].is_a?(Array)
+              result[:result].count
+            else
+              ''
+            end
+
+    send_status('symbolic_patch_complete', {
+                  message:        Scriptorium.html("✅ 🔮 #{count} Symbolic **#{operation.hermetic_humanize}** completed on #{create_file_link path}"),
+                  path:,
+                  operation:,
+                  result:,
+                  result_display:
+                }, uuid:)
+  end
+
+
+  def self.symbolic_patch_failed(path, operation, result, uuid: nil)
+    # Get count for display - handle both Array and other types
+    count = if result.is_a?(Hash) && result[:result].is_a?(Array)
+              result[:result].count
+            else
+              ''
+            end
+
+    send_status('symbolic_patch_complete', {
+                  message:        Scriptorium.html("✅ 🔮 #{count} Symbolic **#{operation.hermetic_humanize}** completed on #{create_file_link path}"),
+                  path:,
+                  operation:,
+                  result:,
+                  result_display:
+                }, uuid:)
+  end
+
+
+  def self.formatSymbolicPatchResult(result_data, file_path, operation = nil, patterns = nil)
+    return Scriptorium.html "\n\n**No transformations found**" if result_data.empty?
+
+    language = Scriptorium.language_tag_from_path file_path
+
+    # Include operation and pattern information if available
+    operation_info = if operation
+                       "<div class='operation-info'><strong>Operation:</strong> #{operation.hermetic_humanize}</div>"
+                     else
+                       ''
+                     end
+
+    # Include pattern details if available
+    pattern_details = if patterns
+                        <<~HTML
+                          <div class='pattern-details'>
+                            <div><strong>Search Pattern:</strong> <code>#{Scriptorium.escape_html patterns[:search_pattern]}</code></div>
+                            <div><strong>Replace Pattern:</strong> <code>#{Scriptorium.escape_html patterns[:replace_pattern]}</code></div>
+                            #{if patterns[:method_name]
+                                "<div><strong>Method:</strong> #{patterns[:method_name]}</div>"
+                              end}
+                            #{if patterns[:class_name]
+                                "<div><strong>Class:</strong> #{patterns[:class_name]}</div>"
+                              end}
+                          </div>
+                        HTML
+                      else
+                        ''
+                      end
+
+    # Create beautiful chunk-based HTML for transformations
+    transformations_html = result_data.each_with_index.map do |transformation, _index|
+      # Get location information
+      line = begin
+        transformation.dig(:range, :start, :line) + 1
+      rescue StandardError
+        nil
+      end
+      column = begin
+        transformation.dig(:range, :start, :column) + 1
+      rescue StandardError
+        nil
+      end
+
+      # Create file link with precise location
+      file_link = create_file_link file_path, "#{file_path} Line #{line}, Column #{column}", line,
+                                   column
+
+      # Build transformation chunk
+      <<~HTML
+        <div class="symbolic-patch-chunk diff">
+          <div class="chunk-header">
+            <div class="chunk-meta info">
+              <span class="language-badge">#{transformation[:language] || language}</span>
+              <span class="file-link">#{file_link}</span>
+            </div>
+          </div>
+          <div class="chunk-content">
+            <div class="del">
+            #{Scriptorium.html_with_syntax_highlight "```#{language}\n#{transformation[:text]}\n```"}
+            </div>
+            <div class="ins">
+            #{Scriptorium.html_with_syntax_highlight "```#{language}\n#{transformation[:replacement]}\n```"}
+            </div>
+          </div>
+        </div>
+      HTML
+    end.join("\n")
+
+    # Wrap all transformations in a container
+    <<~HTML
+      <div class="symbolic-patch-results">
+        <div class="results-header">
+          <p class="results-count">#{result_data.size} transformation#{unless 1 == result_data.size
+                                                                         's'
+                                                                       end} detected</p>
+          #{operation_info}
+        </div>
+        #{pattern_details}
+        #{transformations_html}
+      </div>
+    HTML
+  end
+
+
+  def self.command_executing(cmd, uuid: nil)
+    cmd_str = if cmd.include? "\n" then "\n\n```\n#{cmd}\n```\n" else "`#{cmd}`" end
+    send_status('command_executing', {
+                  message: Scriptorium.html("⚡️ Executing: #{cmd_str}"),
+                  command: cmd
+                }, uuid:)
+  end
+
+
+  # Command output containing HTML is properly escaped to prevent rendering issues
+  def self.command_completed(cmd, output_length, content = '', exit_status = nil, uuid: nil, execution_time: nil, cwd: nil)
+    symbol = if exit_status.respond_to?(:zero?) && exit_status.zero? then '✅ ⚡️' else '❌ ⚡️' end
+    cmd_str = if cmd.include? "\n" then "\n\n```\n#{cmd}\n```\n" else "`#{cmd}`" end
+
+    # Escape HTML in content to prevent UI corruption
+    escaped_content = Scriptorium.escape_html content
+
+    send_status('command_completed', {
+                  message:        Scriptorium.html("#{symbol} Command complete: #{cmd_str} (#{output_length} chars output)"),
+                  command:        cmd,
+                  output_length:  output_length,
+                  content:        escaped_content,
+                  execution_time: execution_time,
+                  cwd:            cwd
+                }, uuid:)
+  end
+
+
+  def self.processing(message, uuid: nil)
+    send_status('processing', { message: message.to_s }, uuid:)
+  end
+
+
+  def self.completed(summary, uuid: nil)
+    send_status('completed', { summary: Scriptorium.html(summary) }, uuid:)
+  end
+
+
+  def self.task_log_added(task_id, timestamp:, message:, uuid: nil)
+    send_status('task_log_added', {
+                  message:   Scriptorium.html('📝 Task log updated'),
+                  task_id:,
+                  content:   Scriptorium.html_with_syntax_highlight(message),
+                  timestamp:
+                }, uuid:)
+  end
+
+
+  def self.task_removed(task_id, uuid: nil)
+    send_status('task_removed', {
+                  message: Scriptorium.html("Removed Task **##{task_id}**"),
+                  task_id:
+                }, uuid:)
+  end
+
+
+  def self.task_started(uuid: nil, **task)
+    max_steps = 10
+    title = task[:title]
+    task = render_task_fields task
+    send_status('task_started', {
+                  message: Scriptorium.html("📦 Task started: **#{title}** (0/#{max_steps})"),
+                  **task
+                }, uuid:)
+  end
+
+
+  def self.task_created(uuid: nil, **task)
+    max_steps = 10
+    title = task[:title]
+    plan = task[:plan] || ''
+    task = render_task_fields task
+
+    send_status('task_created', {
+                  message: Scriptorium.html("📋 Task created: **#{title} ##{task[:id]}**"),
+                  **task
+                }, uuid:)
+  end
+
+
+  def self.task_updated(uuid: nil, show_progress: false, step_results: nil, **task)
+    progress = task[:current_step] || 0
+    max_steps = 10
+    workflow_type = task[:workflow_type] || 'full'
+
+    # Get proper stage name based on workflow type
+    stage_name = Mnemosyne.step_name workflow_type, progress + 0
+
+    task = render_task_fields task
+    send_status('task_updated', {
+                  message: Scriptorium.html("🔄 Task progress: **#{stage_name}** " \
+                                            "(#{progress}/#{max_steps})"),
+                  **task
+                }, uuid:)
+  end
+
+
+
+
+  def self.task_step_completed(result:, uuid: nil, **task)
+    progress = task[:current_step] || 0
+    max_steps = 10
+    workflow_type = task[:workflow_type] || 'full'
+
+    # Get proper stage name based on workflow type
+    stage_name = Mnemosyne.step_name workflow_type, progress + 0
+
+    # Extract step result if available
+    task = render_task_fields task
+    send_status('task_step_completed', {
+                  message: Scriptorium.html("✅ Step completed: **#{stage_name}** (#{progress}/#{max_steps})"),
+                  result:  Scriptorium.html_with_syntax_highlight(result),
+                  **task
+                }, uuid:)
+  end
+
+
+  def self.task_step_rejected(reason:, uuid: nil, **task)
+    progress = task[:current_step] || 0
+    max_steps = 10
+    workflow_type = task[:workflow_type] || 'full'
+
+    # Get proper stage name based on workflow type
+    stage_name = Mnemosyne.step_name workflow_type, progress + 0
+
+    # Extract rejection reason if available
+    task = render_task_fields task
+    send_status('task_step_rejected', {
+                  message: Scriptorium.html("🔄 Step rejected: **#{stage_name}** (#{progress}/#{max_steps})"),
+                  reason:  Scriptorium.html_with_syntax_highlight(reason),
+                  **task
+                }, uuid:)
+  end
+
+
+  def self.render_task_fields(task)
+    unless task[:logs].nil?
+      logs = if task[:logs].is_a? String
+               JSON.parse task[:logs]
+             else
+               task[:logs]
+             end
+      task = task.merge logs: logs.map do |log|
+        Scriptorium.html_with_syntax_highlight log
+      end
+    end
+    unless task[:step_results].nil?
+      step_results = if task[:step_results].is_a? String
+                       JSON.parse task[:step_results]
+                     else
+                       task[:step_results]
+                     end
+      task = task.merge step_results: step_results.map do |step_result|
+        Scriptorium.html_with_syntax_highlight step_result
+      end
+    end
+    unless task[:plan].nil?
+      task = task.merge plan: Scriptorium.html_with_syntax_highlight(task[:plan])
+    end
+    task
+  end
+
+
+  def self.task_completed(duration, uuid: nil, **task)
+    task = render_task_fields task
+    send_status('task_completed', {
+                  message:  Scriptorium.html("✅ Task completed: **#{task[:title]}** (#{duration.round 2}s)"),
+                  **task,
+                  duration:
+                }, uuid:)
+  end
+
+
+  def self.task_list(tasks, count:, uuid: nil)
+    tasks_md = tasks.map do |task|
+      plan = task[:plan]&.each_line&.map { |line| "  #{line}" }&.join
+      "- \\##{task[:id]} **#{task[:title]}:**\n#{plan}\n  _(Status: #{task[:status]})_"
+    end.join "\n\n"
+    send_status('task_list', {
+                  message: Scriptorium.html("Found **#{count}** Active Tasks"),
+                  content: Scriptorium.html_with_syntax_highlight(tasks_md)
+                }, uuid:)
+  end
+
+
+  def self.file_renaming(from, to, uuid: nil)
+    send_status('file_renaming', {
+                  message: Scriptorium.html("📝 Renaming #{create_file_link from} → #{create_file_link to}"),
+                  from:    from,
+                  to:      to
+                }, uuid:)
+  end
+
+
+  def self.file_renamed(from, to, uuid: nil)
+    send_status('file_renamed', {
+                  message: Scriptorium.html("✅ 📝 Renamed #{create_file_link from} → #{create_file_link to}"),
+                  from:    from,
+                  to:      to
+                }, uuid:)
+  end
+
+
+  def self.memory_storing(key, bytes, uuid: nil)
+    send_status('memory_storing', {
+                  message: Scriptorium.html("🧠 Storing memory: `#{key}` (#{display_bytes bytes})"),
+                  key:     key,
+                  bytes:   bytes
+                }, uuid:)
+  end
+
+
+  def self.memory_stored(key, uuid: nil)
+    send_status('memory_stored', {
+                  message: Scriptorium.html("✅ 🧠 Memory stored: `#{key}`"),
+                  key:     key
+                }, uuid:)
+  end
+
+
+  def self.aegis_unveiled(tags, summary, temperature, thinking, notes, uuid: nil)
+    parts = []
+    parts << "**Thinking:** `#{thinking}`" if thinking
+    parts << "Temperature `#{temperature}`" if temperature
+    meta = parts.empty? ? '' : "\n\n#{parts.join ' · '}"
+    content = [summary, meta].join
+    send_status('aegis_unveiled', {
+                  message:     Scriptorium.html("🔮 Aegis unveiled#{" · `#{tags.join ', '}`" if tags}"),
+                  content:     Scriptorium.html_with_syntax_highlight(content),
+                  # The raw markdown lets the native editor render the veil with
+                  # full markdown (headings, bold, code) instead of stripped HTML.
+                  raw:         content,
+                  # Structured fields let the native veil render the summary
+                  # prominently and the recalled notes as collapsed memories.
+                  summary:     summary,
+                  notes:       notes,
+                  tags:        tags,
+                  temperature: temperature,
+                  thinking:    thinking
+                }, uuid:)
+  end
+
+
+  def self.memory_searching(query, limit, uuid: nil)
+    send_status('memory_searching', {
+                  message: Scriptorium.html("🔍 Searching memories for: *#{query}* (limit: #{limit})"),
+                  query:   query,
+                  limit:   limit
+                }, uuid:)
+  end
+
+
+  def self.memory_found(query, count, notes, uuid: nil)
+    send_status('memory_found', {
+                  message: Scriptorium.html("✅ 🔍 Found **#{count}** memories for: *\"#{query}\"*"),
+                  query:   query,
+                  count:   count,
+                  content: notes
+                }, uuid:)
+  end
+
+
+  def self.note_added(note, uuid: nil)
+    send_status('note_added', {
+                  message: '🔒 Note stored',
+                  content: Scriptorium.html_with_syntax_highlight(render_note(note))
+                }, uuid:)
+  end
+
+
+  def self.note_removed(note, uuid: nil)
+    send_status('note_removed', {
+                  message: "Removed Note #{note[:id]}",
+                  content: Scriptorium.html_with_syntax_highlight(render_note(note))
+                }, uuid:)
+  end
+
+
+  def self.note_updated(note, uuid: nil)
+    send_status('note_updated', {
+                  message: '🔒 Note stored.',
+                  content: Scriptorium.html_with_syntax_highlight(render_note(note))
+                }, uuid:)
+  end
+
+
+  def self.notes_recalled(query, limit, notes, uuid: nil)
+    query = '(empty query)' if query.empty?
+    send_status('notes_recalled', {
+                  query:   query,
+                  count:   notes.count,
+                  message: Scriptorium.html("🔍 Recalled **#{notes.count}** (limit: **#{limit}**) Hermetic notes for: *#{query}*"),
+                  notes:   Scriptorium.html_with_syntax_highlight(render_notes(notes))
+                }, uuid:)
+  end
+
+
+  def self.info_message(message, uuid: nil)
+    send_status('info', { message: Scriptorium.html_with_syntax_highlight("💬 #{message}") }, uuid:)
+  end
+
+
+  def self.render_note(note)
+    links = if note[:links].nil? || note[:links].empty?
+              ''
+            else
+              if note[:links].is_a? Array then note[:links]
+              else
+                note[:links].split ','
+              end.map { |link| "- #{create_file_link link}" }.join "\n"
+            end
+    # Tags are formatted as clickable links for better navigation
+    tags = if note[:tags].nil? || note[:tags].empty? then ''
+           else
+             if note[:tags].is_a? Array then note[:tags]
+             else
+               note[:tags].split ','
+             end.map { |tag| "<a href=\"#tag:#{tag}\">##{tag}</a>" }.join ', '
+           end
+    tags = if note[:tags].nil? || note[:tags].empty? then ''
+           else
+             if note[:tags].is_a? Array then note[:tags]
+             else
+               note[:tags].split ','
+             end.map { |tag| "\\##{tag}" }.join ', '
+           end
+    note_info = if note[:id] then "**ID:** #{note[:id]}, **updated:** #{note[:created_at] || note[:updated_at]}"
+                else
+                  ''
+                end
+    <<~MARKDOWN
+      #{note_info}
+
+      #{note[:content]}
+
+      #{tags}
+
+      #{links}
+    MARKDOWN
+  end
+
+
+  def self.render_notes(notes)
+    if notes.empty?
+      'None.'
+    else
+      notes.map { |note| render_note note }.join "\n\n---\n\n"
+    end
+  end
+
+
+  def self.file_overview(path, result, uuid: nil)
+    # Use the symbolic overview data already generated in Instrumenta/Argonaut
+    symbolic_data = result[:symbolic_overview] || {}
+
+    # Get optimized notes metadata - handle nil notes array gracefully
+    notes_metadata = (result[:notes_preview] || []).map do |note|
+      {
+        id:      note[:id],
+        tags:    note[:tags] || [],
+        excerpt: note[:excerpt] || '',
+        links:   note[:links] || []
+      }
+    end
+
+    # Format the symbolic data properly for display
+    symbolic_summary = if symbolic_data[:structural_summary]
+                         "**Classes:** #{symbolic_data[:structural_summary][:classes]}, " \
+                           "**Modules:** #{symbolic_data[:structural_summary][:modules]}, " \
+                           "**Methods:** #{symbolic_data[:structural_summary][:methods]}, " \
+                           "**Constants:** #{symbolic_data[:structural_summary][:constants]}, " \
+                           "**Variables:** #{symbolic_data[:structural_summary][:variables]}"
+                       else
+                         'No symbolic data available'
+                       end
+
+    # Format navigation hints - handle both old hash format and new array format
+    navigation_hints = if symbolic_data[:navigation_hints] && !symbolic_data[:navigation_hints].empty?
+                         "\n\n### Navigation Hints:\n" +
+                           if symbolic_data[:navigation_hints].is_a? Hash
+                             # Old format: { "10" => ["method: test", "require -> json"] }
+                             symbolic_data[:navigation_hints].map do |line, hints|
+                               "- **Line #{line}:** #{hints.join ', '}"
+                             end.join("\n")
+                           else
+                             # New format: [{ line: 10, description: "Navigate to method test" }, ...]
+                             # Group by line number for cleaner display
+                             hints_by_line = symbolic_data[:navigation_hints].group_by do |h|
+                               h[:line]
+                             end
+                             hints_by_line.map do |line, line_hints|
+                               descriptions = line_hints.map { |h| h[:description] }
+                               "- **Line #{line}:** #{descriptions.join ', '}"
+                             end.join("\n")
+                           end
+                       elsif symbolic_data[:navigation_hints].nil?
+                         # Debug: check what we actually have
+                         "\n\n### Navigation Hints: (nil)\n"
+                       elsif symbolic_data[:navigation_hints].empty?
+                         "\n\n### Navigation Hints: (empty)\n"
+                       else
+                         "\n\n### Navigation Hints: (unknown format)\n"
+                       end
+
+    content = <<~MARKDOWN
+      **File Size:** #{display_bytes result[:file_info][:size]}
+      **Number of Lines:** #{result[:file_info][:lines]}
+      **Last Modified:** #{result[:file_info][:last_modified]}
+      **Notes Count:** #{notes_metadata.count}
+
+      ### Symbolic Overview (AI Vision):
+      #{symbolic_summary}
+      #{navigation_hints}
+
+      ### Notes Metadata:
+      #{notes_metadata.map { |n| "- **ID:** #{n[:id]}, **Tags:** #{n[:tags]&.join ', '}, **Excerpt:** #{n[:excerpt]}" }.join("\n")}
+    MARKDOWN
+
+    send_status('file_overview', {
+      message:        Scriptorium.html("🔍 Overview: #{create_file_link path}"),
+      content:        Scriptorium.html_with_syntax_highlight(content),
+      symbolic_data:  symbolic_data,
+      notes_metadata: notes_metadata,
+      data:           result,
+    }, uuid:)
+  end
+
+
+  def self.thinking(message = '🔮 Consulting the astral codex...', content = '', uuid: nil,
+                   temperature: nil, thinking: nil)
+    aegis = Mnemosyne.aegis || {}
+    send_status('thinking', {
+                  message: Scriptorium.html_with_syntax_highlight("🧠 #{message}"),
+                  content: Scriptorium.html_with_syntax_highlight(content.to_s),
+                  temperature: (temperature || aegis[:temperature] || 1.0).to_f,
+                  thinking: (thinking || aegis[:thinking] || 'normal').to_s,
+                }, uuid:)
+  end
+
+
+  def self.divination(message = '🔮 Consulting the astral codex...', uuid: nil)
+    send_status('divination', { message: Scriptorium.html("🔮 #{message}") }, uuid:)
+  end
+
+
+  def self.server_error(error, type = 'Server Error', uuid: nil)
+    send_status('server_error', {
+                  error: Scriptorium.html("❌ **#{type}#{':' if error}** `#{error}`")
+                }, uuid:)
+  end
+
+
+  def self.system_error(error, message: nil, backtrace: nil, uuid: nil)
+    if message.nil?
+      message = error
+      error = 'System Error'
+    end
+    message = "`#{message}`" if message
+    if backtrace
+      puts "[HOROLOGIUM][SYSTEM ERROR] #{message} backtrace=#{backtrace}"
+      backtrace = backtrace.lines.map do |line|
+        line.gsub %r{((?:/[^/:]+/)+):([0-9]+)in `(\w+)'} do
+          matches = Regexp.last_match
+          "* #{create_file_link matches[1], nil, matches[2]} in `#{matches[3]}`"
+        end
+      end.join "\n"
+      backtrace = "\n\n**Backtrace:**\n\n#{backtrace}"
+    end
+    send_status('system_error', {
+                  error: Scriptorium.html("❌ #{error}#{': ' if message || backtrace}" \
+                                          "#{message}#{backtrace}")
+                }, uuid:)
+  end
+
+
+  def self.system_message(message, uuid: nil)
+    send_status('system_message', {
+                  message: Scriptorium.html(message)
+                }, uuid:)
+  end
+
+
+  def self.create_file_link(file, display_name = nil, line = nil, column = nil)
+    line = " line=\"#{line}\"" if line
+    column = " column=\"#{column}\"" if column
+    "<file path=\"#{file}\"#{line}#{column}>#{display_name || file}</file>"
+  end
+
+
+  def self.attach(_message,
+                  file: nil,
+                  selection: nil,
+                  lines: nil,
+                  content: nil,
+                  line: nil,
+                  column: nil,
+                  selection_range: nil,
+                  uuid: nil)
+    type = Scriptorium.language_tag_from_path file
+    if selection
+      selection_html = Scriptorium.html_with_syntax_highlight("```#{type}\n#{selection}\n```")
+    end
+    file_html = create_file_link file, nil, line, column
+    send 'attach', 'attachment', {
+      file:,
+      file_html:,
+      selection:,
+      selection_html:,
+      lines:,
+      content:,
+      line:,
+      column:,
+      selection_range:
+    }, uuid:
+  end
+
+
+  # --- User Response Mechanism (for ask_user tool) ---
+
+  @user_responses = {}
+  @user_response_mutex = Mutex.new
+
+  def self.await_user_response(uuid, timeout: 300)
+    queue = Queue.new
+    @user_response_mutex.synchronize { @user_responses[uuid] = queue }
+
+    begin
+      # Block until frontend sends response or timeout
+      result = Timeout.timeout(timeout) { queue.pop }
+      # Normalize to hash format
+      result.is_a?(Hash) ? result : { response: result.to_s }
+    rescue Timeout::Error
+      HorologiumAeternum.system_error 'User response timed out'
+      { error: 'User response timed out', timed_out: true }
+    ensure
+      @user_response_mutex.synchronize { @user_responses.delete(uuid) }
+    end
+  end
+
+  def self.receive_user_response(uuid, response)
+    @user_response_mutex.synchronize do
+      queue = @user_responses[uuid]
+      queue&.push(response)
+    end
+  end
+
+  # ── Screenshot (CapturaVisus) logging ──────────────────────────────────
+
+  def self.screenshot_capturing(mode, display: nil, x: nil, y: nil,
+                                width: nil, height: nil, uuid: nil)
+    desc = case mode.to_s
+           when 'screen' then 'entire display'
+           when 'window' then 'frontmost window'
+           when 'area' then "region (#{x},#{y} #{width}x#{height})"
+           when 'display' then "display ##{display}"
+           when 'active-app' then 'active app bounds'
+           when 'menu-bar' then 'menu bar'
+           else mode.to_s
+           end
+    send_status('screenshot_capturing', { mode:, description: desc }, uuid:)
+  end
+
+  def self.screenshot_captured(mode, path, bytes, uuid: nil, execution_time: nil)
+    send_status('screenshot_captured', {
+                  mode:,
+                  path:,
+                  bytes:,
+                  size: display_bytes(bytes),
+                  execution_time:
+                }, uuid:)
+  end
+
+  def self.screenshot_failed(mode, error, uuid: nil)
+    send_status('screenshot_failed', { mode:, error: }, uuid:)
+  end
+end

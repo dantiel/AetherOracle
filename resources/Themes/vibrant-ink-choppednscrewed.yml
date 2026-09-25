@@ -1,0 +1,258 @@
+# Converted from TextMate theme: Vibrant Ink chopped'n'screwed
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Themes.tmbundle/Themes/Vibrant Ink chopped'n'screwed.tmTheme
+name: vibrant-ink-choppednscrewed
+kind: dark
+sourceEditorBackground: "0x000000"
+class: theme.dark.vibrant-ink-chopped-n-screwed
+tags: [dark, vibrant-ink-chopped-n-screwed]
+
+# Global editor colors
+editor:
+  background: "0x000000"
+  foreground: "0xFFFFFF"
+  caret: "0xFFFFFF"
+  selection: "0x0A0074"
+  lineHighlight: "0x070C86"
+  invisibles: "0x222222"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.75
+glassBlurStrength: 0.65
+glassStyle: regular
+textShadowStrength: 0.7
+lineSpacing: 4.5
+editorBackgroundOpacity: 0.8
+sidebarBackgroundOpacity: 0.9
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x000000"
+rulerForeground: "0xFFFFFF"
+sourceRulerBackground: "0x000000"
+rulerSeparator: "0x2828287F"
+sidebarAccent: "0x6C67AC"
+sidebarForeground: "0xFFFFFF"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x1C1B29"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x000000"
+  foreground: "0xFFFFFF"
+  baseText: "0x26ADFF"
+  accent: "0xFF7827"
+  complementary: "0x26ADFF"
+  codeBackground: "0x000000"
+  codeForeground: "0xFFFFFF"
+  shine: "0xFFAB79"
+  glassTint: 0.75
+  glassMaterial: menu
+
+scopes:
+  plain: "0xFFFFFF"
+  tag: "0xFFFFFF"
+  text: "0xFFFFFF"
+  entity: "0xFFFFFF"
+  markup: "0xFFFFFF"
+  source: "0xFFFFFF"
+  string: "0xFEFF8E"
+  comment:
+    color: "0x363636"
+    bold: false
+    italic: false
+    underline: false
+  keyword:
+    color: "0xFF7827"
+    bold: false
+    italic: false
+    underline: false
+  storage: "0xEE8329"
+  support: "0xFFFFFF"
+  constant:
+    color: "0x64AEF9"
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0xFFFFFF"
+  punctuation: "0xFFFFFF"
+  preprocessor: "0xFFFFFF"
+  string source: "0xB2D9D0"
+  source.ruby: "0xFFFFFF"
+  variable.js:
+    color: "0x042CF7"
+    bold: false
+    italic: false
+    underline: false
+  keyword.other: "0xFF7827"
+  string.regexp: "0x44B4CC"
+  string.literal: "0xCCFF33"
+  variable.other:
+    color: "0x042CF7"
+    bold: false
+    italic: false
+    underline: false
+  support.function: "0xE94526"
+  support.variable: "0xF5B92D"
+  variable.language: "0x44BCF9"
+  string source.ruby: "0xB2D9D0"
+  variable.parameter:
+    bold: false
+    italic: false
+    underline: false
+  string.interpolated:
+    color: "0xDDE93D"
+    background: "0x61601D"
+  keyword.preprocessor:
+    color: "0xEDF8F9"
+    bold: false
+    italic: false
+    underline: false
+  source comment.block:
+    color: "0x363636"
+    italic: true
+  keyword.preprocessor directive:
+    color: "0xFFFFFF"
+    bold: false
+    italic: false
+    underline: false
+  text.html.ruby: "0xFFFFFF"
+  entity.name.tag:
+    bold: false
+    italic: false
+    underline: false
+  support.class.js:
+    bold: false
+    italic: false
+    underline: false
+  entity.name.class:
+    bold: false
+    italic: false
+    underline: false
+  meta.selector.css: "0xFCE85F"
+  keyword.control.js: "0xFFCC00"
+  variable.other.php: "0xFFFFFF"
+  keyword.operator.js: "0xFF6600"
+  constant.numeric.css: "0xF2F2F2"
+  entity.name.function:
+    color: "0xF8CC49"
+    bold: false
+    italic: false
+    underline: false
+  constant.numeric.ruby: "0xCCFF33"
+  variable.other.normal: "0xFFFFFF"
+  variable.other.constant: "0xFFFFFF"
+  constant.character.escape: "0xB2D9D0"
+  constant.character.escaped: "0xB2D9D0"
+  entity.other.attribute-name:
+    color: "0xFF873A"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    bold: false
+    italic: false
+    underline: false
+  punctuation.separator.variable:
+    color: "0x042CF7"
+    bold: false
+    italic: false
+    underline: false
+  string constant.character.escape: "0xAAAAAA"
+  keyword.other.unit.css: "0xF2F2F2"
+  storage.type.function.js:
+    color: "0xF8CC49"
+    bold: false
+    italic: false
+    underline: false
+  support.class.prototype.js: "0xFFFFFF"
+  constant.other.rgb-value.css: "0xF2F2F2"
+  support.type.property-name.css: "0x9CD2F8"
+  variable.other.readwrite.class: "0xFFFFFF"
+  variable.other.readwrite.global: "0xD0D0FF"
+  support.function.event-handler.js: "0xFFFFFF"
+  variable.other.readwrite.instance: "0x1AA6FC"
+  support.function.activerecord.rails: "0x999966"
+  string.interpolated constant.character.escape: "0x555555"
+  meta.tag.block.any.html:
+    color: "0xFF873A"
+    bold: false
+    italic: false
+    underline: false
+  meta.tag.inline.any.html:
+    color: "0xFF873A"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.tag.wildcard.css: "0xFCE85F"
+  source.ruby.rails.embedded.html: "0xFFFFFF"
+  entity.other.attribute-name.id.css: "0xFCE85F"
+  entity.other.attribute-name.class.css: "0xFCE85F"
+  object.property.function.prototype.js: "0x4CB786"
+  variable.other.readwrite.global.pre-defined: "0x44BCF9"
+  entity.other.attribute-name.pseudo-class.css: "0xFCE85F"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xFFFFFF"
+  markup.heading:
+    color: "0xFF7827"
+    bold: true
+  markup.heading.1:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xFF7827"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xFFFFFF"
+    bold: true
+  markup.italic:
+    color: "0xFFFFFF"
+    italic: true
+  markup.link:
+    color: "0xFEFF8E"
+    underline: true
+  markup.link.url:
+    color: "0xFEFF8E"
+    underline: true
+  markup.code.block:
+    color: "0x363636"
+    background: "0x000000"
+  markup.code.inline:
+    color: "0x363636"
+    background: "0x000000"
+  markup.quote:
+    color: "0x363636"
+    italic: true
+    background: "0x050505"
+  markup.rule:
+    color: "0x363636"
+    bold: true
+  markup.strikethrough:
+    color: "0x363636"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xF8CC49"
+    bold: true
+

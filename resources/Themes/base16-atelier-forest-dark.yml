@@ -1,0 +1,188 @@
+# Converted from TextMate theme: Base16 Atelier Forest Dark
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Antonio’s Bundle.tmbundle/Themes/base16-atelierforest.dark 2.tmTheme
+name: base16-atelier-forest-dark
+kind: dark
+sourceEditorBackground: "0x1B1918"
+class: base16.atelierforest.dark
+tags: [dark, base16, atelierforest]
+
+# Global editor colors
+editor:
+  background: "0x1B1918"
+  foreground: "0xA8A19F"
+  caret: "0xA8A19F"
+  selection: "0x68615E"
+  lineHighlight: "0x2C2421"
+  invisibles: "0x766E6B"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.73
+glassBlurStrength: 0.63
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.3
+editorBackgroundOpacity: 0.78
+sidebarBackgroundOpacity: 0.88
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x2C2421"
+rulerForeground: "0xFFFFFF"
+sourceRulerBackground: "0x2C2421"
+rulerSeparator: "0x2C2421"
+sidebarAccent: "0x8888EF"
+sidebarForeground: "0xFFFFFF"
+gutterSelectionBackground: "0x68615E"
+gutterSelectionForeground: "0x9C9491"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x494351"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x1B1918"
+  foreground: "0xA8A19F"
+  baseText: "0xAD0010"
+  accent: "0x00AD9C"
+  complementary: "0xAD0010"
+  codeBackground: "0x131211"
+  codeForeground: "0xA8A19F"
+  shine: "0x61CCC2"
+  glassTint: 0.73
+  glassMaterial: menu
+
+scopes:
+  plain: "0xA8A19F"
+  tag: "0xA8A19F"
+  none: "0xA8A19F"
+  entity: "0xA8A19F"
+  markup: "0xA8A19F"
+  string: "0x5AB738"
+  comment: "0x766E6B"
+  keyword: "0x6666EA"
+  storage: "0x6666EA"
+  support: "0xA8A19F"
+  constant: "0xDF5320"
+  variable: "0xF22C40"
+  attribute: "0xA8A19F"
+  punctuation: "0xA8A19F"
+  preprocessor: "0xA8A19F"
+  meta.link: "0xDF5320"
+  meta.class: "0xF1EFEE"
+  markup.bold:
+    color: "0xD5911A"
+    bold: true
+  markup.list: "0xF22C40"
+  markup.quote: "0xDF5320"
+  meta.require: "0x407EE7"
+  markup.italic:
+    color: "0x6666EA"
+    italic: true
+  meta.selector: "0x6666EA"
+  string.regexp: "0x00AD9C"
+  support.class: "0xD5911A"
+  markup.changed: "0x6666EA"
+  markup.deleted: "0xF22C40"
+  meta.separator:
+    color: "0xA8A19F"
+    background: "0x68615E"
+  invalid.illegal:
+    color: "0x1B1918"
+    background: "0xF22C40"
+  markup.inserted: "0x5AB738"
+  constant.numeric: "0xDF5320"
+  keyword.operator: "0xA8A19F"
+  support.function: "0x00AD9C"
+  variable.interpolation: "0xC33FF3"
+  entity.name.tag: "0xF22C40"
+  entity.name.class: "0xD5911A"
+  markup.raw.inline: "0x5AB738"
+  string.other.link: "0xF22C40"
+  keyword.other.unit: "0xDF5320"
+  entity.name.section:
+    color: "0x407EE7"
+    bold: false
+    italic: false
+    underline: false
+  constant.other.color: "0x00AD9C"
+  entity.name.function: "0x407EE7"
+  constant.other.symbol: "0x5AB738"
+  constant.character.escape: "0x00AD9C"
+  entity.other.attribute-name: "0xDF5320"
+  punctuation.definition.bold:
+    color: "0xD5911A"
+    bold: true
+  support.function.any-method: "0x407EE7"
+  variable.parameter.function: "0xA8A19F"
+  entity.other.inherited-class: "0x5AB738"
+  keyword.other.special-method: "0x407EE7"
+  punctuation.definition.array: "0xA8A19F"
+  punctuation.section.embedded: "0xC33FF3"
+  punctuation.definition.entity: "0x407EE7"
+  punctuation.definition.italic:
+    color: "0x6666EA"
+    italic: true
+  punctuation.definition.string: "0xA8A19F"
+  punctuation.definition.comment: "0x766E6B"
+  punctuation.definition.variable: "0xA8A19F"
+  punctuation.definition.parameters: "0xA8A19F"
+  entity.name.type.class: "0xD5911A"
+  entity.other.attribute-name.id: "0x407EE7"
+  markup.heading punctuation.definition.heading:
+    color: "0x407EE7"
+    bold: false
+    italic: false
+    underline: false
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xA8A19F"
+  markup.heading:
+    color: "0x6666EA"
+    bold: true
+  markup.heading.1:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x6666EA"
+    bold: true
+    fontSize: 1.0
+  markup.link:
+    color: "0x5AB738"
+    underline: true
+  markup.link.url:
+    color: "0x5AB738"
+    underline: true
+  markup.code.block:
+    color: "0x766E6B"
+    background: "0x131110"
+  markup.code.inline:
+    color: "0x766E6B"
+    background: "0x131110"
+  markup.rule:
+    color: "0x766E6B"
+    bold: true
+  markup.strikethrough:
+    color: "0x766E6B"
+    strikethrough: true
+  markup.list.checked:
+    color: "0x407EE7"
+    bold: true
+

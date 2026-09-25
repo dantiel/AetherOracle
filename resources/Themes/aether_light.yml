@@ -1,0 +1,175 @@
+# AetherLight — parchment white, zero shadow, code at dawn
+name: AetherLight
+kind: light
+class: theme.light.aetherlight
+tags: [aether, signature, light]
+
+# Global editor colors
+editor:
+  background: "0xF5F5F0"
+  foreground: "0x383840"
+  caret: "0x0066CC"
+  selection: "0xB3D6F5"
+  lineHighlight: "0xE6E6E0"
+  invisibles: "0xD8D8D0"
+
+# ── AetherCodex Chrome ──
+glassTintColor: "0xE8D4A0"
+glassTint: 0.30
+glassBlurStrength: 0.42
+glassStyle: clear
+textShadowStrength: 0.0
+lineSpacing: 3.0
+editorBackgroundOpacity: 0.10
+sidebarBackgroundOpacity: 0.15
+rootBlurMaterial: underWindowBackground
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: sidebar
+
+# ── Gutter & Sidebar ──
+rulerBackground: "0xE6E6E1"
+rulerForeground: "0x7A7A75"
+rulerSeparator: "0xBFBFBF"
+sidebarAccent: "0x1A57A6"
+sidebarForeground: "0x383840"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0xE8E6E3"
+
+# ── Pythia Oracle Chamber (first-class curated) ──
+# Warm dawn chamber: shares the parchment background, carries a dawn-blue
+# accent + amber complementary, and a lifted blue shine for tool-call glass.
+pythia:
+  background: "0xF5F5F0"
+  foreground: "0x383840"
+  baseText: "0x383840"
+  accent: "0x1A57A6"
+  complementary: "0xB08D3E"
+  codeBackground: "0xECE9E0"
+  codeForeground: "0x383840"
+  shine: "0x7FA8D9"
+  glassTint: 0.30
+  glassMaterial: sidebar
+
+scopes:
+  keyword:
+    color: "0x9C1E99"
+    bold: true
+  keyword.type:
+    color: "0x801980"
+  operator: "0x8C338C"
+  string:
+    color: "0x217821"
+  string.escape:
+    color: "0x666699"
+  number:
+    color: "0xA16621"
+  comment:
+    color: "0x8C8C8C"
+  type:
+    color: "0x215496"
+  support.type:
+    color: "0x4D5999"
+  function:
+    color: "0x387099"
+  support.function: "0x664D80"
+  variable: "0x383840"
+  variable.language: "0x264D80"
+  variable.instance: "0x336699"
+  variable.class:
+    color: "0x4D5999"
+  variable.global: "0xA65959"
+  constant:
+    color: "0x668C1A"
+  constant.symbol: "0x668C1A"
+  support.constant: "0x0D660D"
+  property: "0x4D738C"
+  entity.name.class: "0x215496"
+  entity.name.function: "0x387099"
+  entity.name.tag: "0x26408C"
+  entity.name.type.namespace: "0x1D4B87"
+  entity.other.attribute-name: "0x4D5999"
+  entity.other.inherited-class:
+    color: "0x215496"
+    italic: true
+  variable.other: "0x383840"
+  variable.parameter:
+    color: "0x383840"
+    italic: true
+  variable.function: "0x387099"
+  constant.other: "0x668C1A"
+  constant.language: "0x264D80"
+  constant.character: "0x217821"
+  storage: "0x801980"
+  storage.type: "0x801980"
+  punctuation: "0x808080"
+  tag: "0x26408C"
+  attribute: "0x4D5999"
+  preprocessor:
+    color: "0x59801A"
+  invalid:
+    color: "0xCC0000"
+    background: "0xFFE0E0"
+  plain: "0x47474D"
+  markup.heading:
+    color: "0x1A4773"
+    bold: true
+    fontSize: 1.5
+  markup.heading.1:
+    color: "0x0D3066"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x133A6B"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x1A4773"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x245080"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x2E598C"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x386299"
+    bold: true
+    fontSize: 1.0
+  markup:
+    color: "0x8C7000"
+  markup.link:
+    color: "0x1A57A6"
+    underline: true
+  markup.link.url:
+    color: "0x336699"
+    underline: true
+  markup.italic:
+    color: "0x5A5A5A"
+    italic: true
+  markup.bold:
+    color: "0x2E2E35"
+    bold: true
+  markup.strikethrough:
+    color: "0x996666"
+    strikethrough: true
+  markup.quote:
+    color: "0x666666"
+    italic: true
+    background: "0xF0EFE8"
+  markup.rule:
+    color: "0x999999"
+    bold: true
+  markup.code.block:
+    color: "0x3A5A70"
+    background: "0xF0F0EA"
+  markup.code.inline:
+    color: "0x3A5A70"
+    background: "0xF0F0EA"
+  markup.list.checked:
+    color: "0x3E7A3E"
+    bold: true

@@ -1,0 +1,163 @@
+# Verdant — green-dominant, organic, growing
+name: Verdant
+kind: dark
+tags: [classic, green, dark]
+rulerBackground: "0x1E231E"
+rulerSeparator: "0x373C377F"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x0D0D0D"
+  foreground: "0xEEEEEE"
+  baseText: "0x733FCC"
+  accent: "0x99CC40"
+  complementary: "0x733FCC"
+  codeBackground: "0x090909"
+  codeForeground: "0xEEEEEE"
+  shine: "0xC0DF89"
+  glassTint: 0.7
+  glassMaterial: menu
+
+scopes:
+  keyword:
+    color: "0x66BF80"
+    bold: true
+  keyword.type:
+    color: "0x4DA66A"
+  operator: "0x80B38C"
+  string:
+    color: "0x99CC66"
+  string.escape:
+    color: "0xA0D970"
+  number:
+    color: "0xCCB34D"
+  comment:
+    color: "0x597359"
+  type:
+    color: "0x73B399"
+  support.type:
+    color: "0x6DBF90"
+    bold: true
+  function:
+    color: "0x8CBF80"
+  support.function: "0x6B8C4D"
+  variable: "0xBFBFA6"
+  variable.language: "0x5C9940"
+  variable.instance: "0x59B34D"
+  variable.class:
+    color: "0x6BA64D"
+  variable.global: "0xD98073"
+  constant:
+    color: "0x99CC40"
+  constant.symbol: "0x99CC40"
+  support.constant: "0x06960E"
+  property: "0x80A68C"
+  entity.name.class: "0x73B399"
+  entity.name.function: "0x8CBF80"
+  entity.name.tag: "0x5C9940"
+  entity.name.type.namespace: "0x67A189"
+  entity.other.attribute-name: "0x6BA64D"
+  entity.other.inherited-class:
+    color: "0x73B399"
+    italic: true
+  variable.other: "0xBFBFA6"
+  variable.parameter:
+    color: "0xBFBFA6"
+    italic: true
+  variable.function: "0x8CBF80"
+  constant.other: "0x99CC40"
+  constant.language: "0x5C9940"
+  constant.character: "0x99CC66"
+  storage: "0x4DA66A"
+  storage.type: "0x4DA66A"
+  punctuation: "0x668066"
+  tag: "0x5C9940"
+  attribute: "0x6BA64D"
+  preprocessor:
+    color: "0x6B8C00"
+  invalid:
+    color: "0xCC4040"
+    background: "0x660000"
+  plain: "0xB3BFAD"
+  markup.heading:
+    color: "0x55CC66"
+    bold: true
+    fontSize: 1.5
+  markup.heading.1:
+    color: "0x66DD77"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x5ED46F"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x55CC66"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x4CC05D"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x42B352"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x39A64A"
+    bold: true
+    fontSize: 1.0
+  markup:
+    color: "0x99B340"
+  markup.link:
+    color: "0x4DB359"
+    underline: true
+  markup.link.url:
+    color: "0x66CC73"
+    underline: true
+  markup.italic:
+    color: "0xB0E0C0"
+    italic: true
+  markup.bold:
+    color: "0xF0E8A0"
+    bold: true
+  markup.strikethrough:
+    color: "0x996666"
+    markup.strikethrough: true
+  markup.quote:
+    color: "0x9999B3"
+    italic: true
+    background: "0x141420"
+  markup.rule:
+    color: "0x665580"
+    bold: true
+  markup.code.block:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.code.inline:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.list.checked:
+    color: "0x73BF73"
+    bold: true
+
+editorBackground: "0x0F140F"
+sidebarBackground: "0x1D2320"
+sidebarBackgroundOpacity: 0.15
+editorForeground: "0xB3BFAD"
+caretColor: "0x88FF88"
+selectionColor: "0x1A331A"
+lineHighlight: "0x141A14"
+editorBackgroundOpacity: 0.10
+textShadowStrength: 0.0
+lineSpacing: 4.0
+
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+glassTintColor: "0x55CC55"
+glassStyle: regular
+glassTint: 0.65
+class: theme.Vibrant Dark

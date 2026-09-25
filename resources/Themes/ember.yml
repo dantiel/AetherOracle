@@ -1,0 +1,163 @@
+# Ember — warm umber, amber glow, candlelit code
+name: Ember
+kind: dark
+tags: [classic, fire, dark]
+rulerBackground: "0x29231F"
+rulerSeparator: "0x423C387F"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x0D0D0D"
+  foreground: "0xEEEEEE"
+  baseText: "0xC4F079"
+  accent: "0xA67AF0"
+  complementary: "0xC4F079"
+  codeBackground: "0x090909"
+  codeForeground: "0xEEEEEE"
+  shine: "0xC8ADF6"
+  glassTint: 0.7
+  glassMaterial: menu
+
+scopes:
+  keyword:
+    color: "0xD9804D"
+    bold: true
+  keyword.type:
+    color: "0xC0703D"
+  operator: "0xCC9966"
+  string:
+    color: "0x99B359"
+  string.escape:
+    color: "0xC0B070"
+  number:
+    color: "0xE6BF59"
+  comment:
+    color: "0x73664D"
+  type:
+    color: "0xBF8C66"
+  support.type:
+    color: "0xA67AF0"
+    bold: true
+  function:
+    color: "0xD9B380"
+  support.function: "0x815DB3"
+  variable: "0xCCB399"
+  variable.language: "0x8C70B0"
+  variable.instance: "0x62A6FF"
+  variable.class:
+    color: "0x7A88F6"
+  variable.global: "0xF18F94"
+  constant:
+    color: "0xBFD94D"
+  constant.symbol: "0xBFD94D"
+  support.constant: "0x06960E"
+  property: "0xB39980"
+  entity.name.class: "0xBF8C66"
+  entity.name.function: "0xD9B380"
+  entity.name.tag: "0x8C70B0"
+  entity.name.type.namespace: "0xAB7E5B"
+  entity.other.attribute-name: "0x9A80E0"
+  entity.other.inherited-class:
+    color: "0xBF8C66"
+    italic: true
+  variable.other: "0xCCB399"
+  variable.parameter:
+    color: "0xCCB399"
+    italic: true
+  variable.function: "0xD9B380"
+  constant.other: "0xBFD94D"
+  constant.language: "0x8C70B0"
+  constant.character: "0x99B359"
+  storage: "0xC0703D"
+  storage.type: "0xC0703D"
+  punctuation: "0x807366"
+  tag: "0x8C70B0"
+  attribute: "0x9A80E0"
+  preprocessor:
+    color: "0x7B9A00"
+  invalid:
+    color: "0xE64040"
+    background: "0x660000"
+  plain: "0xCCB39E"
+  markup.heading:
+    color: "0xE69955"
+    bold: true
+    fontSize: 1.5
+  markup.heading.1:
+    color: "0xF2AD66"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xECA35D"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xE69955"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xDB8C4A"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xCC7D3D"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xBF7033"
+    bold: true
+    fontSize: 1.0
+  markup:
+    color: "0xE6BF59"
+  markup.link:
+    color: "0xCC8844"
+    underline: true
+  markup.link.url:
+    color: "0xD9A055"
+    underline: true
+  markup.italic:
+    color: "0xB0E0C0"
+    italic: true
+  markup.bold:
+    color: "0xF0E8A0"
+    bold: true
+  markup.strikethrough:
+    color: "0x996666"
+    markup.strikethrough: true
+  markup.quote:
+    color: "0x9999B3"
+    italic: true
+    background: "0x141420"
+  markup.rule:
+    color: "0x665580"
+    bold: true
+  markup.code.block:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.code.inline:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.list.checked:
+    color: "0x73BF73"
+    bold: true
+
+editorBackground: "0x1A1410"
+sidebarBackground: "0x29281F"
+sidebarBackgroundOpacity: 0.15
+editorForeground: "0xCCB39E"
+caretColor: "0xFFCC88"
+selectionColor: "0x3A2518"
+lineHighlight: "0x241C14"
+editorBackgroundOpacity: 0.10
+textShadowStrength: 0.0
+lineSpacing: 4.0
+
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+glassTintColor: "0xFF5500"
+glassStyle: regular
+glassTint: 0.80
+class: theme.Vibrant Dark

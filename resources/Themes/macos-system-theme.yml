@@ -1,0 +1,156 @@
+# Converted from TextMate theme: macOS System Theme
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Themes.tmbundle/Themes/macOS System Theme.tmTheme
+name: macos-system-theme
+kind: dark
+class: theme.universal.macos-system-theme
+tags: [dark, universal, macos-system-theme]
+
+# Global editor colors
+editor:
+  background: "0x0D0D0D"
+  foreground: "0xEEEEEE"
+  caret: "0xFFFFFF"
+  selection: "0x333366"
+  lineHighlight: "0x232323"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.7
+lineSpacing: 4.4
+editorBackgroundOpacity: 0.79
+sidebarBackgroundOpacity: 0.89
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x121212"
+rulerForeground: "0xEEEEEE"
+sourceRulerBackground: "0x121212"
+rulerSeparator: "0x3535357F"
+sidebarAccent: "0xEEEEEE"
+sidebarForeground: "0xEEEEEE"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x454545"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x0D0D0D"
+  foreground: "0xEEEEEE"
+  baseText: "0x666533"
+  accent: "0x333366"
+  complementary: "0x666533"
+  codeBackground: "0x090909"
+  codeForeground: "0xEEEEEE"
+  shine: "0x8181A0"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xFFFFFF"
+  tag: "0xEEEEEE"
+  entity: "0xEEEEEE"
+  markup: "0xEEEEEE"
+  string: "0xFFFFFF"
+  comment:
+    italic: true
+  keyword:
+    bold: true
+  storage:
+    italic: true
+  support: "0xEEEEEE"
+  attribute: "0xEEEEEE"
+  punctuation: "0xEEEEEE"
+  preprocessor: "0xEEEEEE"
+  support.type: "0xFFFFFF"
+  support.class: "0xFFFFFF"
+  constant.other: "0xFFFFFF"
+  variable.other: "0xFFFFFF"
+  invalid.illegal: "0xFFFFFF"
+  constant.numeric: "0xFFFFFF"
+  support.constant: "0xFFFFFF"
+  support.function: "0xFFFFFF"
+  constant.language:
+    bold: true
+  variable.language: "0xFFFFFF"
+  constant.character: "0xFFFFFF"
+  invalid.deprecated:
+    italic: true
+    underline: true
+  variable.parameter: "0xFFFFFF"
+  entity.name.tag: "0xFFFFFF"
+  entity.name.class:
+    underline: true
+  entity.name.function: "0xFFFFFF"
+  markup.underline.link: "0xFFFFFF"
+  support.other.variable: "0xFFFFFF"
+  entity.other.attribute-name: "0xFFFFFF"
+  entity.other.inherited-class:
+    italic: true
+    underline: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xEEEEEE"
+  markup.heading:
+    color: "0xEEEEEE"
+    bold: true
+  markup.heading.1:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xEEEEEE"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xEEEEEE"
+    bold: true
+  markup.italic:
+    color: "0xEEEEEE"
+    italic: true
+  markup.link:
+    color: "0xFFFFFF"
+    underline: true
+  markup.link.url:
+    color: "0xFFFFFF"
+    underline: true
+  markup.code.block:
+    color: "0xEEEEEE"
+    background: "0x050505"
+  markup.code.inline:
+    color: "0xEEEEEE"
+    background: "0x050505"
+  markup.quote:
+    color: "0xEEEEEE"
+    italic: true
+    background: "0x121212"
+  markup.rule:
+    color: "0xEEEEEE"
+    bold: true
+  markup.strikethrough:
+    color: "0xEEEEEE"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xFFFFFF"
+    bold: true
+
