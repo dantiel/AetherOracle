@@ -16,9 +16,8 @@
 
   The native gems with no precompiled Windows binary in this profile
   (redcarpet / eventmachine / websocket-driver) compile automatically via the
-  RubyInstaller DevKit (MSYS2). No Rust is required: sqlite3 1.7.3 and
-  tiktoken_ruby 0.0.9 ship precompiled x64-mingw-ucrt gems for the exact
-  pinned versions.
+  RubyInstaller DevKit (MSYS2). Bundler resolves compatible Windows binaries
+  for sqlite3 and tiktoken_ruby.
 
 .PARAMETER InstallRuby
   Attempt a non-interactive RubyInstaller (Ruby + DevKit) install via winget.
@@ -72,7 +71,7 @@ One-time install (recommended: Ruby + DevKit):
 
 Then complete the MSYS2 toolchain (needed to compile redcarpet / eventmachine /
 websocket-driver):
-    ridk install 2 3
+    ridk install 1 3
 
 Or re-run this script with -InstallRuby to attempt the winget install.
 "@ -ForegroundColor Yellow
@@ -81,8 +80,15 @@ Or re-run this script with -InstallRuby to attempt the winget install.
 Write-Step "Ruby: $ruby"
 
 $rubyBin   = Split-Path -Parent $ruby
-$gemExe    = Join-Path $rubyBin 'gem.bat'
-$bundleExe = Join-Path $rubyBin 'bundle.bat'
+# Use Ruby scripts directly: RubyInstaller releases use both .cmd and .bat
+# wrappers. Keep every subprocess on the selected Ruby, including native builds.
+$env:PATH = "$rubyBin;$env:PATH"
+$env:RUBY = $ruby
+$gemScript = Join-Path $rubyBin 'gem'
+if (-not (Test-Path -LiteralPath $gemScript -PathType Leaf)) {
+    throw "RubyGems is missing from $rubyBin. Install Ruby with RubyGems included."
+}
+$bundleRunner = "load Gem.bin_path('bundler', 'bundle', '2.3.27')"
 
 # ----------------------------------------------------------------- version check
 $ver = & $ruby -e "print RUBY_VERSION"
@@ -93,28 +99,35 @@ if ($LASTEXITCODE -ne 0 -or [version]$ver -lt [version]'3.1.0') {
 Write-Step "Ruby $ver"
 
 # ------------------------------------------------------------------ DevKit check
-$ridk = Get-Command ridk.bat -ErrorAction SilentlyContinue
+$ridk = @('ridk.cmd', 'ridk.bat', 'ridk.ps1') |
+    ForEach-Object { Join-Path $rubyBin $_ } |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+    Select-Object -First 1
 if (-not $ridk) {
-    Write-Host "[aetheroracle] DevKit (ridk) not found. Native gems (redcarpet, eventmachine, websocket-driver) will fail to build." -ForegroundColor Yellow
-    Write-Host "Run once:  ridk install 2 3" -ForegroundColor Yellow
+    throw "RubyInstaller DevKit (ridk) not found in $rubyBin. Install Ruby + DevKit, then run ridk install 1 3."
+}
+# A ridk wrapper alone does not mean MSYS2 and its compiler are installed.
+& $ruby -r ruby_installer/runtime -e "RubyInstaller::Runtime.msys2_installation.enable_msys_apps; exit(system('gcc', '--version', out: File::NULL) && system('make', '--version', out: File::NULL) ? 0 : 1)"
+if ($LASTEXITCODE -ne 0) {
+    throw "MSYS2 development tools are unavailable. Run: & '$ridk' install 1 3, then rerun setup."
 }
 
 # ---------------------------------------------------------------------- bundler
 Write-Step "Ensuring bundler"
-& $gemExe install bundler -v 2.3.27 --no-document
+& $ruby $gemScript install bundler -v 2.3.27 --no-document
 if ($LASTEXITCODE -ne 0) { throw "gem install bundler failed" }
 
 # ----------------------------------------------------------------------- bundle
 Write-Step "Configuring bundle (local path = ruby/.vendor_bundle)"
 Push-Location $rubyDir
 try {
-    & $bundleExe config set --local path .vendor_bundle
+    & $ruby -r rubygems -e $bundleRunner -- config set --local path .vendor_bundle
     if ($LASTEXITCODE -ne 0) { throw "bundle config failed" }
 
-    & $bundleExe lock --add-platform x64-mingw-ucrt
+    & $ruby -r rubygems -e $bundleRunner -- lock --add-platform x64-mingw-ucrt
     if ($LASTEXITCODE -ne 0) { throw "bundle lock failed" }
 
-    & $bundleExe install
+    & $ruby -r rubygems -e $bundleRunner -- install
     if ($LASTEXITCODE -ne 0) { throw "bundle install failed" }
 } finally {
     Pop-Location
@@ -125,8 +138,10 @@ if (-not $SkipSmokeTest) {
     Write-Step "Smoke test"
     $aether = Join-Path $repo 'bin\aetheroracle.cmd'
     & $aether peers
+    if ($LASTEXITCODE -ne 0) { throw "CLI peers smoke test failed" }
     Write-Host ""
     & $aether config
+    if ($LASTEXITCODE -ne 0) { throw "CLI config smoke test failed" }
 }
 
 Write-Host ""

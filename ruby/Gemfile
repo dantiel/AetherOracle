@@ -1,6 +1,6 @@
 # Support/Gemfile
 source 'https://rubygems.org'
-ruby '3.1.7'
+ruby '>= 3.1'
 
 # Core dependencies
 gem 'sinatra', '~> 3.0'
