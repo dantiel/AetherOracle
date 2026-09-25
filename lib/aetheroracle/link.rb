@@ -1,0 +1,195 @@
+# frozen_string_literal: true
+
+require 'net/http'
+require 'json'
+
+module AetherOracle
+  # The LINK tier — pure Ruby stdlib, no gems. Discovers oracle peers on the LAN
+  # and routes turns over the limen.rb wire contract (scan 4550..4610,
+  # GET /aether/heartbeat, POST /aether/invoke). This is the aetherlink surface:
+  # a Windows/Linux box reaches the brain on a Mac over the same wire, with only
+  # Ruby installed — the aether is everywhere, and the voice finds it.
+  module Link
+    SCAN_RANGE = (4550..4610).freeze
+    HEARTBEAT_PATH = '/aether/heartbeat'.freeze
+    INVOKE_PATH = '/aether/invoke'.freeze
+    CONNECT_TIMEOUT = 2
+    READ_TIMEOUT = 180
+
+    module_function
+
+    def http_get(port, path, timeout: CONNECT_TIMEOUT)
+      uri = URI("http://127.0.0.1:#{port}#{path}")
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = timeout
+      http.read_timeout = READ_TIMEOUT
+      res = http.get(uri.path)
+      return nil unless res.code.to_i == 200
+
+      JSON.parse(res.body, symbolize_names: true)
+    rescue StandardError
+      nil
+    end
+
+    def heartbeat(port)
+      http_get(port, HEARTBEAT_PATH)
+    end
+
+    def peers
+      SCAN_RANGE.filter_map do |port|
+        info = heartbeat(port)
+        name = info && (info[:name] || info['name'])
+        next unless name
+
+        {
+          port: port,
+          name: name,
+          busy: info[:busy] || info['busy'] || false,
+          version: info[:version] || info['version'],
+          path: info[:path] || info['path'],
+          capabilities: info[:capabilities] || info['capabilities'] || []
+        }
+      end
+    end
+
+    def find_peer(peer)
+      list = peers
+      list.find { |p| p[:name] == peer } ||
+        list.find { |p| p[:name].downcase == peer.downcase } ||
+        begin
+          port = Integer(peer, exception: false)
+          port && port.between?(SCAN_RANGE.begin, SCAN_RANGE.end) ? { port: port, name: nil } : nil
+        end
+    end
+
+    def print_peers
+      list = peers
+      if list.empty?
+        warn 'No oracle peers found on the LAN (scanned 4550..4610).'
+        warn 'Start a brain with: aetheroracle server'
+        exit 1
+      end
+
+      puts format('%-6s %-32s %-10s %-8s', 'PORT', 'NAME', 'BUSY', 'VERSION')
+      puts '-' * 66
+      list.each do |p|
+        puts format('%-6d %-32s %-10s %-8s', p[:port], p[:name], p[:busy] ? 'yes' : 'no', p[:version] || '?')
+      end
+    end
+
+    def probe_heartbeat(args)
+      port = (args.first || 4567).to_i
+      info = heartbeat(port)
+      if info.nil?
+        warn "No heartbeat on 127.0.0.1:#{port}"
+        exit 1
+      end
+      puts JSON.pretty_generate(info)
+    end
+
+    def invoke_peer(args)
+      if args.empty?
+        warn 'Usage: aetheroracle invoke <peer> "prompt"'
+        exit 1
+      end
+
+      peer = args.shift
+      prompt = args.join(' ').strip
+      prompt = $stdin.read.strip if prompt.empty? && !$stdin.tty?
+
+      if prompt.empty?
+        warn 'No prompt given. Usage: aetheroracle invoke <peer> "prompt"'
+        warn '  or: echo "prompt" | aetheroracle invoke <peer>'
+        exit 1
+      end
+
+      target = find_peer(peer)
+      if target.nil?
+        warn "No peer found: #{peer}"
+        exit 1
+      end
+
+      uri = URI("http://127.0.0.1:#{target[:port]}#{INVOKE_PATH}")
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = CONNECT_TIMEOUT
+      http.read_timeout = READ_TIMEOUT
+      req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
+      req.body = { prompt: prompt, type: 'chat', from_context: 'aetheroracle-cli' }.to_json
+
+      res = http.request(req)
+      unless res.code.to_i == 200
+        warn "invoke failed: HTTP #{res.code}"
+        exit 1
+      end
+
+      body = JSON.parse(res.body, symbolize_names: true)
+      if body[:error]
+        warn "oracle error: #{body[:error]}"
+        exit 1
+      elsif body[:busy]
+        warn 'oracle busy'
+        exit 1
+      end
+
+      puts(body[:answer] || body['answer'] || body[:html] || body['html'])
+    rescue StandardError => e
+      warn "invoke failed: #{e.message}"
+      exit 1
+    end
+
+    def run(argv)
+      command = argv.shift
+      case command
+      when 'peers', 'discover', 'ls'
+        print_peers
+      when 'heartbeat', 'hb'
+        probe_heartbeat(argv)
+      when 'invoke', 'ask-peer', 'link'
+        invoke_peer(argv)
+      when 'help', '-h', '--help', nil
+        print_help
+      else
+        warn "unknown command: #{command}"
+        warn ''
+        print_help
+        exit 1
+      end
+    end
+
+    def print_help
+      puts <<~HELP
+        AetherOracle — one oracle, many voices.
+
+        The oracle has many names — all the same aether in the CLI:
+          aetheroracle · aether · oracle · oracleaether · ae · aero · orae
+
+        Usage: aetheroracle <command> [options]
+
+        LINK tier (any platform with Ruby — no gems):
+          peers                      discover oracle peers on the LAN (4550..4610)
+          heartbeat [port]           probe one peer's heartbeat (default 4567)
+          invoke <peer> "prompt"     route a turn to a remote oracle
+
+        BRAIN tier (needs the brain gems — `gem install aetheroracle`):
+          ask "prompt"               local oracle turn
+          server                     start the daemon (limen.rb)
+          config                     show configuration
+          task <action>              task ledger (list / show <id> / create <title>)
+
+        Install on any OS with Ruby:
+          gem build aetheroracle.gemspec && gem install ./aetheroracle-*.gem
+        Windows one-shot:
+          powershell -ExecutionPolicy Bypass -File bin\\aetheroracle-setup.ps1
+
+        Examples:
+          aetheroracle peers
+          oracle invoke "AetherCodex" "summarize the current project"
+          echo "what is the aether?" | ae invoke mac-oracle
+          aero ask "refactor this with --file app.rb"
+
+        The link tier speaks the ruby/aether_link.rb contract — a Windows/Linux
+        box reaches the brain on a Mac over the same wire. The aether is everywhere.
+      HELP
+    end
+  end
+end

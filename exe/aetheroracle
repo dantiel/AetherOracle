@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# AetherOracle — one oracle, many voices. Development launcher: loads the gem
-# from ../lib so the CLI works from a source checkout without `gem install`.
+# AetherOracle — one oracle, many voices. This is one of the seven names;
+# all are the same aether in the CLI.
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'aetheroracle'
 exit AetherOracle::CLI.run(ARGV)

@@ -2,21 +2,22 @@
 
 Two surfaces, two timelines:
 
-1. **The CLI (today)** — the full `aetheroracle` console entry point, running
-   locally with *full control* (the whole brain: `ask`, `server`, `config`,
-   `task`, `repl`). This file documents it.
+1. **The CLI (today)** — the full `aetheroracle` RubyGem, installed locally with
+   *full control* (the whole brain: `ask`, `server`, `config`, `task`, `repl`).
 2. **The WinUI3 shell (later)** — the native packaged app that embeds the brain
    and owns daemon/file-permission policy per `platform/README.md`. Spec at the
    bottom.
 
-## CLI — one-command full control
+## CLI — one-command full control, seven names
 
-The `aetheroracle` CLI has two tiers:
+AetherOracle is a RubyGem. Installing it on Windows turns the machine into an
+Aether OS: the oracle answers to seven names — `aetheroracle`, `aether`,
+`oracle`, `oracleaether`, `ae`, `aero`, `orae` — all the same aether in the CLI.
 
 | Tier | Commands | Needs |
 |---|---|---|
 | **Link** | `peers`, `heartbeat`, `invoke` | Ruby only (pure stdlib) |
-| **Brain** | `ask`, `server`, `config`, `task`, `logs`, `repl` | Ruby + DevKit + `bundle install` |
+| **Brain** | `ask`, `server`, `config`, `task`, `logs`, `repl` | Ruby + DevKit (C gems) |
 
 ### Setup
 
@@ -24,9 +25,10 @@ The `aetheroracle` CLI has two tiers:
 powershell -ExecutionPolicy Bypass -File bin\aetheroracle-setup.ps1
 ```
 
-This provisions everything in one shot: locates Ruby, pins the gem path to
-`ruby/.vendor_bundle`, adds the `x64-mingw-ucrt` platform to the lock, runs
-`bundle install`, and smoke-tests the CLI.
+This does everything in one shot: locates Ruby, builds the gem
+(`gem build aetheroracle.gemspec`), installs it (`gem install` — which pulls the
+brain tier + its dependencies), and smoke-tests `aetheroracle peers` +
+`aetheroracle config`. After it, the seven names are on `PATH`.
 
 If Ruby is missing, install it once (recommended: Ruby + DevKit):
 
@@ -35,29 +37,27 @@ winget install --id RubyInstallerTeam.RubyWithDevKit.3.1 -e
 ridk install 1 3
 ```
 
-`ridk install 1 3` installs MSYS2 and the development toolchain needed to
-compile native gems such as `redcarpet`, `eventmachine`, and
-`websocket-driver`. Setup checks that the compiler and make are available
-before installing gems and reports the selected Ruby's `ridk` path if needed.
-Ruby 3.1 or newer is accepted, including Ruby 3.3. Setup invokes RubyGems
-and Bundler through the selected Ruby, regardless of `.cmd`/`.bat` wrappers.
+`ridk install 1 3` fetches the MSYS2/mingw toolchain. It is the *only*
+interactive step — it cannot be scripted reliably, and it is only needed to
+compile the three C gems (`redcarpet`, `eventmachine`, `websocket-driver`).
 
 ### Why no Rust
 
-Bundler resolves `x64-mingw-ucrt` binaries for `sqlite3` and `tiktoken_ruby`
-within the Gemfile's version constraints. The resolved version can depend on
-the Ruby version; Ruby 3.3 uses a newer `tiktoken_ruby` than the original
-macOS lock. Using these binaries avoids a Rust source build.
+The two native gems that matter most ship precompiled Windows binaries for the
+pinned ranges, so there is no Rust toolchain and no source build for them:
 
-### Usage
+- `sqlite3 1.7.3` → `x64-mingw-ucrt` (Ruby ≥ 3.1)
+- `tiktoken_ruby 0.0.17` → `x64-mingw-ucrt` (Ruby ≥ 3.1)
+
+### Usage (seven names, one oracle)
 
 ```bat
-bin\aetheroracle.cmd peers                         rem discover peers on the LAN
-bin\aetheroracle.cmd invoke mac-oracle "prompt"    rem route a turn to a Mac brain
-bin\aetheroracle.cmd ask "prompt"                  rem local brain turn
-bin\aetheroracle.cmd server                        rem start the daemon (limen.rb)
-bin\aetheroracle.cmd config                        rem show configuration
-bin\aetheroracle.cmd task list                     rem task ledger
+aether peers                         rem discover peers on the LAN
+ae invoke mac-oracle "prompt"        rem route a turn to a Mac brain (aetherlink)
+aero ask "prompt"                    rem local brain turn
+oracle server                        rem start the daemon (limen.rb)
+orae config                          rem show configuration
+aetheroracle task list               rem task ledger
 ```
 
 The link tier speaks the same wire contract as `ruby/aether_link.rb`
@@ -65,10 +65,20 @@ The link tier speaks the same wire contract as `ruby/aether_link.rb`
 Windows box reaches a brain running on a Mac — aetherlink is part of
 AetherOracle.
 
-### Prerequisites
+### Without `gem install` (source checkout)
 
-- Ruby ≥ 3.1 (RubyInstaller with DevKit) — see above.
-- Git — for the `htmldiff` git-sourced gem in the `Gemfile`.
+The repo ships dev launchers for when you prefer a local checkout over a global
+install:
+
+```bat
+bin\aetheroracle.cmd peers              rem link tier: plain ruby, stdlib only
+bin\aetheroracle.cmd ask "prompt"       rem brain tier: bundle exec (ruby/Gemfile)
+```
+
+`bin\aetheroracle.cmd` routes the link tier through the same dispatcher as the
+installed gem (`bin/aetheroracle`); its brain tier runs `ruby/cli.rb` under
+`bundle exec` against `ruby/Gemfile` (which still carries the `htmldiff` git
+source).
 
 ## WinUI3 shell — spec
 
