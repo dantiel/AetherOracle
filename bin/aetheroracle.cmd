@@ -1,11 +1,11 @@
 @echo off
 rem =============================================================
-rem AetherOracle CLI - Windows full-control launcher.
+rem AetherOracle CLI - Windows full-control launcher (source-checkout).
 rem
 rem   LINK tier  (peers / heartbeat / invoke): pure stdlib, runs
 rem               with any Ruby - no gems, no bundle.
 rem   BRAIN tier (ask / server / config / task / logs / repl):
-rem               runs via `bundle exec` against ruby/.vendor_bundle.
+rem               runs via bundler against ruby/.vendor_bundle.
 rem
 rem Ruby resolution order: ruby/.portable -> %RUBY% -> PATH.
 rem Provision everything first with:
