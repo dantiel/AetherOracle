@@ -44,14 +44,16 @@ exit /b %ERRORLEVEL%
 
 :brain
 for %%I in ("%RUBY_EXE%") do set "RUBY_BIN=%%~dpI"
-if not exist "%RUBY_BIN%bundle.bat" (
+"%RUBY_EXE%" -r rubygems -e "gem 'bundler', '2.3.27'" >nul 2>&1
+if errorlevel 1 (
     echo [aetheroracle] bundler not installed. Run:
     echo   powershell -ExecutionPolicy Bypass -File "%~dp0aetheroracle-setup.ps1"
     exit /b 1
 )
 set "BUNDLE_GEMFILE=%DIR%..\ruby\Gemfile"
+set "PATH=%RUBY_BIN%;%PATH%"
 pushd "%DIR%..\ruby"
-"%RUBY_BIN%bundle.bat" exec ruby "%DIR%..\ruby\cli.rb" %*
+"%RUBY_EXE%" -r rubygems -e "load Gem.bin_path('bundler', 'bundle', '2.3.27')" -- exec "%RUBY_EXE%" "%DIR%..\ruby\cli.rb" %*
 set "CODE=%ERRORLEVEL%"
 popd
 exit /b %CODE%

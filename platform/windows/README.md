@@ -32,22 +32,22 @@ If Ruby is missing, install it once (recommended: Ruby + DevKit):
 
 ```bat
 winget install --id RubyInstallerTeam.RubyWithDevKit.3.1 -e
-ridk install 2 3
+ridk install 1 3
 ```
 
-`ridk install 2 3` fetches the MSYS2/mingw toolchain. It is the *only*
-interactive step — it cannot be scripted reliably, and it is only needed to
-compile the three native C gems (`redcarpet`, `eventmachine`,
-`websocket-driver`).
+`ridk install 1 3` installs MSYS2 and the development toolchain needed to
+compile native gems such as `redcarpet`, `eventmachine`, and
+`websocket-driver`. Setup checks that the compiler and make are available
+before installing gems and reports the selected Ruby's `ridk` path if needed.
+Ruby 3.1 or newer is accepted, including Ruby 3.3. Setup invokes RubyGems
+and Bundler through the selected Ruby, regardless of `.cmd`/`.bat` wrappers.
 
 ### Why no Rust
 
-The two native gems that matter most ship precompiled Windows binaries for the
-exact pinned versions, so there is no Rust toolchain and no source build for
-them:
-
-- `sqlite3 1.7.3` → `x64-mingw-ucrt` (Ruby ≥ 3.1)
-- `tiktoken_ruby 0.0.9` → `x64-mingw-ucrt` (Ruby ≥ 3.1)
+Bundler resolves `x64-mingw-ucrt` binaries for `sqlite3` and `tiktoken_ruby`
+within the Gemfile's version constraints. The resolved version can depend on
+the Ruby version; Ruby 3.3 uses a newer `tiktoken_ruby` than the original
+macOS lock. Using these binaries avoids a Rust source build.
 
 ### Usage
 
