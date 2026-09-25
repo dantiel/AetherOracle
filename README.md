@@ -52,12 +52,21 @@ aetheroracle ask "refactor this"          # local oracle turn (brain tier)
 aetheroracle server                       # start the daemon (brain tier)
 ```
 
-On Windows the link tier runs directly via `bin/aetheroracle.cmd` (Ruby on PATH):
+On Windows the same two tiers run via `bin/aetheroracle.cmd`, and the full
+*brain tier* (local `ask`/`server`/`config`/`task`) is one command away:
 
 ```bat
+powershell -ExecutionPolicy Bypass -File bin\aetheroracle-setup.ps1
+
 aetheroracle.cmd peers
 aetheroracle.cmd invoke mac-oracle "what is the aether?"
+aetheroracle.cmd ask "refactor this"     # local brain — full control
+aetheroracle.cmd server                  # run the daemon on Windows
 ```
+
+`aetheroracle-setup.ps1` pins the gems to `ruby/.vendor_bundle`, adds the
+`x64-mingw-ucrt` platform to the lock, and `bundle install`s. See
+`platform/windows/README.md` for prerequisites (RubyInstaller + DevKit).
 
 The link tier speaks the **same contract as `ruby/aether_link.rb`** (scan
 `4550..4610`, `GET /aether/heartbeat`, `POST /aether/invoke`), so a Windows or

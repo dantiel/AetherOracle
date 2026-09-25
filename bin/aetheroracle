@@ -194,6 +194,12 @@ def self.print_help
       echo "what is the aether?" | aetheroracle invoke mac-oracle
       aetheroracle ask "refactor this with --file app.rb"
 
+    Windows:
+      Run bin/aetheroracle.cmd (link tier needs only Ruby; brain tier needs
+      `bundle install`). Provision everything with:
+        powershell -ExecutionPolicy Bypass -File bin\\aetheroracle-setup.ps1
+      See platform/windows/README.md.
+
     The link tier speaks the ruby/aether_link.rb contract — a Windows/Linux
     box reaches the brain on a Mac over the same wire. The aether is everywhere.
   HELP
