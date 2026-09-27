@@ -40,10 +40,9 @@ class CONFIG
       
       # 3. Current project directory and parent directories (highest priority)
       current_dir = Pathname.new(start_dir)
-      root_dir = Pathname.new('/')
-      
-      # Traverse up directory tree until reaching root
-      while current_dir != root_dir
+      # Pathname.new('/') is not the root on Windows (for example, V:/).
+      # Stop when parent no longer moves upward on the current filesystem.
+      while current_dir != current_dir.parent
         project_config_path = current_dir + '.aethercodex'
         if File.exist?(project_config_path.to_s)
           project_config = load_config_file(project_config_path.to_s)
@@ -354,8 +353,7 @@ class CONFIG
   def self.project_config_path
     project_root = ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd
     current_dir = Pathname.new(project_root)
-    root_dir = Pathname.new('/')
-    while current_dir != root_dir
+    while current_dir != current_dir.parent
       candidate = current_dir + '.aethercodex'
       return candidate.to_s if File.exist?(candidate.to_s)
       current_dir = current_dir.parent

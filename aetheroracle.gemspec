@@ -53,6 +53,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'ruby-enum', '~> 1.0'
   spec.add_dependency 'textpow', '~> 1.4'
   spec.add_dependency 'differ', '~> 0.1.2'
+  # The vendored htmldiff source requires this directly at runtime.
+  spec.add_dependency 'diff-lcs', '~> 1.6'
   spec.add_dependency 'tiktoken_ruby', '~> 0.0.9'
   spec.add_dependency 'diffy', '~> 3.4'
   spec.add_dependency 'dotenv', '~> 3.1'

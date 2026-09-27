@@ -104,7 +104,7 @@ policies.
 
 ## Upstream dependency posture
 
-`bundle outdated` was audited (the "drunken Sam Altman" check). The pins are
+`bundle outdated` was audited against the pinned ranges. The pins are
 deliberate and stable; nothing is broken:
 
 - **Kept pinned (breaking majors, intentionally held):** `sinatra` 3.x (not 4),
