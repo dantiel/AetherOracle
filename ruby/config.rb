@@ -40,6 +40,17 @@ class CONFIG
         source_dirs[:bundle] = File.dirname(bundle_config_path)
       end
 
+      # User preferences and credentials apply to projects on every drive.
+      # Load the home config as a low-priority base; project and nearer configs
+      # later in the chain can still override it.
+      user_config_path = File.join(home, '.aethercodex')
+      if File.file?(user_config_path) && !config_chain(start_dir).include?(user_config_path)
+        user_config = load_config_file(user_config_path)
+        user_config[:__source] = :home
+        configs << user_config
+        source_dirs[:home] = home
+      end
+
       # 2. The walk-up chain: merge every config from the boundary down to the
       #    start directory. Reverse order (boundary first) so the deepest config
       #    - the one actually identifying the context - wins the merge.
@@ -338,7 +349,7 @@ class CONFIG
   
   
   def self.api_key
-    [ENV['AETHER_API_KEY'], CFG[:api_key], ENV['DEEPSEEK_API_KEY']]
+    [ENV['AETHER_API_KEY'], CFG[:api_key], CFG['api-key'], ENV['DEEPSEEK_API_KEY']]
       .find { |value| !value.to_s.strip.empty? }
   end
 

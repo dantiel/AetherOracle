@@ -15,6 +15,19 @@ class TerminalStream
     puts "\e[2m  ◇ #{message}\e[0m"
   end
 
+  def ask_user(type:, message:, options: nil)
+    choices = options || %w[Yes No]
+    STDOUT.print "\e[35m? #{message}\e[0m"
+    STDOUT.print " [#{choices.join('/')}]" unless choices.empty?
+    STDOUT.print ': '
+    answer = $stdin.gets&.strip
+    return { error: 'No terminal response received' } if answer.nil?
+    return { response: answer } if choices.empty?
+
+    selected = choices.find { |choice| choice.casecmp?(answer) || choice[0]&.casecmp?(answer[0]) }
+    { response: selected || answer }
+  end
+
   def send_status(type, data = {}, uuid: nil, **_)
     case type
     when 'ask_user'

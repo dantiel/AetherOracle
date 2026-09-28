@@ -70,11 +70,18 @@ class ÆtherCodexCLI
     end
     prompt = args.join(' ')
 
+    interactive = $stdin.tty? && $stdout.tty?
+    terminal_stream = interactive ? TerminalStream.new : nil
+    tools = interactive ? @tools : @tools.reject(:ask_user)
     context = Coniunctio.build(files: files)
-    answer, arts, tool_results = Oracle.divination(prompt, context, tools: @tools) do |name, args, tool_ctx|
-      @tools.handle(tool: name, args:, context: tool_ctx)
+    previous_stream = Thread.current[:aether_terminal_stream]
+    Thread.current[:aether_terminal_stream] = terminal_stream
+    answer, arts, tool_results = Oracle.divination(prompt, context, tools:, stream: terminal_stream) do |name, args, tool_ctx|
+      tools.handle(tool: name, args:, context: tool_ctx)
     end
     puts answer
+  ensure
+    Thread.current[:aether_terminal_stream] = previous_stream
   end
 
   def server_mode

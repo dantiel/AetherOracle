@@ -1389,15 +1389,18 @@ instrument :ask_user,
                          nil
                        end
 
-  # Send to frontend
-  HorologiumAeternum.send_status('ask_user', {
-                                   type:,
-                                   message:,
-                                   options: normalized_options
-                                 }, uuid:)
-
-  # Block until user responds
-  result = HorologiumAeternum.await_user_response(uuid)
+  terminal = Thread.current[:aether_terminal_stream]
+  result = if terminal
+             terminal.ask_user(type:, message:, options: normalized_options)
+           else
+             # Web clients respond asynchronously over the status channel.
+             HorologiumAeternum.send_status('ask_user', {
+                                              type:,
+                                              message:,
+                                              options: normalized_options
+                                            }, uuid:)
+             HorologiumAeternum.await_user_response(uuid)
+           end
   
   # Ensure consistent return format
   case result
