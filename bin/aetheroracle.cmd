@@ -34,7 +34,7 @@ if not defined RUBY_EXE (
 rem classify the command: brain tier needs bundler, link tier does not
 set "CMD=%~1"
 set "BRAIN=0"
-for %%C in (ask server config task logs repl) do if /i "%CMD%"=="%%C" set "BRAIN=1"
+for %%C in (ask server config context task logs repl veil) do if /i "%CMD%"=="%%C" set "BRAIN=1"
 
 if "%BRAIN%"=="1" goto :brain
 

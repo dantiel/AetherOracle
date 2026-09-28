@@ -53,6 +53,31 @@ Windows one-shot (Ruby + DevKit + gem + smoke test):
 powershell -ExecutionPolicy Bypass -File bin\aetheroracle-setup.ps1
 ```
 
+After installation, run `aether veil` for a first-run system check and guided
+configuration. Only `model` is needed — pick a known model and the fast model,
+API type and endpoint are filled automatically; for a custom model, fill the
+minimal fields directly:
+
+```yaml
+# ~/.aethercodex
+model: deepseek-chat     # known model → everything else is derived
+
+# --- custom model: fill the minimal fields directly ---
+# model:    your-model-id
+# api-type: openai       # openai | anthropic | gemini | deepseek
+# api-url:  https://api.example.com/v1/chat/completions
+# api-key:  sk-...       # or export AETHER_API_KEY=...
+```
+
+Useful veil commands:
+
+```bash
+aether veil --check     # read-only system + configuration check
+aether veil --repair    # review model, repair a damaged config
+aether veil --default   # write a documented default ~/.aethercodex (never overwrites)
+aether veil --edit      # write the default if missing, then open it in your editor
+```
+
 ## Two tiers
 
 - **Link tier** — pure Ruby stdlib, no gems. `peers`, `heartbeat`, `invoke`.

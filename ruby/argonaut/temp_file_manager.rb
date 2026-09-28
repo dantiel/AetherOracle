@@ -61,8 +61,8 @@ class Argonaut
             # Debug: check what path is received
             puts "[TEMP_MANAGER] Creating project file with path: #{path}"
             # Create file within project structure
-            # Use project base directory (where TextMate runs commands)
-            project_base = ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd
+            # Use the derived context root (same resolution as Argonaut.project_root)
+            project_base = Argonaut.project_root
             full_path = File.expand_path(path, project_base)
             puts "[TEMP_MANAGER] Full path: #{full_path}"
             FileUtils.mkdir_p(File.dirname(full_path))

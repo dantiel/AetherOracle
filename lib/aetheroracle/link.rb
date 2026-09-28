@@ -172,8 +172,10 @@ module AetherOracle
 
         BRAIN tier (needs the brain gems — `gem install aetheroracle`):
           ask "prompt"               local oracle turn
+          veil                      check, configure, and repair Aether setup
           server                     start the daemon (limen.rb)
           config                     show configuration
+          context                    show / create / switch the active context
           task <action>              task ledger (list / show <id> / create <title>)
 
         Install on any OS with Ruby:

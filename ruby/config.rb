@@ -7,83 +7,149 @@ require_relative 'instrumentarium/metaprogramming_utils'
 
 
 
-# Unified hierarchical configuration loading system
-# Loads .aethercodex files from multiple sources with precedence:
-# 1. Current project directory (highest priority)
-# 2. User home directory (~/.aethercodex)
-# 3. Bundle Support directory (lowest priority)
+# Unified hierarchical configuration loading system.
+#
+# A context is identified by a config file - `.aethercodex` (YAML) or
+# `.aether_properties` (flat `key = value`) - placed at the context root.
+# Resolution walks up from the working directory, merging every config it
+# finds until it reaches a boundary:
+#   * started inside the user home dir  -> stop at the home dir (never crawl above it)
+#   * started anywhere else (e.g. another drive) -> crawl to the filesystem root
+# Deeper (more specific) configs override shallower (more general) ones; the
+# bundle's own config (lowest priority) is always merged underneath.
 class CONFIG
+
+  # Recognized config file names, in precedence order. `.aethercodex` (YAML) is
+  # authoritative; `.aether_properties` (flat `key = value`) is the lightweight
+  # alternative. A directory carries at most one of them as its context marker.
+  CONFIG_FILENAMES = ['.aethercodex', '.aether_properties'].freeze
   
   class << self
     
     def load_hierarchical_config(start_dir = Dir.pwd)
       configs = []
       source_dirs = {}
-      
-      # 1. Bundle Support directory (lowest priority)
-      bundle_config_path = File.expand_path('.aethercodex', __dir__)
-      if File.exist?(bundle_config_path)
+      home = File.expand_path(Dir.home)
+
+      # 1. Bundle's own config (lowest priority, always merged underneath)
+      bundle_config_path = config_file_in(__dir__)
+      if bundle_config_path
         bundle_config = load_config_file(bundle_config_path)
         bundle_config[:__source] = :bundle
         configs << bundle_config
         source_dirs[:bundle] = File.dirname(bundle_config_path)
       end
-      
-      # 2. User home directory
-      home_config_path = File.expand_path('~/.aethercodex')
-      if File.exist?(home_config_path)
-        home_config = load_config_file(home_config_path)
-        home_config[:__source] = :home
-        configs << home_config
-        source_dirs[:home] = File.dirname(home_config_path)
+
+      # 2. The walk-up chain: merge every config from the boundary down to the
+      #    start directory. Reverse order (boundary first) so the deepest config
+      #    - the one actually identifying the context - wins the merge.
+      config_chain(start_dir).reverse_each do |path|
+        dir = File.dirname(path)
+        project_config = load_config_file(path)
+        project_config[:__source] = (dir == home) ? :home : :project
+        configs << project_config
+        source_dirs[project_config[:__source]] = dir
       end
-      
-      # 3. Current project directory and parent directories (highest priority)
-      current_dir = Pathname.new(start_dir)
-      # Pathname.new('/') is not the root on Windows (for example, V:/).
-      # Stop when parent no longer moves upward on the current filesystem.
-      while current_dir != current_dir.parent
-        project_config_path = current_dir + '.aethercodex'
-        if File.exist?(project_config_path.to_s)
-          project_config = load_config_file(project_config_path.to_s)
-          project_config[:__source] = :project
-          configs << project_config
-          source_dirs[:project] = File.dirname(project_config_path.to_s)
-          break # Stop at first project config found
-        end
-        current_dir = current_dir.parent
-      end
-      
+
       # Merge all configs with proper precedence (first = lowest, last = highest)
       merged_config = {}
-      configs.each do |config|
-        merged_config = deep_merge(merged_config, config)
-      end
-      
+      configs.each { |config| merged_config = deep_merge(merged_config, config) }
+
       # Track the actual source for debugging
       merged_config[:__loaded_from] = merged_config[:__source]
       merged_config.delete(:__source)
-      
+
       # Store base directory of highest-priority config for resolving relative paths
       highest_source = merged_config[:__loaded_from]
       merged_config[:__base_dir] = source_dirs[highest_source] if highest_source
-      
-      # puts "[CONFIG][LOAD_HIERARCHICAL_CONFIG]: merged_config: #{merged_config.inspect}"
-      
+
       merged_config
     end
     
     
     def load_config_file(path)
       return {} unless File.exist?(path)
-      
+
       begin
-        config = YAML.load_file(path) || {}
+        config = if File.basename(path) == '.aether_properties'
+                   load_properties_file(path)
+                 else
+                   YAML.load_file(path) || {}
+                 end
         symbolize_keys(config)
       rescue => e
         puts "[CONFIG] Error loading #{path}: #{e.message}"
         {}
       end
+    end
+
+    # Parse a `.aether_properties` file: flat `key = value` / `key: value`
+    # lines with `#`/`!` comments and blank lines. Values stay strings - the
+    # accessors coerce scalars downstream (`port` -> to_i, `dev_mode` -> 'true').
+    def load_properties_file(path)
+      File.readlines(path).each_with_object({}) do |line, config|
+        line = line.strip
+        next if line.empty? || line.start_with?('#', '!')
+
+        m = line.match(/\A([^=:]+?)\s*[=:]\s*(.*)\z/)
+        next unless m
+
+        config[m[1].strip] = m[2].strip
+      end
+    end
+
+    # The config file (if any) that marks `dir` as a context root. Prefers
+    # `.aethercodex` over `.aether_properties` when both are present.
+    def config_file_in(dir)
+      CONFIG_FILENAMES.each do |name|
+        path = File.join(dir, name)
+        return path if File.exist?(path)
+      end
+      nil
+    end
+
+    # The directory above which resolution must NOT crawl. Inside the user home
+    # dir the boundary is the home dir itself; elsewhere it is the root of the
+    # filesystem the search began on.
+    def config_boundary(start_dir)
+      start = Pathname.new(File.expand_path(start_dir))
+      home  = Pathname.new(File.expand_path(Dir.home))
+      return home if start == home || start.to_s.start_with?(home.to_s + File::SEPARATOR)
+
+      root = start
+      root = root.parent while root != root.parent
+      root
+    end
+
+    # Directories from `start_dir` up to (and including) the boundary,
+    # nearest-first. A file path is treated as its containing directory.
+    def upward_dirs(start_dir)
+      current  = Pathname.new(File.expand_path(start_dir))
+      current  = current.parent if File.file?(current.to_s)
+      boundary = config_boundary(current.to_s)
+      dirs = []
+      loop do
+        dirs << current
+        break if current == boundary
+        current = current.parent
+      end
+      dirs
+    end
+
+    # Every config file found on the walk from `start_dir` to the boundary,
+    # nearest-first (most specific first).
+    def config_chain(start_dir)
+      upward_dirs(start_dir).map { |d| config_file_in(d.to_s) }.compact
+    end
+
+    # Walk up from `start_dir` looking for one named config file, within the
+    # boundary. Returns its path or nil.
+    def find_config_file_upward(start_dir, name)
+      upward_dirs(start_dir).each do |d|
+        path = File.join(d.to_s, name)
+        return path if File.exist?(path)
+      end
+      nil
     end
     
     
@@ -119,22 +185,126 @@ class CONFIG
   end
   
   
+  # Model registry — `model` is the only knob a user needs. Each preset maps a
+  # known model ID to its fast model, API type and endpoint. A custom model (one
+  # not listed here) simply sets `model` + `api-type` + `api-url` directly — no
+  # values are templated or derived from anything else.
+  MODELS = {
+    # DeepSeek
+    'deepseek-chat'     => { fast_model: 'deepseek-chat',     api_type: 'deepseek',  api_url: 'https://api.deepseek.com/v1/chat/completions' },
+    'deepseek-reasoner' => { fast_model: 'deepseek-chat',     api_type: 'deepseek',  api_url: 'https://api.deepseek.com/v1/chat/completions' },
+    # OpenAI
+    'gpt-4o'            => { fast_model: 'gpt-4o-mini',       api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    'gpt-4o-mini'       => { fast_model: 'gpt-4o-mini',       api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    'gpt-4.1'           => { fast_model: 'gpt-4.1-mini',      api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    'gpt-4.1-mini'      => { fast_model: 'gpt-4.1-mini',      api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    'gpt-5'             => { fast_model: 'gpt-5-mini',        api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    'gpt-5-mini'        => { fast_model: 'gpt-5-mini',        api_type: 'openai',    api_url: 'https://api.openai.com/v1/chat/completions' },
+    # Anthropic
+    'claude-sonnet-4-5' => { fast_model: 'claude-sonnet-4-5', api_type: 'anthropic', api_url: 'https://api.anthropic.com/v1/messages' },
+    'claude-opus-4-5'   => { fast_model: 'claude-opus-4-5',   api_type: 'anthropic', api_url: 'https://api.anthropic.com/v1/messages' },
+    'claude-haiku-4-5'  => { fast_model: 'claude-haiku-4-5',  api_type: 'anthropic', api_url: 'https://api.anthropic.com/v1/messages' },
+    # Gemini
+    'gemini-2.5-pro'    => { fast_model: 'gemini-2.5-flash',  api_type: 'gemini',    api_url: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent' },
+    'gemini-2.5-flash'  => { fast_model: 'gemini-2.5-flash',  api_type: 'gemini',    api_url: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent' }
+  }.freeze
+
+  DEFAULT_MODEL = 'deepseek-chat'
+
+  def self.models
+    MODELS
+  end
+
+  def self.model
+    resolve_model(CFG)
+  end
+
+  def self.fast_model
+    resolve_fast_model(CFG)
+  end
+
+  def self.api_type
+    resolve_api_type(CFG)
+  end
+
+  # Fill every derived key into the merged config so CFG[:model], CFG[:fast_model],
+  # CFG[:api_url] and CFG[:api_type] are always present and always consistent.
+  # A known `model` (a MODELS preset) contributes its fast model, API type and
+  # endpoint; a custom model must supply `api-type` and `api-url` directly.
+  def self.apply_model_defaults(config)
+    model = resolve_model(config)
+    spec = MODELS[model]
+
+    fast_model = resolve_fast_model(config)
+
+    api_type = resolve_api_type(config)
+
+    endpoint = configured_value(config, :api_url)
+    endpoint = spec[:api_url] if endpoint.to_s.strip.empty? && spec
+    endpoint = ENV['DEEPSEEK_API_URL'] if endpoint.to_s.strip.empty? && !ENV['DEEPSEEK_API_URL'].to_s.strip.empty?
+    endpoint = endpoint.sub('{model}', model) if endpoint.to_s.include?('{model}')
+
+    config[:model] = model
+    config[:fast_model] = fast_model
+    config[:api_type] = api_type
+    config[:api_url] = endpoint
+    config
+  end
+
+  def self.configured_value(config, key)
+    env = ENV["AETHER_#{key.to_s.upcase}"]
+    return env unless env.to_s.strip.empty?
+    value = config[key] || config[key.to_s]
+    value unless value.to_s.strip.empty?
+  end
+
+  def self.resolve_model(config)
+    model = configured_value(config, :model)
+    model.to_s.strip.empty? ? DEFAULT_MODEL : model
+  end
+
+  def self.resolve_fast_model(config)
+    fast_model = configured_value(config, :fast_model)
+    return fast_model unless fast_model.to_s.strip.empty?
+
+    spec = MODELS[resolve_model(config)]
+    spec ? spec[:fast_model] : resolve_model(config)
+  end
+
+  def self.resolve_api_type(config)
+    api_type = configured_value(config, :api_type)
+    return api_type.to_s.strip.downcase unless api_type.to_s.strip.empty?
+
+    spec = MODELS[resolve_model(config)]
+    return spec[:api_type] if spec
+
+    infer_provider_from_url(configured_value(config, :api_url))
+  end
+
+  def self.infer_provider_from_url(url)
+    u = url.to_s.downcase
+    return 'deepseek' if u.include?('deepseek')
+    return 'anthropic' if u.include?('anthropic')
+    return 'gemini' if u.include?('googleapis.com') || u.include?('generativelanguage')
+    return 'openai' if u.include?('openai')
+    nil
+  end
+
   # Load configuration hierarchically (initial load).
-  # Start the upward traversal from the STABLE project root (TM_PROJECT_DIRECTORY),
-  # never from Dir.pwd — which drifts to the folder of the last-opened file and can
-  # even land outside the project tree, loading the wrong .aethercodex.
-  CFG = load_hierarchical_config(ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd)
+  # The context is DERIVED from where `aether` is executed: walk up from Dir.pwd
+  # to the nearest `.aethercodex` config file — that directory is the context root.
+  CFG = apply_model_defaults(load_hierarchical_config(Dir.pwd))
   
   
   # Default values
   DEFAULT_CONFIG = {
     port: 4567,
     model: 'deepseek-chat',
-    'api-url': 'https://api.deepseek.com/v1/chat/completions',
+    api_url: 'https://api.deepseek.com/v1/chat/completions',
     'reasoning-model': true,
-    'fast-model': 'deepseek-v4-flash',
-    'tm-ai': '.tm-ai/',
-    'memory-db': '.tm-ai/memory.db'
+    'fast-model': 'deepseek-chat',
+    'tm-ai': '.aether/',
+    'memory-db': '.aether/mnemosyne.db'
   }
   
   
@@ -168,12 +338,14 @@ class CONFIG
   
   
   def self.api_key
-    ENV['AETHER_API_KEY'] || CFG[:api_key] || CFG['api-key']
+    [ENV['AETHER_API_KEY'], CFG[:api_key], ENV['DEEPSEEK_API_KEY']]
+      .find { |value| !value.to_s.strip.empty? }
   end
-  
-  
+
+
   def self.api_url
-    ENV['AETHER_API_URL'] || CFG[:api_url] || CFG['api-url'] || DEFAULT_CONFIG[:api_url]
+    [ENV['AETHER_API_URL'], CFG[:api_url], ENV['DEEPSEEK_API_URL']]
+      .find { |value| !value.to_s.strip.empty? }
   end
   
   
@@ -212,35 +384,30 @@ class CONFIG
   end
   
   
-  # Resolve a path relative to the config base directory, handling absolute paths.
-  # Precedence: TM_PROJECT_DIRECTORY env var > config file directory > Dir.pwd.
-  def self.resolve_path(relative_path)
-    # Handle absolute paths (starting with "/")
-    return relative_path if relative_path.start_with?('/')
-    
-    # For relative paths, resolve relative to the highest-priority config's directory
-    project_root = ENV['TM_PROJECT_DIRECTORY']
-    
-    # Fall back to config base dir only if outside the bundle (pristine copies are read-only)
-    if !project_root && CFG[:__base_dir]
-      bundle_dir = File.expand_path('..', __dir__)
-      project_root = CFG[:__base_dir] unless CFG[:__base_dir].start_with?(bundle_dir)
-    end
-    
-    project_root ||= Dir.pwd
-    File.join(project_root, relative_path)
+  # Find the config file (`.aethercodex` or `.aether_properties`) that identifies
+  # the context for `start_dir`, walking up parent directories to the boundary
+  # (home dir when started inside home, otherwise the filesystem root). Returns
+  # the config file path, or nil when no config exists anywhere up the chain.
+  def self.resolve_path(start_dir = Dir.pwd)
+    config_chain(start_dir).first
   end
 
 
-  # The project root directory. TextMate exposes the stable project root via
-  # TM_PROJECT_DIRECTORY; Dir.pwd, by contrast, drifts to the folder of the
-  # most recently opened file. Resolve context identity to this root, not pwd.
-  # (TM_DIRECTORY is deliberately skipped — it tracks the active file's folder,
-  # i.e. exactly the "last-opened folder" drift we want to avoid.)
+  # The context root is DERIVED, never switched: walk up from the current
+  # working directory (where `aether` is executed) to the nearest `.aethercodex`
+  # config file — that directory IS the context. Falls back to Dir.pwd when no
+  # config file exists anywhere up the tree.
   def self.project_root
-    root = ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd
-    root = File.dirname(root) if root && File.file?(root)
-    root
+    find_project_root(Dir.pwd)
+  end
+
+  def self.find_project_root(start_dir)
+    cfg = resolve_path(start_dir)
+    return File.dirname(cfg) if cfg
+
+    expanded = Pathname.new(File.expand_path(start_dir))
+    expanded = expanded.parent if File.file?(expanded.to_s)
+    expanded.to_s
   end
 
 
@@ -254,25 +421,25 @@ class CONFIG
   end
 
 
-  # Get the tm-ai directory path
+  # Runtime data directory for the derived context: `<root>/.aether/`.
   def self.tm_ai_dir
-    path = resolve_path(self[:tm_ai] || '.tm-ai/')
+    path = File.join(project_root, '.aether')
     FileUtils.mkdir_p(path)
     path
   rescue Errno::EACCES, Errno::EROFS
-    fallback = File.expand_path('~/.tm-ai/')
+    fallback = File.expand_path('~/.aether/')
     FileUtils.mkdir_p(fallback)
     fallback
   end
   
   
-  # Get the memory database path
+  # Unified memory database: always `<context>/.aether/mnemosyne.db`.
   def self.memory_db_path
-    path = resolve_path(self[:memory_db] || '.tm-ai/memory.db')
+    path = File.join(project_root, '.aether', 'mnemosyne.db')
     FileUtils.mkdir_p(File.dirname(path))
     path
   rescue Errno::EACCES, Errno::EROFS
-    fallback = File.expand_path('~/.tm-ai/memory.db')
+    fallback = File.expand_path('~/.aether/mnemosyne.db')
     FileUtils.mkdir_p(File.dirname(fallback))
     fallback
   end
@@ -284,9 +451,9 @@ class CONFIG
   end
   
   
-  # Get the PID file path
-  def self.pid_file_path
-    File.join(tm_ai_dir, 'limen.pid')
+  # Re-read the hierarchical config in place from the current working directory.
+  def self.reload!
+    CFG.replace(apply_model_defaults(load_hierarchical_config(Dir.pwd)))
   end
   
   
@@ -347,18 +514,12 @@ class CONFIG
     end
   end
 
-  # Locate the project .aethercodex that write_contexts will splice into.
-  # Walks up from TM_PROJECT_DIRECTORY (or Dir.pwd) to the filesystem root,
-  # returning the first existing .aethercodex; falls back to project_root/.aethercodex.
+  # Locate the `.aethercodex` that write_contexts will splice into. Walks up
+  # from the working directory within the boundary, returning the first existing
+  # `.aethercodex`; falls back to project_root/.aethercodex. (YAML `contexts:`
+  # only applies to `.aethercodex`, so the properties variant is not a target.)
   def self.project_config_path
-    project_root = ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd
-    current_dir = Pathname.new(project_root)
-    while current_dir != current_dir.parent
-      candidate = current_dir + '.aethercodex'
-      return candidate.to_s if File.exist?(candidate.to_s)
-      current_dir = current_dir.parent
-    end
-    File.join(project_root, '.aethercodex')
+    find_config_file_upward(Dir.pwd, '.aethercodex') || File.join(project_root, '.aethercodex')
   end
 
   # Render contexts (name-keyed hash) as indented YAML list entries — WITHOUT
@@ -412,6 +573,6 @@ class CONFIG
   # server restart required. CFG is the live Hash constant; replace() mutates
   # it in place so all existing references observe the new contents.
   def self.reload!
-    CFG.replace(load_hierarchical_config(ENV['TM_PROJECT_DIRECTORY'] || Dir.pwd))
+    CFG.replace(apply_model_defaults(load_hierarchical_config(Dir.pwd)))
   end
 end

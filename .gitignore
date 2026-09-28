@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 # Local memory / logs — never shipped.
+.aethercodex
 .tm-ai/
 *.db
 *.sqlite

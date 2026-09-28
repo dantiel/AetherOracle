@@ -4,6 +4,7 @@ require 'json'
 require 'open3'
 require 'tempfile'
 require 'pathname'
+require_relative '../config'
 require_relative '../mnemosyne/mnemosyne'
 require_relative '../instrumentarium/diff_crepusculum'
 require_relative '../instrumentarium/semantic_patch'
@@ -136,22 +137,18 @@ class Argonaut
   end
 
 
+  # The project root is DERIVED, never switched: delegate to CONFIG, which
+  # walks up from the working directory to the nearest `.aethercodex` (or
+  # `.aether_properties`) context marker, falling back to Dir.pwd when none
+  # exists. No reliance on TM_PROJECT_DIRECTORY/TM_DIRECTORY env vars.
   def self.project_root
     if ENV['TM_DEBUG_PATHS']
       puts '🔮 Dimensional Diagnostics:'
-      puts "TM_PROJECT_DIRECTORY: #{ENV['TM_PROJECT_DIRECTORY'].inspect}"
-      puts "TM_DIRECTORY: #{ENV['TM_DIRECTORY'].inspect}"
-      puts "TM_FILEPATH: #{ENV['TM_FILEPATH'].inspect}"
-      puts "TM_SELECTED_FILE: #{ENV['TM_SELECTED_FILE'].inspect}"
+      puts "Derived context root: #{CONFIG.project_root.inspect}"
       puts "Current directory: #{Dir.pwd}"
-      puts "TM_QUERY: #{`#{ENV['TM_QUERY']}`}" if ENV['TM_QUERY']
     end
 
-    root = ENV['TM_PROJECT_DIRECTORY'] || ENV['TM_DIRECTORY'] || Dir.pwd
-
-    root = File.dirname root if root && File.file?(root)
-
-    root
+    CONFIG.project_root
   end
 
 
@@ -329,12 +326,11 @@ class Argonaut
     excludes = exclude_files
     prefix = working_dir ? "#{working_dir}/" : ''
 
-    # Get top-level dirs and files
-    entries = Dir.chdir(base_dir) do
-      Dir.glob('*')
-        .reject { |e| excludes.any? { |ex| argonaut_match? ex, e } }
-        .sort
-    end
+    # Enumerate with absolute paths so an inaccessible child never changes the
+    # process working directory or prevents the remaining project summary.
+    entries = Dir.children(base_dir)
+                  .reject { |e| excludes.any? { |ex| argonaut_match? ex, e } }
+                  .sort
 
     lines = []
     dirs = entries.select { |e| File.directory? File.join(base_dir, e) }
@@ -342,7 +338,11 @@ class Argonaut
 
     dirs.each do |dir|
       full_dir = File.join base_dir, dir
-      count = Dir.chdir(full_dir) { Dir.glob('*').count { |f| File.file? f } }
+      begin
+        count = Dir.children(full_dir).count { |file| File.file?(File.join(full_dir, file)) }
+      rescue Errno::EACCES, Errno::EPERM, Errno::ENOENT
+        next
+      end
       rel = "#{prefix}#{dir}/"
       lines << "#{rel} (#{count} files)"
     end

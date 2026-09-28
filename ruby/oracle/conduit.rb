@@ -21,21 +21,21 @@ class Conduit
   class << self
     THINKING_LEVELS = %w[max high normal fast].freeze
 
-    def select_model(config, reasoning)
+    def select_model(_config, reasoning)
       thinking = Mnemosyne.aegis[:thinking].to_s
       thinking = 'normal' if thinking.empty?
       case thinking
-      when 'fast' then config[:fast_model] || 'deepseek-flash'
+      when 'fast' then CONFIG.fast_model
       when 'max', 'high', 'normal'
-        config[:model] || 'deepseek-chat'
+        CONFIG.model
       else
         # Unknown thinking level — fall back to the configured chat model. Never
         # leak the `reasoning-model` flag string ("yes"/"true") as a model name.
-        config[:model] || 'deepseek-chat'
+        CONFIG.model
       end
     rescue StandardError => e
       HorologiumAeternum.system_error "Failed to select model: #{e.message.truncate 100}"
-      'deepseek-chat'
+      CONFIG.model
     end
 
 
@@ -97,7 +97,8 @@ class Conduit
       # ENV['AETHER_API_KEY'], CFG[:api_key], and CFG['api-key'] in that order)
       # → the legacy env var. The daemon inherits a minimal launch environment,
       # so the merged CONFIG is the canonical source of truth for credentials.
-      config[:api_key] || config['api-key'] || CONFIG.api_key || ENV['AETHER_API_KEY'] || ENV.fetch('DEEPSEEK_API_KEY', nil)
+      [config[:api_key], config['api-key'], CONFIG.api_key, ENV['AETHER_API_KEY'], ENV['DEEPSEEK_API_KEY']]
+        .find { |value| !value.to_s.strip.empty? }
     rescue StandardError => e
       HorologiumAeternum.system_error "Failed to extract API key: #{e.message.truncate 100}"
       nil
@@ -105,10 +106,11 @@ class Conduit
 
 
     def extract_api_endpoint(config)
-      config[:api_url] || config['api-url'] || CONFIG.api_url || ENV['AETHER_API_URL'] || ENV.fetch('DEEPSEEK_API_URL', nil)
+      [config[:api_url], config['api-url'], CONFIG.api_url, ENV['AETHER_API_URL'], ENV['DEEPSEEK_API_URL']]
+        .find { |value| !value.to_s.strip.empty? }
     rescue StandardError => e
       HorologiumAeternum.system_error "Failed to extract API endpoint: #{e.message.truncate 100}"
-      'https://api.deepseek.com/v1/chat/completions'
+      CONFIG.api_url
     end
 
 
@@ -147,7 +149,7 @@ class Conduit
     def build_body(prompt, ctx, reasoning: false)
       system_prompt = reasoning ? Oracle::REASONING_PROMPT : Oracle::SYSTEM_PROMPT
       {
-        model:       CONFIG::CFG[:model] || 'deepseek-chat',
+        model:       CONFIG.model,
         messages:    [
           { role: 'system', content: system_prompt },
           { role: 'user', content: prompt },

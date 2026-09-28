@@ -213,6 +213,7 @@ class Aetherflux
 
     def channel_oracle_conjuration(params, tools:, context: nil, timeout: nil)
       start_time = Time.now
+      error_message = nil
       msg_uuid = HorologiumAeternum.divination 'Initializing astral connection...'
       ctx = Coniunctio.build(context ? params.merge(context: context) : params)
 
@@ -261,6 +262,7 @@ class Aetherflux
         }
       }
     rescue StandardError => e
+      error_message = e.message
       execution_time = Time.now - start_time
       HorologiumAeternum.server_error "Oracle reasoning stream failed: #{e.message}"
       { status: :failure, response: "Oracle reasoning stream failed: #{e.message}" }
@@ -268,8 +270,8 @@ class Aetherflux
       if params[:record]
         execution_time ||= Time.now - start_time
         tool_call_count ||= 0
-        Mnemosyne.record(**params, answer: "Error: #{error_message}", execution_time:,
-                                   tool_call_count:, answer:)
+        recorded_answer = answer || "Error: #{error_message || 'Oracle conjuration did not complete'}"
+        Mnemosyne.record(**params, answer: recorded_answer, execution_time:, tool_call_count:)
       end
     end
 

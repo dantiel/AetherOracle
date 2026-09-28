@@ -26,11 +26,22 @@ require 'fileutils'
 require 'thread'
 require 'socket'
 
-# Resolve the project root. Swift passes AETHER_PROJECT_ROOT; fall back to cwd.
-# The root is MUTABLE: `activate_context` re-points it when the user opens a
-# file/folder from another project, making the daemon polymorphic at runtime
-# (the whole window inherits the new project's identity — "ICH bin der ÆTHER").
-$project_root = ENV['AETHER_PROJECT_ROOT'] || Dir.pwd
+# Resolve the project root by DERIVING the context from where the daemon runs:
+# walk up from Dir.pwd to the nearest config file (`.aethercodex` or
+# `.aether_properties`). AETHER_PROJECT_ROOT is kept as an explicit override for
+# the macOS/Swift bridge; on Windows and most hosts the context is simply the
+# config file nearest the working directory.
+def derive_project_root(start_dir = Dir.pwd)
+  current = File.expand_path(start_dir)
+  loop do
+    return current if %w[.aethercodex .aether_properties].any? { |n| File.exist?(File.join(current, n)) }
+    parent = File.dirname(current)
+    return File.expand_path(start_dir) if parent == current || parent.empty?
+    current = parent
+  end
+end
+
+$project_root = ENV['AETHER_PROJECT_ROOT'] || derive_project_root(Dir.pwd)
 
 # Point runtime data (memory db, logs, pids) at the active project's `.aether/`
 # directory. Kept in a method so context switches re-resolve the paths without
@@ -43,7 +54,6 @@ def apply_project_root(root)
   $project_root = File.expand_path(root)
   Dir.chdir($project_root)
   ENV['AETHER_PROJECT_ROOT'] = $project_root
-  ENV['TM_PROJECT_DIRECTORY'] = $project_root
   ENV['AETHER_TM_AI'] = aether_data_dir + '/'
   ENV['AETHER_MEMORY_DB'] = File.join(aether_data_dir, 'mnemosyne.db')
 end
@@ -513,7 +523,7 @@ class StandaloneDaemon
     {
       project_root: $project_root,
       name: CONFIG.project_name,
-      config_path: File.exist?(File.join($project_root, '.aethercodex')) ? File.join($project_root, '.aethercodex') : nil,
+      config_path: CONFIG.config_file_in($project_root),
       memory_db: CONFIG.memory_db_path
     }
   end
@@ -525,22 +535,14 @@ class StandaloneDaemon
     t[:paused] = true if t && t.alive?
   end
 
-  # Walk up from `path` (file or directory) to the nearest `.aethercodex`; if
-  # none exists, the originally-opened directory becomes the project root. This
-  # mirrors AetherContext.resolveRoot in Swift so both sides agree on identity.
+  # Walk up from `path` (file or directory) to the nearest config file
+  # (`.aethercodex` or `.aether_properties`); if none exists, the opened
+  # directory becomes the project root. Delegates to CONFIG so context identity
+  # stays identical to the rest of the brain.
   def resolve_project_root(path)
     path = File.expand_path(path)
     return nil unless File.exist?(path)
-
-    opened_dir = File.directory?(path) ? path : File.dirname(path)
-    current = opened_dir
-    loop do
-      candidate = File.join(current, '.aethercodex')
-      return current if File.exist?(candidate)
-      parent = File.dirname(current)
-      return opened_dir if parent == current || parent.empty?
-      current = parent
-    end
+    CONFIG.find_project_root(path)
   end
 
   # Best-effort cancellation of the running Oracle request. Aetherflux tracks the
