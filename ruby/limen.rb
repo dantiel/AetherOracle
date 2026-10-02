@@ -821,15 +821,15 @@ def do_ask(p)
 
   html = Scriptorium.html_with_syntax_highlight answer.to_s
   
-  # Record the entry with tool calls if recording is enabled
-  if p['record']
-    Mnemosyne.record(
-      prompt: p['prompt'],
+  # Every oracle turn is inscribed into Mnemosyne's persistent Chronicle --
+  # inscription is no longer left to a frontend flag. Only ephemeral (flash)
+  # turns stay silent.
+  unless p['ephemeral']
+    Mnemosyne.inscribe(
+      p,
       answer: answer,
-      tags: p['tags'],
-      file: p['file'],
-      attachments: attachments,
-      tool_calls: ToolCallRecorder.get_current_entry_tool_calls
+      tool_calls: tool_results,
+      tool_call_count: tool_results.length
     )
   end
 

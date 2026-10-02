@@ -266,9 +266,16 @@ module CompanionPrograms
     # Veil the companion into Aegis — activation makes its personality part of
     # the oracle's orientation (returns previous state for release).
     def veil(glyphs, persona = nil)
-      glyphs = Array(glyphs).compact.map(&:to_s)
-      Thread.current[:companion_glyphs] = glyphs
+      glyphs = (active_glyphs + Array(glyphs).compact.map(&:to_sym)).uniq
+      Thread.current[:companion_glyphs] = glyphs.map(&:to_s)
       Mnemosyne.companion_veil(glyphs, persona)
+    end
+
+    # Remove a single companion from the active set — the others stay veiled.
+    def unveil(glyph)
+      glyph = glyph.to_sym
+      Thread.current[:companion_glyphs] = (active_glyphs - [glyph]).map(&:to_s)
+      Mnemosyne.companion_unveil(glyph)
     end
 
     def release(previous)
@@ -277,7 +284,9 @@ module CompanionPrograms
     end
 
     # The glyphs currently veiled in the thread (many may be active at once).
-    def active_glyphs = Array(Thread.current[:companion_glyphs])
+    def active_glyphs
+      Array(Thread.current[:companion_glyphs]).compact.map(&:to_sym)
+    end
 
     # Personality-driven reasoning temperament per companion (temperature + thinking).
     # The mapping lives alongside the personalities in instrumenta.rb; resolved lazily
@@ -328,6 +337,44 @@ module CompanionPrograms
       memory = companion_memory(glyph)
 
       [persona_prompt, protocol, memory].compact.join("\n\n")
+    end
+
+    # Combined system prompt for several simultaneously veiled companions: each
+    # contributes its persona and memory, prefixed by a collaboration note so the
+    # oracle speaks with all their voices at once.
+    def build_multi_prompt(glyphs)
+      glyphs = Array(glyphs).compact.map(&:to_sym).uniq
+      blocks = glyphs.filter_map do |g|
+        next unless defined?(::COMPANION_PERSONALITIES) && ::COMPANION_PERSONALITIES[g]
+
+        p = ::COMPANION_PERSONALITIES[g]
+        ["### #{p[:glyph]} #{p[:name]} (#{g})", p[:system_prompt], companion_memory(g)].compact.join("\n\n")
+      end
+      return nil if blocks.empty?
+
+      header = "MEHRERE BEGLEITER AKTIV: #{glyphs.join(', ')} — du vereinst ihre Stimmen " \
+               'und ziehst jeweils die passende zu Rate.'
+      ([header] + blocks).join("\n\n")
+    end
+
+    # Extract <companion-suggestions> blocks emitted by the oracle.
+    # Returns [cleaned_text, suggestions] where each suggestion is
+    # { glyph:, name:, prompt: } — mapped to companion ids on the frontend.
+    def extract_companion_suggestions(text)
+      return [text, []] unless text.is_a?(String)
+
+      match = text.match(/<companion-suggestions>([\s\S]*?)<\/companion-suggestions>/i)
+      return [text, []] unless match
+
+      cleaned = text.gsub(match[0], '')
+      suggestions = []
+      # Greedy capture to the final quote on the line: prompts may legitimately
+      # contain inner quotes (e.g. »Soll ich "X" prüfen?«). `.+` is line-scoped
+      # (`.` never matches \n), so it never bleeds into the next suggestion.
+      match[1].scan(/(\p{Emoji}(?:\p{Emoji}|\u200D|\uFE0F|\uFE0E)*)\s+(.+?):\s*"(.+)"/) do |glyph, name, prompt|
+        suggestions << { glyph: glyph.strip, name: name.strip, prompt: prompt.strip }
+      end
+      [cleaned, suggestions]
     end
 
     private

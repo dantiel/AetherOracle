@@ -621,7 +621,6 @@ class PrimaMateria
   def self.allowed_commands
     default_commands = ALLOW_CMDS
     custom_commands = CONFIG::allowed_commands
-    puts "[PRIMA_MATERIA][ALLOWED_COMMANDS]: #{custom_commands.inspect}"
     # If custom commands include wildcard, allow everything
     # Belt: check for // (from CONFIG)  Suspenders: check for * in pattern source
     return [//] if custom_commands.any? { |re| // == re }
@@ -639,10 +638,12 @@ class PrimaMateria
   def self.dynamic_run_command_description
     allowed = allowed_commands
     if allowed.any? { |re| // == re }
-      "Run an allowed shell command in project base dir. ⬢ ALL commands are permitted (wildcard: *). ⬢"
+      "Conjure the shell: summon a command in the project's base dir.\n\n\n" \
+      "ALL commands are permitted (wildcard: *)."
     else
       cmds = (ALLOW_CMDS + allowed).map { |re| re.source.sub(/\A\^/, '').sub(/\\b\z/, '') }.reject(&:empty?).uniq
-      "Run an allowed shell command in project base dir. Permitted: #{cmds.join(', ')}."
+      "Conjure the shell: summon a command in the project's base dir.\n\n\n" \
+      "Permitted: #{cmds.join(', ')}."
     end
   end
 

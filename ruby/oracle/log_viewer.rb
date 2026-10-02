@@ -2,15 +2,28 @@
 
 require_relative 'log_tags'
 
-# ── AetherLog::Viewer — the colorful, tagged, toggleable log tail. ─────────
+# -- AetherLog::Viewer -- the colorful, tagged, toggleable log tail. ---------
 # Reads the daemon's `limen.log`, assigns every line a tag (explicit `[tag]`,
-# severity keyword, or module heuristic — see log_tags.rb), paints it with that
+# severity keyword, or module heuristic -- see log_tags.rb), paints it with that
 # tag's color, and drops lines whose tag is disabled.
 #
 # In an interactive terminal the left margin doubles as a live configurator:
 # number keys toggle tags, `a`/`n` enable/disable all, `l` flips the legend,
 # `r` reloads the taxonomy from disk, `?` shows the keys, `q` quits.
 module AetherLog
+  # A single shared TTY::Reader for the log subsystem. TTY::Reader restores the
+  # terminal to its previous (cooked) state after every keypress and handles both
+  # Unix escape sequences and Windows scan codes -- no raw!/cooked!/getch juggling,
+  # no background thread. Falls back to nil when tty-reader is unavailable.
+  def self.key_reader
+    @key_reader ||= begin
+      require 'tty-reader'
+      TTY::Reader.new(interrupt: :noop)
+    rescue LoadError
+      nil
+    end
+  end
+
   class Viewer
     def initialize(registry:, path:, follow: true, lines: 200, color: $stdout.tty?)
       @reg = registry
@@ -21,7 +34,7 @@ module AetherLog
       @quit = false
       @legend = true
       @label_width = @reg.label_width
-      @keys = Queue.new
+      @reader = AetherLog.key_reader
     end
 
     def run
@@ -30,20 +43,17 @@ module AetherLog
       else
         dump_once
       end
-    ensure
-      stop_key_listener
     end
 
-    # ── Non-follow mode: print the last `@lines` lines once. ───────────────
+    # -- Non-follow mode: print the last `@lines` lines once. ---------------
     def dump_once
       ensure_file!
       File.readlines(@path).last(@lines).each { |line| render_line(line) }
     end
 
-    # ── Follow mode ────────────────────────────────────────────────────────
+    # -- Follow mode --------------------------------------------------------
     def tail_loop
       print_header
-      start_key_listener if $stdin.tty?
       ensure_file!
       until @quit
         File.open(@path, 'r') do |f|
@@ -59,25 +69,24 @@ module AetherLog
           end
         end
       end
-      reset_terminal
     end
 
     def rotated?(file)
       return false unless File.exist?(@path)
-      File.size(@path) < file.pos # truncation or rename → reopen from head
+      File.size(@path) < file.pos # truncation or rename -> reopen from head
     end
 
     def ensure_file!
       return if File.exist?(@path)
       if @follow
-        warn "waiting for #{@path} … (start the server first)"
+        warn "waiting for #{@path} ... (start the server first)"
         sleep 0.5 until File.exist?(@path)
       else
         abort "No log file at #{@path}. Start the server first with: ÆtherCodex server"
       end
     end
 
-    # ── Rendering ──────────────────────────────────────────────────────────
+    # -- Rendering ----------------------------------------------------------
     def render_line(line)
       tag = @reg.tag_for(line)
       return unless @reg.enabled?(tag)
@@ -96,9 +105,9 @@ module AetherLog
     def print_header
       return unless @color && @legend
       puts AetherLog.ansi(AetherLog::PALETTE['violet'], bold: true) + 'ÆtherCodex log viewer' + AetherLog::RESET +
-           " — #{@path}"
+           " -- #{@path}"
       print_legend
-      puts '─' * 70
+      puts '-' * 70
     end
 
     def print_legend
@@ -114,40 +123,14 @@ module AetherLog
       puts if @reg.names.size % 4 != 0
     end
 
-    # ── Interactive keys ───────────────────────────────────────────────────
-    def start_key_listener
-      return if @key_thread
-      require 'io/console'
-      @key_thread = Thread.new do
-        $stdin.raw!
-        loop { @keys << $stdin.getch }
-      rescue IOError, Errno::EBADF
-        # stdin closed; the main loop still exits cleanly via q/EOF
-      ensure
-        reset_terminal
-      end
-    end
-
-    def stop_key_listener
-      @key_thread&.kill
-      @key_thread = nil
-      reset_terminal
-    end
-
-    def reset_terminal
-      require 'io/console'
-      $stdin.cooked!
-    rescue StandardError
-      nil
-    end
-
+    # -- Interactive keys ---------------------------------------------------
+    # Polled through TTY::Reader in non-blocking mode -- no background thread,
+    # no raw!/cooked! juggling. Each poll waits at most 0.1s for a keypress.
     def process_keys
+      return unless @reader
       loop do
-        ch = begin
-          @keys.pop(true)
-        rescue ThreadError
-          break
-        end
+        ch = @reader.read_keypress(nonblock: true)
+        break if ch.nil?
         handle_key(ch)
       end
     end
@@ -168,14 +151,14 @@ module AetherLog
     end
 
     def print_help
-      puts '─' * 70
+      puts '-' * 70
       puts '1-9 toggle tag   a all on   n all off   l legend   r reload   q quit'
-      puts '─' * 70
+      puts '-' * 70
     end
   end
 end
 
-# ── AetherLog::Configurator — the log tag configurator. ────────────────────
+# -- AetherLog::Configurator -- the log tag configurator. --------------------
 # Interactive tag editor: move with j/k (or arrows), space toggles, c cycles the
 # color, s saves, r resets to defaults, q quits (auto-saves). Without a TTY it
 # acts as a scriptable CLI (`list`, `toggle`, `enable`, `disable`, `color`,
@@ -193,17 +176,24 @@ module AetherLog
       run_interactive
     end
 
-    # ── Interactive editor ─────────────────────────────────────────────────
+    # -- Interactive editor -------------------------------------------------
     def run_interactive
-      require 'io/console'
+      reader = AetherLog.key_reader
+      unless reader
+        # No tty-reader -- degrade to the scriptable CLI instead of raw!/getch.
+        run_cli(['list'])
+        return
+      end
+      keymap = reader.console.keys
       loop do
         redraw
-        ch = $stdin.getch
-        case ch
-        when 'q' then break
-        when 'j', "\e[B" then move(1)
-        when 'k', "\e[A" then move(-1)
-        when ' ' then toggle_current
+        ch = reader.read_keypress
+        key = keymap[ch] || ch
+        case key
+        when 'q', :ctrl_c then break
+        when 'j', :down then move(1)
+        when 'k', :up then move(-1)
+        when ' ', :space then toggle_current
         when 'c' then cycle_color
         when 's' then save
         when 'r' then @reg.reset!
@@ -243,11 +233,11 @@ module AetherLog
       print "\e[H\e[2J" # clear
       puts AetherLog.ansi(AetherLog::PALETTE['violet'], bold: true) + 'Log tag configurator' + AetherLog::RESET
       puts 'j/k move   space toggle   c color   a all   n none   s save   r reset   q quit'
-      puts '─' * 64
+      puts '-' * 64
       @reg.names.each_with_index do |name, i|
         cfg = @reg.tags[name]
         code = AetherLog.color_code(cfg['color'])
-        cursor = i == @idx ? '▶' : ' '
+        cursor = i == @idx ? '>' : ' '
         state = cfg['enabled'] ? '●' : '○'
         kind = cfg['kind'] == 'level' ? 'level ' : 'module'
         swatch = AetherLog.ansi(code) + '███' + AetherLog::RESET
@@ -256,12 +246,12 @@ module AetherLog
         print AetherLog.ansi(code) + line + AetherLog::RESET
         puts
       end
-      puts '─' * 64
+      puts '-' * 64
       puts(@dirty ? 'unsaved changes' : 'clean')
       print "\e[?25l" # hide cursor
     end
 
-    # ── Scriptable CLI ─────────────────────────────────────────────────────
+    # -- Scriptable CLI -----------------------------------------------------
     def run_cli(args)
       action = args.shift || 'list'
       case action

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'sqlite3'
+require 'stringio'
 require 'fileutils'
 require 'yaml'
 require 'set'
@@ -14,15 +15,18 @@ using TokenExtensions
 
 # Load sub-modules first — they reopen Mnemosyne to add inner classes
 require_relative 'aegis'
+require_relative 'resonance'
 require_relative 'notes'
 require_relative 'companion'
 require_relative 'metempsychosis_router'
 require_relative 'task_ledger'
 require_relative 'seal_ledger'
 require_relative 'chronicle'
+require_relative 'fragments'
+require_relative 'vectors'
 
 class Mnemosyne
-  DB_VERSION = 9
+  DB_VERSION = 11
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -313,6 +317,54 @@ class Mnemosyne
         db.execute 'ALTER TABLE tasks ADD COLUMN milestone_order INTEGER' unless existing_task_columns.include?('milestone_order')
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '9')"
       end
+      # Version 10 — die Mnemosyne-Kaskade: filesystem-scoped notes. Every note
+      # is bound to the context path (folder) it was minted in; recall ranks
+      # local > ancestors (distance decay) > tag-resonant peers. The parent
+      # context stays observer-only: child scopes whisper nothing upward.
+      if 10 > db_version
+        existing_note_columns = db.execute('PRAGMA table_info(project_notes)').map { |col| col['name'] }
+        db.execute 'ALTER TABLE project_notes ADD COLUMN context_path TEXT' unless existing_note_columns.include?('context_path')
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '10')"
+      end
+      # Version 11 -- Stufe 2 + 3 der Kaskade: fragments (transient cognition
+      # with TTL -- notes as metaformat) and memory_tokens (the polymorphic
+      # token substrate where notes and fragments are stored a second time as
+      # term vectors; the embryo of the neural Mnemosyne).
+      if 11 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS fragments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT,
+            tags TEXT,
+            links TEXT,
+            context_path TEXT,
+            ttl INTEGER DEFAULT 3600,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS memory_tokens (
+            unit_type TEXT NOT NULL,
+            unit_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            weight REAL NOT NULL
+          );
+        SQL
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_token ON memory_tokens (token)'
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_unit ON memory_tokens (unit_type, unit_id)'
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '11')"
+      end
+      # Version 12 -- Kanaele im Substrat. memory_tokens erhaelt kind
+      # ('content' | 'tag' | 'path'): tags sind eigene Vektoren (bewusste
+      # semantische Betonung, die freie Markdown-Tokens ohne Training nicht
+      # liefern), der Pfad eine strukturelle Spur. Suchalgorithmen sind
+      # Linsen: dieselbe Einheit, verschiedene Beobachter.
+      if 12 > db_version
+        existing_token_columns = db.execute('PRAGMA table_info(memory_tokens)').map { |col| col['name'] }
+        db.execute "ALTER TABLE memory_tokens ADD COLUMN kind TEXT DEFAULT 'content'" unless existing_token_columns.include?('kind')
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_kind ON memory_tokens (kind)'
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '12')"
+      end
     end
 
     def tokenize(text)
@@ -345,15 +397,23 @@ class Mnemosyne
 
     # -- Notes --
     def get_note(note_id) = Notes.get_note(note_id)
-    def recall_notes(query, limit: 5, max_content_length: nil) = Notes.recall_notes(query, limit: limit, max_content_length: max_content_length)
-    def create_note(content:, links: nil, tags: nil) = Notes.create_note(content: content, links: links, tags: tags)
-    def remember(content:, links: nil, tags: nil) = Notes.remember(content: content, links: links, tags: tags)
+    def recall_notes(query, limit: 5, max_content_length: nil, context_path: nil, lens: :blend, channel_weights: nil) = Notes.recall_notes(query, limit: limit, max_content_length: max_content_length, context_path: context_path, lens: lens, channel_weights: channel_weights)
+    def create_note(content:, links: nil, tags: nil, context_path: nil) = Notes.create_note(content: content, links: links, tags: tags, context_path: context_path)
+    def remember(content:, links: nil, tags: nil, context_path: nil) = Notes.remember(content: content, links: links, tags: tags, context_path: context_path)
     def fetch_notes_by_links(links) = Notes.fetch_notes_by_links(links)
     def update_note(id, content: nil, links: nil, tags: nil) = Notes.update_note(id, content: content, links: links, tags: tags)
     def remove_note(id) = Notes.remove_note(id)
     def link_note(source_context:, source_note_id:, content: nil, tags: nil, links: nil) = Notes.link_note(source_context: source_context, source_note_id: source_note_id, content: content, tags: tags, links: links)
     def resolve_linked_note(source_context, source_note_id) = Notes.resolve_linked_note(source_context, source_note_id)
     def notes_for_context(context) = Notes.notes_for_context(context)
+
+    # -- Fragments --
+    def fragment(content:, tags: nil, links: nil, context_path: nil, ttl: Fragments::DEFAULT_TTL) = Fragments.fragment(content: content, tags: tags, links: links, context_path: context_path, ttl: ttl)
+    def recall_fragments(query, limit: 5, max_content_length: nil, context_path: nil, lens: :blend, channel_weights: nil) = Fragments.recall_fragments(query, limit: limit, max_content_length: max_content_length, context_path: context_path, lens: lens, channel_weights: channel_weights)
+
+    # -- Vectors --
+    def recall_by_vector(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil) = Vectors.recall_by_vector(query, limit: limit, max_content_length: max_content_length, context_path: context_path, channel_weights: channel_weights)
+    def rebuild_vectors = Vectors.rebuild
 
     # -- Companion --
     def companion_save_state(glyph:, summary:, tags: [], score: nil, domain_model: nil) = Companion.save_state(glyph: glyph, summary: summary, tags: tags, score: score, domain_model: domain_model)
@@ -390,5 +450,45 @@ class Mnemosyne
     def delete_last_entry = Chronicle.delete_last_entry
     def search(query, limit: 5) = Chronicle.search(query, limit: limit)
     def format_history_tool_calls(tool_calls, index = 0) = Chronicle.format_history_tool_calls(tool_calls, index)
+
+    # -- Inscription --
+    # The canonical projection: every oracle turn flows through here. Maps
+    # arbitrary oracle-params hashes (symbol OR string keys) onto
+    # Chronicle.record kwargs; builds the prompt from params[:prompt] or a
+    # system-filtered messages transcript (6000-char cap). Chronicle.record's
+    # debug puts are quarantined into a StringIO so CLI pipes stay clean.
+    # Fire-and-forget: rescues everything, never breaks a turn.
+    def inscribe(params, answer: nil, tool_calls: [], tool_call_count: nil, execution_time: 0)
+      args = {}
+      params&.each { |key, value| args[key.to_sym] = value unless value.nil? }
+      prompt = args[:prompt]
+      unless prompt
+        messages = args[:messages] || []
+        prompt = messages.filter_map do |m|
+          role = m[:role] || m['role']
+          next if role == 'system'
+          m[:content] || m['content']
+        end.join("\n")
+      end
+      prompt = prompt.to_s[0, 6000]
+      real_stdout = $stdout
+      $stdout = StringIO.new
+      Chronicle.record(prompt: prompt,
+                       attachments: args[:attachments] || [],
+                       tags: args[:tags],
+                       file: args[:file],
+                       execution_time: execution_time,
+                       tool_call_count: tool_call_count || Array(tool_calls).size,
+                       timestamp: args[:timestamp],
+                       answer: answer.to_s,
+                       tool_calls: tool_calls,
+                       task_id: args[:task_id],
+                       step_id: args[:step_id],
+                       mode: args[:mode])
+    rescue StandardError
+      nil
+    ensure
+      $stdout = real_stdout if real_stdout
+    end
   end
 end

@@ -1,0 +1,110 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# ÆtherOracle dev hot-reload — restart the CLI whenever source changes.
+#
+#   ruby bin/watch server
+#   ruby bin/watch chamber --theme argonaut
+#   ruby bin/watch ask "refactor app.rb"
+#
+# Watches lib/**/*.rb and ruby/**/*.rb (mtime polling, stdlib only,
+# cross-platform). On any change it kills the running process (on Windows its
+# whole process tree via taskkill) and respawns it. Ctrl-C stops both.
+#
+# This is the honest form of "hot reload" in Ruby: the long-running daemon and
+# the chamber hold in-memory state and Ruby caches `require`d files, so a clean
+# restart-on-save is more robust than in-process reloading.
+
+require 'fileutils'
+
+ROOT = File.expand_path('..', __dir__)
+WATCH_GLOBS = [
+  File.join(ROOT, 'lib', '**', '*.rb'),
+  File.join(ROOT, 'ruby', '**', '*.rb')
+].freeze
+EXCLUDE = %r{[/\\]\.(?:vendor_bundle|bundle|git)[/\\]}
+POLL_INTERVAL = 0.4
+
+WINDOWS = !!(RUBY_PLATFORM =~ /mswin|mingw|cygwin/)
+
+def source_files
+  WATCH_GLOBS.flat_map { |g| Dir.glob(g) }.reject { |f| f =~ EXCLUDE }
+end
+
+def snapshot
+  source_files.to_h { |f| [f, File.mtime(f)] }
+end
+
+def spawn_child(args)
+  argv =
+    if WINDOWS
+      ['cmd', '/c', File.join(ROOT, 'bin', 'aetheroracle.cmd'), *args]
+    else
+      ['ruby', File.join(ROOT, 'bin', 'aetheroracle'), *args]
+    end
+  spawn(*argv)
+end
+
+def stop(pid)
+  if WINDOWS
+    system('taskkill', '/F', '/T', '/PID', pid.to_s, out: File::NULL, err: File::NULL)
+  else
+    Process.kill('TERM', pid)
+  end
+rescue Errno::ESRCH, Errno::EINVAL
+  nil # already gone
+ensure
+  begin
+    Process.waitpid(pid)
+  rescue Errno::ECHILD
+    nil
+  end
+end
+
+def main(args)
+  if args.empty? || %w[-h --help].include?(args.first)
+    puts <<~HELP
+      aetheroracle dev hot-reload
+
+      usage: ruby bin/watch [aetheroracle args...]
+
+      examples:
+        ruby bin/watch server
+        ruby bin/watch chamber --theme argonaut
+        ruby bin/watch ask "refactor app.rb"
+
+      Watches lib/**/*.rb and ruby/**/*.rb and restarts the process on change.
+      Ctrl-C stops both the watcher and the running process.
+    HELP
+    return
+  end
+
+  pid = spawn_child(args)
+  puts "[watch] started pid #{pid} — edit lib/ or ruby/ to restart. Ctrl-C to stop."
+  before = snapshot
+
+  trap('INT') do
+    stop(pid)
+    exit 0
+  end
+
+  loop do
+    sleep POLL_INTERVAL
+    after = snapshot
+    changed = (after.keys - before.keys) |
+              (before.keys - after.keys) |
+              after.select { |f, mt| before[f] && before[f] != mt }.keys
+    before = after
+
+    next if changed.empty?
+
+    names = changed.map { |f| File.basename(f) }.uniq.join(', ')
+    puts "[watch] change: #{names} — restarting…"
+    stop(pid)
+    pid = spawn_child(args)
+    puts "[watch] restarted pid #{pid}"
+    before = snapshot
+  end
+end
+
+main(ARGV)

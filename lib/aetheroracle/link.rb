@@ -163,20 +163,42 @@ module AetherOracle
         The oracle has many names — all the same aether in the CLI:
           aetheroracle · aether · oracle · oracleaether · ae · aero · orae
 
-        Usage: aetheroracle <command> [options]
+        Usage: aetheroracle [command] [options]
+
+        With no command, aetheroracle enters the Dialog-Kammer — the hermetic,
+        polymorphic conversation room: an interactive REPL with twelve companion
+        voices, slash-commands, live tool telemetry, and syntax-highlighted
+        terminal Markdown.
+
+        BRAIN tier (needs the brain gems — `gem install aetheroracle`):
+          (no args)                  enter the Dialog-Kammer
+          chamber [--theme NAME]     enter the Dialog-Kammer explicitly
+          ask "prompt"               one-shot local oracle turn
+          server                     start the daemon (limen.rb)
+          config                     show configuration
+          context                    show / create / switch the active context
+          task <action>              task ledger (list / show <id> / create <title>)
+          veil                       check, configure, and repair Aether setup
+          logs                       tail the tagged log stream
+
+        DEVELOPER TOOLBELT (mirrors the oracle's own instruments):
+          read <path> [a:b]          read a file (line range, --numbers)
+          inspect <path>             symbolic structural overview
+          write <path> [--body …]    create/overwrite a file (or pipe)
+          mv <from> <to>             rename/move a file
+          files [glob]               list project files
+          ast <pattern> [glob]       AST-GREP search
+          notes [query]              recall Mnemosyne notes by fuzzy query
+          note add|show|edit|rm      manage a Mnemosyne note
+          history [n] [--notes]      recent chronicle history (or notes)
+          search <query> [--limit n] search notes + chronicle
+          aegis [show|summary|tags|temp|think|dir]  view/edit Aegis state
+          seal list|status|delegate  Salomo's executive seals
 
         LINK tier (any platform with Ruby — no gems):
           peers                      discover oracle peers on the LAN (4550..4610)
           heartbeat [port]           probe one peer's heartbeat (default 4567)
           invoke <peer> "prompt"     route a turn to a remote oracle
-
-        BRAIN tier (needs the brain gems — `gem install aetheroracle`):
-          ask "prompt"               local oracle turn
-          veil                      check, configure, and repair Aether setup
-          server                     start the daemon (limen.rb)
-          config                     show configuration
-          context                    show / create / switch the active context
-          task <action>              task ledger (list / show <id> / create <title>)
 
         Install on any OS with Ruby:
           gem build aetheroracle.gemspec && gem install ./aetheroracle-*.gem
@@ -184,10 +206,11 @@ module AetherOracle
           powershell -ExecutionPolicy Bypass -File bin\\aetheroracle-setup.ps1
 
         Examples:
-          aetheroracle peers
-          oracle invoke "AetherCodex" "summarize the current project"
+          aetheroracle                        # enter the Dialog-Kammer
+          aetheroracle chamber --theme github # chamber with a light theme
+          aetheroracle ask "refactor app.rb"
+          oracle peers
           echo "what is the aether?" | ae invoke mac-oracle
-          aero ask "refactor this with --file app.rb"
 
         The link tier speaks the ruby/aether_link.rb contract — a Windows/Linux
         box reaches the brain on a Mac over the same wire. The aether is everywhere.

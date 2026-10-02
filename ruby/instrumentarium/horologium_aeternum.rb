@@ -70,6 +70,9 @@ module HorologiumAeternum
     # Ephemeral turns (flash conjuration) breathe silently: the flag suppresses
     # every status frame so a one-shot never leaks into Pythia's shared stream.
     return if Thread.current[:aether_silent]
+    # Bridge to the terminal stream when a CLI chamber is driving the turn, so
+    # the interactive REPL sees the same telemetry the web UI receives.
+    Thread.current[:aether_terminal_stream]&.send_status(type, data, uuid:)
     send 'status', type, data, uuid:
   end
 
@@ -89,9 +92,11 @@ module HorologiumAeternum
 
 
   def self.oracle_conjuration_revelation(message, content, uuid: nil)
+    raw = content.to_s
     send_status('oracle_conjuration_revelation', {
                   message: Scriptorium.html("🏛️ #{message}"),
-                  content: Scriptorium.html_with_syntax_highlight(content.to_s)
+                  content: Scriptorium.html_with_syntax_highlight(raw),
+                  raw_content: raw
                 }, uuid:)
   end
 
@@ -896,7 +901,8 @@ module HorologiumAeternum
 
 
   def self.info_message(message, uuid: nil)
-    send_status('info', { message: Scriptorium.html_with_syntax_highlight("💬 #{message}") }, uuid:)
+    raw = message.to_s
+    send_status('info', { message: Scriptorium.html_with_syntax_highlight("💬 #{raw}"), raw_message: raw }, uuid:)
   end
 
 

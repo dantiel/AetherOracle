@@ -6,16 +6,23 @@ module AetherOracle
   # Link-tier commands stay pure stdlib. Veil uses a lightweight setup path;
   # other brain commands load the full CLI only when requested.
   module CLI
-    BRAIN_COMMANDS = %w[ask server config context task logs repl veil].freeze
+    BRAIN_COMMANDS = %w[ask chamber dialog talk server config context task logs repl veil
+                        read cat inspect ov write new mv rename files ast grep notes mem
+                        note history hist search find aegis seal seals].freeze
 
     def self.run(argv)
-      unless BRAIN_COMMANDS.include?(argv.first)
-        Link.run(argv.dup)
-        return 0
+      command = argv.first
+
+      # Hermetic default: bare `aetheroracle` enters the Dialog-Kammer, not a
+      # dry usage line. Link-tier commands (peers / heartbeat / invoke) stay
+      # pure-stdlib and are dispatched below without loading the brain.
+      if command.nil? || BRAIN_COMMANDS.include?(command)
+        status = run_brain(argv)
+        return status.is_a?(Integer) ? status : 0
       end
 
-      status = run_brain(argv)
-      status.is_a?(Integer) ? status : 0
+      Link.run(argv.dup)
+      0
     end
 
     def self.run_brain(argv)

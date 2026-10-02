@@ -4,7 +4,7 @@ rem AetherOracle CLI - Windows full-control launcher (source-checkout).
 rem
 rem   LINK tier  (peers / heartbeat / invoke): pure stdlib, runs
 rem               with any Ruby - no gems, no bundle.
-rem   BRAIN tier (ask / server / config / task / logs / repl):
+rem   BRAIN tier (no args / ask / chamber / server / config / task / logs):
 rem               runs via bundler against ruby/.vendor_bundle.
 rem
 rem Ruby resolution order: ruby/.portable -> %RUBY% -> PATH.
@@ -34,7 +34,9 @@ if not defined RUBY_EXE (
 rem classify the command: brain tier needs bundler, link tier does not
 set "CMD=%~1"
 set "BRAIN=0"
-for %%C in (ask server config context task logs repl veil) do if /i "%CMD%"=="%%C" set "BRAIN=1"
+rem No subcommand -> enter the Dialog-Kammer (brain tier).
+if "%CMD%"=="" set "BRAIN=1"
+for %%C in (ask chamber dialog talk server config context task logs repl veil read cat inspect ov write new mv rename files ast grep notes mem note history hist search find aegis seal seals) do if /i "%CMD%"=="%%C" set "BRAIN=1"
 
 if "%BRAIN%"=="1" goto :brain
 

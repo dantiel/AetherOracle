@@ -8,6 +8,7 @@ require 'tempfile'
 # Detects image paths in tool results, encodes them as base64, and formats
 # them according to each provider's API requirements.
 module VisionCoordinator
+  WINDOWS = !!(RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/i)
   VISION_ENABLED = ENV.fetch('VISION_ENABLED', 'true').downcase == 'true'
   MAX_IMAGE_SIZE = ENV.fetch('MAX_IMAGE_SIZE', '20_000_000').to_i # 20MB
   MAX_IMAGE_DIMENSION = ENV.fetch('MAX_IMAGE_DIMENSION', '4096').to_i
@@ -16,6 +17,19 @@ module VisionCoordinator
   MIME_TYPE_MAP = { 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp' }.freeze
 
   module_function
+
+  # PowerShell 5.1 writes console text in the active ANSI/OEM codepage; re-map
+  # invalid UTF-8 to a readable encoding so `.strip`/interpolation never raise.
+  def normalize_encoding(str)
+    return str if str.nil? || str.valid_encoding?
+
+    [Encoding::Windows_1252, Encoding::IBM437].each do |enc|
+      return str.force_encoding(enc).encode(Encoding::UTF_8)
+    rescue StandardError
+      next
+    end
+    str.scrub('?')
+  end
 
   # Extract image references from a tool result
   # Returns array of image references [{path:, mime_type:, size:}] or empty array
@@ -39,6 +53,10 @@ module VisionCoordinator
     content = tool_result[:content] || tool_result['content'] || tool_result.to_s
     if content.is_a?(String)
       content.scan(%r{/tmp/[\w/]+\.(?:png|jpe?g|webp)}) do |match|
+        refs << build_image_reference(match, tool_result) if File.exist?(match)
+      end
+      # Windows temp captures (e.g. C:\Users\…\AppData\Local\Temp\captura_….png)
+      content.scan(%r{[A-Za-z]:[\\/][\w\-./\\]+\.(?:png|jpe?g|webp)}) do |match|
         refs << build_image_reference(match, tool_result) if File.exist?(match)
       end
     end
@@ -96,7 +114,7 @@ module VisionCoordinator
   # @param min_quality [Integer] Optional minimum quality for aggressive compression
   # Returns {data:, mime_type:} or {error:}
   def compress_image(path, ext, original_mime_type, max_dimension: 2048, min_quality: 60)
-    target_mime = 'image/jpeg'
+    return compress_with_powershell(path, max_dimension:, min_quality:) if WINDOWS
 
     # Try ImageMagick first
     if system('which convert > /dev/null 2>&1')
@@ -104,8 +122,53 @@ module VisionCoordinator
     else
       compress_with_sips(path, max_dimension:, min_quality:)
     end
+  end
+
+  # Windows fallback: resize + re-encode to JPEG via System.Drawing in
+  # PowerShell (ships with every Windows box, unlike ImageMagick/sips).
+  def compress_with_powershell(path, max_dimension: 2048, min_quality: 60)
+    script = <<~PS
+      $ErrorActionPreference = 'Stop'
+      Add-Type -AssemblyName System.Drawing
+      $src = [System.Drawing.Image]::FromFile($env:AETHER_IMG_SRC)
+      $w = $src.Width; $h = $src.Height
+      $max = [int]$env:AETHER_IMG_MAX
+      if ($w -gt $max -or $h -gt $max) {
+        if ($w -ge $h) { $nw = $max; $nh = [int]($h * $max / $w) }
+        else { $nh = $max; $nw = [int]($w * $max / $h) }
+      } else { $nw = $w; $nh = $h }
+      $dst = New-Object System.Drawing.Bitmap $nw, $nh
+      $g = [System.Drawing.Graphics]::FromImage($dst)
+      $g.InterpolationMode = 'HighQualityBicubic'
+      $g.DrawImage($src, 0, 0, $nw, $nh)
+      $dst.Save($env:AETHER_IMG_OUT, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+      $g.Dispose(); $src.Dispose(); $dst.Dispose()
+      Write-Output 'OK'
+    PS
+
+    require 'open3'
+    out_path = "#{path}.compressed.jpg"
+    script_path = nil
+    env = { 'AETHER_IMG_SRC' => path, 'AETHER_IMG_OUT' => out_path,
+            'AETHER_IMG_MAX' => max_dimension.to_s }
+
+    file = Tempfile.new(['aether_compress', '.ps1'])
+    script_path = file.path
+    file.write(script)
+    file.close
+    _stdout, stderr, status = Open3.capture3(env, 'powershell', '-NoProfile', '-NonInteractive',
+                                             '-ExecutionPolicy', 'Bypass', '-File', script_path)
+    stderr = normalize_encoding(stderr)
+
+    return { error: "PowerShell compression failed: #{stderr.strip}" } unless status.success?
+    return { error: 'no compressed output produced' } unless File.exist?(out_path) && File.size(out_path).positive?
+
+    { data: File.binread(out_path), mime_type: 'image/jpeg' }
   rescue StandardError => e
-    { error: "Compression error: #{e.message}" }
+    { error: "Failed to compress image: #{e.message}" }
+  ensure
+    File.delete(script_path) if script_path && File.exist?(script_path)
+    File.delete(out_path) if out_path && File.exist?(out_path)
   end
 
   # Compress using ImageMagick

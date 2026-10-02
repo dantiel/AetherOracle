@@ -135,6 +135,18 @@ module ConduitAnthropicHelper
     }
 
     openai_response[:choices][0][:message][:tool_calls] = tool_calls unless tool_calls.empty?
+
+    usage = response[:usage] || response['usage']
+    if usage.is_a?(Hash)
+      input = usage[:input_tokens] || usage['input_tokens']
+      output = usage[:output_tokens] || usage['output_tokens']
+      openai_response[:usage] = {
+        prompt_tokens: input,
+        completion_tokens: output,
+        total_tokens: (input.to_i + output.to_i)
+      }
+    end
+
     openai_response
   end
 end

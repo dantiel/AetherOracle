@@ -38,3 +38,10 @@ gem "dotenv", "~> 3.1"
 gem "dotenvx", "~> 0.0.2"
 
 gem "concurrent-ruby", "~> 1.3"
+
+# ── Dialog-Kammer: polymorphic, hermetically interactive terminal ──
+gem "pastel", "~> 0.8"
+gem "tty-prompt", "~> 0.23"
+gem "tty-markdown", "~> 0.7"
+gem "tty-reader", "~> 0.9"
+gem "tty-screen", "~> 0.8"

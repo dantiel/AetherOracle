@@ -61,5 +61,12 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'dotenvx', '~> 0.0.2'
   spec.add_dependency 'concurrent-ruby', '~> 1.3'
 
+  # Dialog-Kammer: polymorphic, hermetically interactive terminal.
+  spec.add_dependency 'pastel', '~> 0.8'
+  spec.add_dependency 'tty-prompt', '~> 0.23'
+  spec.add_dependency 'tty-markdown', '~> 0.7'
+  spec.add_dependency 'tty-reader', '~> 0.9'
+  spec.add_dependency 'tty-screen', '~> 0.8'
+
   spec.add_development_dependency 'rspec', '~> 3.13'
 end

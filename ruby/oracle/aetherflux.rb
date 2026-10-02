@@ -102,7 +102,6 @@ class Aetherflux
       rescue Oracle::RestartException => e
         puts "[ORACLE][RestartException]: #{e.inspect}"
         HorologiumAeternum.thinking 'Restarting oracle process due to temperature change...'
-        Mnemosyne.record params, '<<temperature change handled>>' if params[:record]
         retry
       end
 
@@ -110,7 +109,7 @@ class Aetherflux
       raise StandardError, answer unless answer.is_a? String
 
       # Extract AI-driven companion suggestions (<companion-suggestions>) before rendering
-      answer, companion_suggestions = extract_companion_suggestions(answer)
+      answer, companion_suggestions = CompanionPrograms.extract_companion_suggestions(answer)
       # Merge suggestions emitted via the `suggest` instrument with the text-block ones.
       companion_suggestions = (companion_suggestions + collect_tool_suggestions(tool_results)).uniq { |s| [s[:glyph], s[:prompt]] }
       # Collect `say`/`_ask` info messages into the chat-flow logs.
@@ -128,11 +127,6 @@ class Aetherflux
 
       HorologiumAeternum.completed Scriptorium.html("🎯 Response ready with **#{tool_call_count}** tools executed in #{execution_time.round 2}s")
 
-      # Record with execution metrics if requested
-      if params[:record]
-        Mnemosyne.record(prompt: params[:prompt], execution_time:,
-                         tool_call_count:, answer:, tool_calls: tool_results)
-      end
 
       # Extract per-tool execution times from tool_results
       tool_execution_times = (tool_results || []).map do |tr|
@@ -187,27 +181,6 @@ class Aetherflux
     ensure
       Thread.current[:aether_silent] = prev_silent
       CompanionPrograms.release(previous_aegis) if previous_aegis
-    end
-
-
-    # Extract <companion-suggestions> blocks emitted by the oracle.
-    # Returns [cleaned_text, suggestions] where each suggestion is
-    # { glyph:, name:, prompt: } — mapped to companion ids on the frontend.
-    def extract_companion_suggestions(text)
-      return [text, []] unless text.is_a?(String)
-
-      match = text.match(/<companion-suggestions>([\s\S]*?)<\/companion-suggestions>/i)
-      return [text, []] unless match
-
-      cleaned = text.gsub(match[0], '')
-      suggestions = []
-      # Greedy capture to the final quote on the line: prompts may legitimately
-      # contain inner quotes (e.g. »Soll ich "X" prüfen?«). `.+` is line-scoped
-      # (`.` never matches \n), so it never bleeds into the next suggestion.
-      match[1].scan(/(\p{Emoji}(?:\p{Emoji}|\u200D|\uFE0F|\uFE0E)*)\s+(.+?):\s*"(.+)"/) do |glyph, name, prompt|
-        suggestions << { glyph: glyph.strip, name: name.strip, prompt: prompt.strip }
-      end
-      [cleaned, suggestions]
     end
 
 
@@ -267,11 +240,16 @@ class Aetherflux
       HorologiumAeternum.server_error "Oracle reasoning stream failed: #{e.message}"
       { status: :failure, response: "Oracle reasoning stream failed: #{e.message}" }
     ensure
-      if params[:record]
+      # Every non-ephemeral oracle turn is inscribed into Mnemosyne's persistent
+      # Chronicle. The frontend record flag is no longer the gate; error turns
+      # leave a trace too, so nothing vanishes into the æther silently.
+      unless params[:ephemeral]
         execution_time ||= Time.now - start_time
         tool_call_count ||= 0
-        recorded_answer = answer || "Error: #{error_message || 'Oracle conjuration did not complete'}"
-        Mnemosyne.record(**params, answer: recorded_answer, execution_time:, tool_call_count:)
+        recorded_answer = (defined?(answer) && answer) || \
+                          "Error: #{error_message || 'Oracle conjuration did not complete'}"
+        Mnemosyne.inscribe(params, answer: recorded_answer, execution_time:,
+                           tool_call_count:, tool_calls: (defined?(tool_results) && tool_results) || [])
       end
     end
 

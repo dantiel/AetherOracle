@@ -1091,13 +1091,18 @@ class Conduit
 
 
     def stream_token_usage(json)
-      usage = json.is_a?(Hash) ? json['usage'] : nil
+      usage = json.is_a?(Hash) ? (json['usage'] || json[:usage]) : nil
       return unless usage.is_a?(Hash)
 
+      prompt = usage['prompt_tokens'] || usage[:prompt_tokens] || usage['input_tokens'] || usage[:input_tokens]
+      completion = usage['completion_tokens'] || usage[:completion_tokens] || usage['output_tokens'] || usage[:output_tokens]
+      total = usage['total_tokens'] || usage[:total_tokens]
+      total ||= (prompt.to_i + completion.to_i) if prompt || completion
+
       HorologiumAeternum.send_status('token_usage', {
-                                       total_tokens: usage['total_tokens'],
-                                       prompt_tokens: usage['prompt_tokens'],
-                                       completion_tokens: usage['completion_tokens'],
+                                       total_tokens: total,
+                                       prompt_tokens: prompt,
+                                       completion_tokens: completion,
                                      })
     rescue StandardError => e
       # Token stats are best-effort; never let them break the divination.

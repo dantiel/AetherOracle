@@ -104,7 +104,13 @@ class Mnemosyne
 
           tool_calls.map do |tool_call|
             tool_name = tool_call[:name]
-            tool_priority = Instrumenta.tools[tool_name&.to_sym]&.history_priority || 1
+            # Instrumenta may not be loaded when Mnemosyne runs standalone
+            # (chamber's lazy require); every tool then defaults to priority 1.
+            tool_priority = if defined?(Instrumenta)
+                              Instrumenta.tools[tool_name&.to_sym]&.history_priority || 1
+                            else
+                              1
+                            end
 
             # Calculate base truncation limit based on tool priority
             base_limit = case tool_priority

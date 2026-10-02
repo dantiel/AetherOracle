@@ -4,17 +4,21 @@
 # = ÆtherCodex CLI — Console-first Hermetic Programming Oracle
 #
 # Subcommands:
-#   ask "prompt"    Direct AI query (stdin pipe supported)
+#   chamber           Enter the Dialog-Kammer (polymorphic, interactive REPL)
+#   ask "prompt"      Direct AI query (stdin pipe supported, markdown output)
 #   server            Start web server (TextMate UI)
 #   config            Show configuration info
 #   task <action>     Task management (list, show, create, execute)
-#   (no args)         Interactive REPL with tool execution
+#   (no args)         Enter the Dialog-Kammer
 
 require 'json'
 require 'optparse'
 require_relative 'config'
 require_relative 'oracle/oracle'
 require_relative 'oracle/terminal_stream'
+require_relative 'oracle/terminal_markdown'
+require_relative 'oracle/chamber'
+require_relative 'oracle/toolbelt'
 require_relative 'oracle/coniunctio'
 require_relative 'oracle/aetherflux'
 require_relative 'instrumentarium/instrumenta'
@@ -33,23 +37,35 @@ class ÆtherCodexCLI
     command = ARGV.shift
 
     case command
-    when 'ask'     then ask_mode
-    when 'server'  then server_mode
-    when 'config'  then config_mode
-    when 'context' then context_mode
-    when 'task'    then task_mode
-    when 'logs'    then logs_mode
-    when 'repl'    then repl_mode
-    when 'veil'    then veil_mode
-    when 'help', '-h', '--help' then print_help
-    when nil       then repl_mode
+    when 'ask'                         then ask_mode
+    when 'chamber', 'dialog', 'talk'   then chamber_mode
+    when 'server'                      then server_mode
+    when 'config'                      then config_mode
+    when 'context'                     then context_mode
+    when 'task'                        then task_mode
+    when 'logs'                        then logs_mode
+    when 'repl'                        then chamber_mode
+    when 'veil'                        then veil_mode
+    when 'read', 'cat', 'inspect', 'ov', 'write', 'new', 'mv', 'rename',
+         'files', 'ast', 'grep', 'notes', 'mem', 'note', 'history', 'hist',
+         'search', 'find', 'aegis', 'seal', 'seals'
+      toolbelt_mode(command)
+    when 'help', '-h', '--help'        then print_help
+    when nil                           then chamber_mode
     else
       ARGV.unshift(command) if command
-      repl_mode
+      chamber_mode
     end
   end
 
   private
+
+  # The developer toolbelt mirrors the agent's own instruments (read_file,
+  # file_overview, create_file, recall_notes, the SealLedger, AST search …) as
+  # first-class CLI commands, so the terminal becomes the agent's twin.
+  def toolbelt_mode(command)
+    Toolbelt.run(command, ARGV)
+  end
 
   def ask_mode
     prompt = ARGV.join(' ').strip
@@ -76,12 +92,25 @@ class ÆtherCodexCLI
     context = Coniunctio.build(files: files)
     previous_stream = Thread.current[:aether_terminal_stream]
     Thread.current[:aether_terminal_stream] = terminal_stream
-    answer, arts, tool_results = Oracle.divination(prompt, context, tools:, stream: terminal_stream) do |name, args, tool_ctx|
-      tools.handle(tool: name, args:, context: tool_ctx)
+    begin
+      started = Time.now
+      answer, arts, tool_results = Oracle.divination(prompt, context, tools:, stream: terminal_stream) do |name, args, tool_ctx|
+        tools.handle(tool: name, args:, context: tool_ctx)
+      end
+      if interactive
+        puts ÆtherTerminalMarkdown.render(answer, theme: theme_from_env)
+      else
+        puts answer
+      end
+      # Every oracle usage is inscribed into Mnemosyne's persistent Chronicle --
+      # the CLI is its own frontend, so there is no record flag to wait for.
+      Mnemosyne.inscribe({ prompt: prompt, attachments: files.map { |f| { file: f } } },
+                         answer: answer, tool_calls: tool_results,
+                         tool_call_count: Array(tool_results).size,
+                         execution_time: (Time.now - started).round(3))
+    ensure
+      Thread.current[:aether_terminal_stream] = previous_stream
     end
-    puts answer
-  ensure
-    Thread.current[:aether_terminal_stream] = previous_stream
   end
 
   def server_mode
@@ -336,11 +365,14 @@ class ÆtherCodexCLI
 
   def print_help
     puts "ÆtherCodex — Console-first Hermetic Programming Oracle"
+    puts "  (installed as `aetheroracle` — no command enters the Dialog-Kammer)"
     puts
-    puts "Usage: ÆtherCodex <command> [options]"
+    puts "Usage: aetheroracle [command] [options]"
     puts
     puts "Commands:"
-    puts "  ask \"prompt\"     Ask the oracle a question"
+    puts "  (no command)     Enter the Dialog-Kammer (the hermetic default)"
+    puts "  chamber          Enter the Dialog-Kammer (polymorphic REPL)"
+    puts "  ask \"prompt\"     Ask the oracle a question (one-shot)"
     puts "  server           Start web server (TextMate UI)"
     puts "  logs             Tail the tagged log stream (colored, toggleable)"
     puts "  logs tags        Configure tags: colors + enable/disable"
@@ -355,92 +387,40 @@ class ÆtherCodexCLI
     puts "  task execute <id> Execute a task"
     puts "  help             Show this help"
     puts
+    puts "Developer toolbelt (mirrors the oracle's own instruments):"
+    puts "  read <path> [a:b] [--numbers]   Read a file (line range, numbered)"
+    puts "  inspect <path>                 Symbolic structural overview"
+    puts "  write <path> [--body \"…\"]      Create/overwrite a file (or pipe)"
+    puts "  mv <from> <to>                 Rename/move a file"
+    puts "  files [glob]                   List project files"
+    puts "  ast <pattern> [glob]           AST-GREP search"
+    puts "  notes [query]                  Recall Mnemosyne notes"
+    puts "  note add <content> | note rm <id>"
+    puts "  seal list | status <id> | delegate <task_id> <owner>"
+    puts
+    puts "Chamber slash-commands:"
+    puts "  /morph /unmorph /personae /file /clear /config /context"
+    puts "  /tools /markdown /highlight /theme"
+    puts
     puts "Examples:"
+    puts "  ÆtherCodex chamber"
+    puts "  ÆtherCodex chamber --theme github"
     puts "  ÆtherCodex ask \"What is the meaning of life?\""
     puts "  echo \"explain this code\" | ÆtherCodex ask"
-    puts "  ÆtherCodex logs"
     puts "  ÆtherCodex ask --file app.rb \"Refactor this\""
   end
 
-  def repl_mode
-    puts "\e[1m╭─ Delphic Session ──────────────────────────────────╮\e[0m"
-    puts "\e[1m│\e[0m  The Pythian oracle awaits your query...             \e[1m│\e[0m"
-    puts "\e[1m│\e[0m  type \e[33m/help\e[0m for commands, \e[31mexit\e[0m to depart              \e[1m│\e[0m"
-    puts "\e[1m╰──────────────────────────────────────────────────────╯\e[0m"
-    puts
-
-    @terminal_stream = TerminalStream.new
-
-    loop do
-      print "\e[36mπ\e[0m "
-      input = STDIN.gets
-      break unless input
-      input = input.strip
-      break if input == 'exit'
-      next if input.empty?
-
-      if input == 'help'
-        puts "Commands:"
-        puts "  exit          Exit Delphic Session"
-        puts "  help          Show this help"
-        puts "  /file <path>  Attach a file to the next query"
-        puts "  /clear        Clear conversation history"
-        puts "  /config       Show current configuration"
-        puts "  /context      Show current context"
-        puts "  /tools        List available tools"
-        puts
-        next
-      end
-
-      if input.start_with?('/')
-        handle_slash_command(input)
-        next
-      end
-
-      context = Coniunctio.build(history: @history)
-      original_stdout = $stdout
-      $stdout = File.open('/dev/null', 'w')
-      begin
-        answer, arts, tool_results = Oracle.divination(input, context, tools: @tools,
-                                                        stream: @terminal_stream) do |name, args, tool_ctx|
-          @tools.handle(tool: name, args:, context: tool_ctx)
-        end
-      ensure
-        $stdout.close
-        $stdout = original_stdout
-      end
-
-      puts "\n\e[36m↯ #{answer}\e[0m\n\n"
-
-      @history << { prompt: input, answer: answer, tool_calls: tool_results, created_at: Time.now }
+  def chamber_mode
+    theme = nil
+    while (idx = ARGV.index('--theme'))
+      ARGV.delete_at(idx)
+      theme = ARGV.delete_at(idx) || nil
     end
+    ÆtherChamber.new(theme: theme || theme_from_env).run
   end
 
-  def handle_slash_command(input)
-    case input
-    when '/clear'
-      @history.clear
-      puts "Conversation history cleared."
-    when '/config'
-      config_mode
-    when '/context'
-      context_show
-    when '/tools'
-      @tools.tools.each do |name, tool|
-        puts "  #{name}: #{tool.description}"
-      end
-    when %r{^/file\s+(.+)}
-      path = $1.strip
-      if File.exist?(path)
-        content = File.read(path)
-        puts "Attached: #{path} (#{content.lines.count} lines)"
-        @history << { prompt: "/file #{path}", answer: "File attached: #{path}\n\n#{content}" }
-      else
-        puts "File not found: #{path}"
-      end
-    else
-      puts "Unknown command: #{input}"
-    end
+  def theme_from_env
+    ENV['AETHER_THEME'] || 'monokai'
   end
 end
 

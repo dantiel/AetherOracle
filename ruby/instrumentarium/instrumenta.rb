@@ -430,9 +430,13 @@ end
 instrument :recall_notes,
            description: 'Recall notes from Mnemosyne by tags, content or context. ' \
                         'Uses fuzzy matching with enhanced scoring: content (4x), ' \
-                        'tags (3x), links (2x), path matches (+5). Current-state only. ' \
-                        'Pass `id` for direct lookup by note ID (useful from file_overview ' \
-                        'which returns note counts). Max. content length reduced by higher limit.',
+                        'tags (3x), links (2x), path matches (+5), plus cascade ' \
+                        'resonance: notes in the current scope (+6) and ancestor ' \
+                        'scopes (distance-decayed) outrank foreign branches; child ' \
+                        'scopes whisper nothing upward (the parent observes only). ' \
+                        'Current-state only. Pass `id` for direct lookup by note ID ' \
+                        '(useful from file_overview which returns note counts). ' \
+                        'Max. content length reduced by higher limit.',
            params: { query: { type: String, required: false },
                      id:    { type: Integer, required: false, description: 'Direct note ID lookup' },
                      limit: { type: Integer, required: false, default: 3 } },
@@ -445,16 +449,53 @@ instrument :recall_notes,
                { error: "Note ##{id} not found" }
              end
            else
-             { notes: Mnemosyne.recall_notes(query, limit: limit, max_content_length: 1111 / limit) }
+             { notes: Mnemosyne.recall_notes(query, limit: limit, max_content_length: 1111 / limit,
+                                             context_path: Mnemosyne.working_dir) }
            end
   HorologiumAeternum.notes_recalled query, limit, result[:notes] if result[:notes]
   result
-rescue StandardError => e
+ rescue StandardError => e
   { error: e.message }
-end
-
-
-instrument :file_overview,
+ end
+ 
+ 
+ instrument :fragment,
+          description: 'Inscribe a transient fragment of cognition into Mnemosyne (cascade Stufe 2). ' \
+                       'Fragments are notes as metaformat: same shape (content/tags/links/context_path) ' \
+                       'and same cascade resonance, but transient -- they carry a TTL (default 3600 s) ' \
+                       'and decay. Use for working thoughts, intermediate findings, or hypotheses not ' \
+                       'yet worthy of durable notes.',
+          params: { content: { type: String, required: true },
+                    tags:    { type: Array, required: false },
+                    links:   { type: Array, required: false },
+                    ttl:     { type: Integer, required: false, default: 3600 } },
+          returns: { id: Integer, error: String } do |content:, tags: nil, links: nil, ttl: 3600|
+ id = Mnemosyne.fragment(content: content, tags: tags, links: links,
+                         context_path: Mnemosyne.working_dir, ttl: ttl)
+ { id: id }
+ rescue StandardError => e
+ { error: e.message }
+ end
+ 
+ 
+ instrument :recall_fragments,
+          description: 'Recall transient fragments of cognition from Mnemosyne. Same cascade ' \
+                       'resonance as recall_notes (local scope +6, ancestors distance-decayed, ' \
+                       'child scopes whisper nothing upward) plus freshness weighting -- newly ' \
+                       'minted fragments glow, expiring ones dim. Expired fragments are purged ' \
+                       'lazily on recall.',
+          params: { query: { type: String, required: false },
+                    limit: { type: Integer, required: false, default: 3 } },
+          returns: { fragments: Array, error: String } do |query: '', limit: 2|
+ { fragments: Mnemosyne.recall_fragments(query, limit: limit,
+                                         max_content_length: 1111 / limit,
+                                         context_path: Mnemosyne.working_dir) }
+ rescue StandardError => e
+ { error: e.message }
+ end
+ 
+ 
+ instrument :file_overview,
            description: <<~DESC,
              Fetch file information with symbolic parsing. Returns lightweight metadata:
              note count, and note relations of tags to files. Enhanced symbolic analysis shows
@@ -483,9 +524,6 @@ instrument :file_overview,
     file_cloud:         results[:symbolic_overview][:file_cloud_text],
     hermetic_overview:  results[:hermetic_overview]
   }
-  # puts results.inspect
-  # puts '==================================================='
-  puts result.inspect
   result
 rescue StandardError => e
   puts "[PRIMA MATERIA][ERROR]: #{e.inspect}"
@@ -979,6 +1017,13 @@ instrument :seal_run,
     next_task = status[:next]
     break unless next_task
 
+    # Veil the milestone's owner companion into Aegis before it drives, so the
+    # companion joins the plan cumulatively — many may be active at once.
+    owner = next_task[:owner].to_s.strip
+    if !owner.empty? && COMPANION_PERSONALITIES.key?(owner.to_sym)
+      CompanionPrograms.veil([owner], COMPANION_PERSONALITIES[owner.to_sym][:name])
+    end
+
     begin
       engine.execute_task(next_task[:id])
       executed << { id: next_task[:id], title: next_task[:title], status: 'completed' }
@@ -1234,7 +1279,7 @@ COMPANION_PERSONALITIES.each_key do |g|
                                      domain_model: domain_model
     end
     Mnemosyne.companion_remember_facet content: facet_note, facet: g, links: links, tags: tags if facet_note
-    { ok: true }
+    { ok: true, glyph: glyph, name: name, summary: summary, facet_note: facet_note }
   rescue StandardError => e
     { error: e.message }
   end
@@ -1376,6 +1421,7 @@ instrument :ask_user,
                      options: { type: Array, required: false,
                                 items: { type: String },
                                 description: 'Options for confirm/select types (defaults to Yes/No for confirm)' } },
+           timeout: 86_400,
            returns: { response: String, error: String } do |type:, message:, options: nil|
   uuid = SecureRandom.uuid
 
@@ -1415,7 +1461,7 @@ end
 # Visual truth — capture the screen-plane for AI inspection
 instrument :take_screenshot,
            description: <<~DESC,
-             Capture a screenshot using native macOS APIs. Use autonomously whenever
+             Capture a screenshot using native OS APIs (macOS + Windows). Use autonomously whenever
              visual inspection would improve task quality — UI changes, layout bugs,
              rendering issues, Xcode simulator, browser output, etc.
 
@@ -1487,7 +1533,7 @@ instrument :take_screenshot,
                                      description: 'Partial window title match for window/active-app modes (case-insensitive). Safer than relying on frontmost app.' },
                      window_id: { type:      Integer,
                                   required:  false,
-                                  description: 'Exact CoreGraphics window ID for window/active-app modes. Obtained from mode: "info" → visible_windows.' } },
+                                  description: 'Exact native window ID (CoreGraphics on macOS, HWND on Windows) for window/active-app modes. Obtained from mode: "info" → visible_windows.' } },
            returns: { path: String, bytes: Integer, format: String, mode: String, error: String,
                       timestamp: String, platform: String, displays: Array, frontmost_app: Hash,
                       visible_windows: Array, menu_bar: Hash } \
@@ -1523,7 +1569,7 @@ end
 # Only registered when dev_mode is enabled in .aethercodex
 if CONFIG.dev_mode?
   instrument :reload_instrumentarium,
-             description: 'Reload all instrumentarium modules from disk. Use after editing tool files to apply changes without restarting TextMate.',
+             description: 'Weave the tools anew from disk after editing them, so changes apply without restarting the host.',
              returns: { reloaded: Array, failed: Array } \
              do
     modules = %w[
@@ -1559,3 +1605,9 @@ if CONFIG.dev_mode?
     { reloaded:, failed: }
   end
 end
+
+# ── Project-context instruments: load every `.aether/*.rb` at boot so a
+# project may define its own tools (Unreal build/run, bespoke automation …)
+# without touching the core instrumentarium. See aether_instrumenta.rb.
+require_relative 'aether_instrumenta'
+AetherInstrumenta.boot!

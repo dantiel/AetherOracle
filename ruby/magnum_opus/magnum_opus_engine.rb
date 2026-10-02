@@ -1476,7 +1476,7 @@ class MagnumOpusEngine
         # Call oracle divination and capture the full response including tool calls
         response, arts, tool_results = HermeticExecutionDomain.execute timeout: 1111 do
           @aetherflux.channel_oracle_divination(
-            { system_prompt:, messages: },
+            { system_prompt:, messages:, record: true, task_id: task_id, step_id: step_index },
             tools:,
             context: context,
             timeout: 1111 # Extended timeout for implementation phases

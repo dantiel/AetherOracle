@@ -8,10 +8,12 @@ require 'fileutils'
 require 'json'
 require 'timeout'
 require 'open3'
+require 'tmpdir'
 
 module CapturaVisus
+  WINDOWS           = !!(RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/i)
   DEFAULT_FORMAT    = 'jpg'
-  DEFAULT_DIR       = File.join '/tmp', 'aethercodex_capturae'
+  DEFAULT_DIR       = File.join(WINDOWS ? Dir.tmpdir : '/tmp', 'aethercodex_capturae')
   CAPTURE_BIN       = '/usr/sbin/screencapture'
   WINDOWLIST_SRC    = File.join(__dir__, 'aether_windowlist.swift')
   WINDOWLIST_BIN    = File.join(DEFAULT_DIR, 'aether_windowlist')
@@ -34,6 +36,10 @@ module CapturaVisus
                    window_id: nil)
     # Special case: info mode returns system intel instead of capturing
     return gather_system_info if mode.to_s == 'info'
+
+    return capture_windows(mode:, display:, x:, y:, width:, height:,
+                           format:, delay:, cursor:, output:,
+                           window_title:, window_id:) if WINDOWS
     
     ensure_dir!
     
@@ -282,6 +288,8 @@ module CapturaVisus
   # ── Info Mode: Gather System Intel ─────────────────────────────────────────
 
   def self.gather_system_info
+    return gather_system_info_windows if WINDOWS
+
     info = {
       timestamp: Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z'),
       platform: 'macOS',
@@ -695,6 +703,251 @@ module CapturaVisus
       bounds: menu_bar_bounds,
       height: 24 # Standard macOS menu bar height
     }
+  end
+
+  # ── Windows backend ────────────────────────────────────────────────────────
+  # PowerShell + System.Drawing + user32 P/Invoke. CopyFromScreen captures the
+  # virtual desktop; the compiled Win32 helper enumerates/measures windows so
+  # `window`/`active-app` modes can target the foreground window or a title.
+
+  # Minimal P/Invoke surface for the capture script. Only GetForegroundWindow +
+  # GetWindowRect, so window title/process introspection never shares a script
+  # with CopyFromScreen (AMSI flags "read window text + screenshot" as spyware).
+  WIN32_CAPTURE_CS = <<~'CS'
+    using System;
+    using System.Runtime.InteropServices;
+
+    public static class Win32 {
+      [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+      [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+
+      [StructLayout(LayoutKind.Sequential)]
+      public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+      public static int[] Rect(IntPtr h) {
+        RECT r; GetWindowRect(h, out r);
+        return new[] { r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top };
+      }
+      public static int[] ForegroundRect() { return Rect(GetForegroundWindow()); }
+    }
+  CS
+
+  # Full P/Invoke surface for the info script (no CopyFromScreen → AMSI-safe).
+  WIN32_INFO_CS = <<~'CS'
+    using System;
+    using System.Text;
+    using System.Runtime.InteropServices;
+
+    public static class Win32 {
+      [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+      [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+      [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+      public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+      [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr h);
+      [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+      [StructLayout(LayoutKind.Sequential)]
+      public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+      public static string Title(IntPtr h) {
+        int n = GetWindowTextLength(h);
+        var sb = new StringBuilder(n + 1);
+        GetWindowText(h, sb, sb.Capacity);
+        return sb.ToString();
+      }
+      public static int[] Rect(IntPtr h) {
+        RECT r; GetWindowRect(h, out r);
+        return new[] { r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top };
+      }
+      public static int[] ForegroundRect() { return Rect(GetForegroundWindow()); }
+      public static uint ProcessId(IntPtr h) {
+        uint pid; GetWindowThreadProcessId(h, out pid); return pid;
+      }
+    }
+  CS
+
+  # Open3 returns stderr/stdout in the Ruby external encoding, but PowerShell 5.1
+  # writes console text in the active ANSI/OEM codepage (commonly CP1252).
+  # Re-map invalid UTF-8 to Windows-1252 → UTF-8 so `.strip`/interpolation never
+  # raise "invalid byte sequence".
+  def self.normalize_encoding(str)
+    return str if str.nil? || str.valid_encoding?
+
+    str.force_encoding(Encoding::Windows_1252).encode(Encoding::UTF_8)
+  rescue StandardError
+    str.scrub('?')
+  end
+
+  # Write a PowerShell script to a temp file and run it under Windows
+  # PowerShell 5.1 (System.Drawing + System.Windows.Forms ship there). Returns
+  # Open3's [stdout, stderr, status].
+  def self.run_powershell(script, env = {})
+    require 'tempfile'
+    file = Tempfile.new(['aether', '.ps1'])
+    path = file.path
+    file.write(script)
+    file.close
+    stdout, stderr, status = Open3.capture3(env, 'powershell', '-NoProfile', '-NonInteractive',
+                                            '-ExecutionPolicy', 'Bypass', '-File', path)
+    [normalize_encoding(stdout), normalize_encoding(stderr), status]
+  ensure
+    File.delete(path) if path && File.exist?(path)
+  end
+
+  # Build a minimal, single-mode capture script. Geometry is interpolated
+  # directly (no switch / functions / env indirection), and the P/Invoke C#
+  # is only embedded for window/active-app modes. This keeps every generated
+  # script as small and innocuous as possible — Windows Defender AMSI blocks
+  # larger "window-enumerate + screenshot" scripts as surveillance malware.
+  def self.build_windows_capture_script(mode:, path:, format:, x:, y:, width:, height:, display:, window_id:)
+    img_format = format.to_s.downcase == 'jpg' ? 'Jpeg' : 'Png'
+    ps_path = path.to_s.gsub("'", "''")
+    needs_win32 = %w[window active-app].include?(mode.to_s)
+
+    geo = case mode.to_s
+          when 'screen'
+            '$b = [System.Windows.Forms.SystemInformation]::VirtualScreen; $x = $b.X; $y = $b.Y; $w = $b.Width; $h = $b.Height'
+          when 'area'
+            "$x = #{x.to_i}; $y = #{y.to_i}; $w = #{width.to_i}; $h = #{height.to_i}"
+          when 'display'
+            "$b = [System.Windows.Forms.Screen]::AllScreens[#{display.to_i - 1}].Bounds; $x = $b.X; $y = $b.Y; $w = $b.Width; $h = $b.Height"
+          when 'window', 'active-app'
+            if window_id && window_id.to_i.positive?
+              "$r = [Win32]::Rect([IntPtr][long]#{window_id.to_i}); $x = $r[0]; $y = $r[1]; $w = $r[2]; $h = $r[3]"
+            else
+              '$r = [Win32]::ForegroundRect(); $x = $r[0]; $y = $r[1]; $w = $r[2]; $h = $r[3]'
+            end
+          else
+            "throw 'unsupported mode: #{mode}'"
+          end
+
+    script = +"$ErrorActionPreference = 'Stop'\n"
+    script << "Add-Type -TypeDefinition @\"\n#{WIN32_CAPTURE_CS}\n\"@\n" if needs_win32
+    script << "Add-Type -AssemblyName System.Drawing\n"
+    script << "Add-Type -AssemblyName System.Windows.Forms\n\n"
+    script << "#{geo}\n"
+    script << "if ($w -le 0 -or $h -le 0) { throw \"invalid capture rectangle ($x,$y,$w,$h)\" }\n"
+    script << "$bmp = New-Object System.Drawing.Bitmap $w, $h\n"
+    script << "$g = [System.Drawing.Graphics]::FromImage($bmp)\n"
+    script << "$g.CopyFromScreen($x, $y, 0, 0, $bmp.Size)\n"
+    script << "$bmp.Save('#{ps_path}', [System.Drawing.Imaging.ImageFormat]::#{img_format})\n"
+    script << "$g.Dispose(); $bmp.Dispose()\n"
+    script << "Write-Output 'OK'\n"
+    script
+  end
+
+  def self.build_window_resolve_script
+    <<~PS
+      $ErrorActionPreference = 'Stop'
+      $t = $env:AETHER_WINDOW_TITLE
+      $p = Get-Process | Where-Object { $_.MainWindowTitle -like "*$t*" } | Select-Object -First 1
+      if (-not $p) { $p = Get-Process | Where-Object { $_.ProcessName -like "*$t*" } | Select-Object -First 1 }
+      if (-not $p -or $p.MainWindowHandle -eq 0) { throw "no window matching '$t'" }
+      Write-Output $p.MainWindowHandle.ToInt64()
+    PS
+  end
+
+  # Resolve a window title (or process-name fragment) to its HWND via a small
+  # standalone PowerShell pass. Kept separate from the capture script so the
+  # window enumeration never shares a script with CopyFromScreen — Windows
+  # Defender AMSI flags that exact combination as surveillance malware.
+  def self.resolve_window_id(title)
+    return nil if title.nil? || title.to_s.empty?
+
+    stdout, stderr, status = run_powershell(build_window_resolve_script,
+                                            { 'AETHER_WINDOW_TITLE' => title.to_s })
+    raise "window lookup failed: #{stderr.strip}" unless status.success?
+
+    stdout.strip.to_i
+  end
+
+  # `cursor` is accepted for API parity but CopyFromScreen does not draw the
+  # pointer; Windows captures omit the mouse cursor.
+  def self.capture_windows(mode:, display:, x:, y:, width:, height:, format:, delay:, cursor:, output:, window_title:, window_id:)
+    ensure_dir!
+    path = output || generate_path(format)
+    sleep delay.to_f if delay.to_f.positive?
+
+    target_id = window_id
+    if (mode.to_s == 'window' || mode.to_s == 'active-app') && target_id.nil? && !window_title.to_s.empty?
+      target_id = resolve_window_id(window_title)
+    end
+
+    script = build_windows_capture_script(mode:, path:, format:, x:, y:, width:, height:, display:, window_id: target_id)
+    _stdout, stderr, status = run_powershell(script)
+    raise "PowerShell capture failed: #{stderr.strip}" unless status.success?
+
+    verify! path
+    { path: path, bytes: File.size(path), format: format, mode: mode.to_s }
+  rescue StandardError => e
+    { error: e.message }
+  end
+
+  def self.gather_system_info_windows
+    script = <<~PS
+      $ErrorActionPreference = 'Stop'
+      Add-Type -TypeDefinition @"
+#{WIN32_INFO_CS}
+"@
+      Add-Type -AssemblyName System.Windows.Forms
+
+      $screens = @([System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
+        [ordered]@{
+          id = $_.DeviceName
+          bounds = @{ x = $_.Bounds.X; y = $_.Bounds.Y; width = $_.Bounds.Width; height = $_.Bounds.Height }
+          width = $_.Bounds.Width
+          height = $_.Bounds.Height
+          is_main = $_.Primary
+        }
+      })
+
+      $fgH = [Win32]::GetForegroundWindow()
+      $fgPid = [Win32]::ProcessId($fgH)
+      $fgRect = [Win32]::Rect($fgH)
+      $frontmost = [ordered]@{
+        name = (Get-Process -Id $fgPid -ErrorAction SilentlyContinue).ProcessName
+        pid = $fgPid
+        title = [Win32]::Title($fgH)
+        bounds = ($fgRect -join ',')
+      }
+
+      $wins = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object {
+        $r = [Win32]::Rect($_.MainWindowHandle)
+        [ordered]@{
+          id = $_.MainWindowHandle.ToInt64()
+          pid = $_.Id
+          app = $_.ProcessName
+          title = $_.MainWindowTitle
+          x = $r[0]; y = $r[1]; width = $r[2]; height = $r[3]
+          onscreen = $true
+        }
+      })
+
+      [ordered]@{
+        displays = $screens
+        frontmost_app = $frontmost
+        visible_windows = $wins
+      } | ConvertTo-Json -Depth 6 -Compress
+    PS
+
+    stdout, stderr, status = run_powershell(script)
+    raise "PowerShell info failed: #{stderr.strip}" unless status.success?
+
+    data = JSON.parse(stdout, symbolize_names: true)
+    {
+      timestamp: Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z'),
+      platform: 'Windows',
+      system: { os_version: `cmd /c ver 2>NUL`.strip, arch: RbConfig::CONFIG['host_cpu'] },
+      displays: data[:displays] || [],
+      frontmost_app: data[:frontmost_app] || {},
+      visible_windows: data[:visible_windows] || [],
+      menu_bar: { note: 'Windows has no global menu bar; use window/active-app modes' },
+      permissions: { accessibility: 'n/a', screen_recording: 'n/a', tips: nil },
+      tcc_dialogs: [],
+      suggestions: generate_suggestions
+    }
+  rescue StandardError => e
+    { error: e.message, platform: 'Windows' }
   end
 
   # ── Future backends (stubs for extensibility) ─────────────────────────────

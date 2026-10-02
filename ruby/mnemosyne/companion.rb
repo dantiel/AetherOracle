@@ -77,24 +77,30 @@ class Mnemosyne
       # and the facet tag opens the episodic memory flow into recall_aegis_notes.
       # Returns the previous aegis state for release.
 
+      def active_glyphs
+        existing_tags(current_aegis).filter_map do |t|
+          t.to_s.start_with?(FACET_TAG_PREFIX) ? t.to_s.delete_prefix(FACET_TAG_PREFIX).to_sym : nil
+        end.uniq
+      end
+
+      # Veil companions into Aegis cumulatively: activation adds each facet to
+      # the orientation — many may be active at once. Returns the previous aegis
+      # state so a full release can restore it.
       def veil(glyphs, persona = nil)
         previous = current_aegis
-        glyphs = Array(glyphs).map(&:to_sym)
+        glyphs = (active_glyphs + Array(glyphs).map(&:to_sym)).uniq
 
-        facet_tags = glyphs.map { |g| "#{FACET_TAG_PREFIX}#{g}" }
-        summaries  = glyphs.filter_map { |g| load_state(g, limit: 1).first&.dig(:summary) }
-        essence    = (['COMPANION VEILED'] + glyphs.map { |g| g.to_s.capitalize } +
-                      [persona] + summaries).compact.join("\n")
-
-        Mnemosyne.aegis = {
-          tags:        (existing_tags(previous) + facet_tags).uniq,
-          summary:     [present_or_nil(previous[:summary]), essence].compact.join("\n"),
-          temperature: previous[:temperature],
-          working_dir: previous[:working_dir],
-          thinking:    previous[:thinking]
-        }
+        Mnemosyne.aegis = build_aegis_state(glyphs, persona, previous)
         Mnemosyne.save_aegis_state(**Mnemosyne.aegis)
         previous
+      end
+
+      # Release a single companion facet — the others stay veiled.
+      def unveil(glyph)
+        glyphs = active_glyphs - [glyph.to_sym]
+        Mnemosyne.aegis = build_aegis_state(glyphs, nil, current_aegis)
+        Mnemosyne.save_aegis_state(**Mnemosyne.aegis)
+        current_aegis
       end
 
       # Release the veil: restore the orientation the oracle held before activation.
@@ -107,6 +113,34 @@ class Mnemosyne
       end
 
       private
+
+      # Rebuild the Aegis orientation for a set of active glyphs: the base
+      # (non-companion) summary is preserved, the companion essence is derived
+      # deterministically from the current facet set.
+      def build_aegis_state(glyphs, persona, previous)
+        facet_tags = glyphs.map { |g| "#{FACET_TAG_PREFIX}#{g}" }
+        summaries  = glyphs.filter_map { |g| load_state(g, limit: 1).first&.dig(:summary) }
+        essence    = if glyphs.empty?
+                       nil
+                     else
+                       (['COMPANION VEILED'] + glyphs.map { |g| g.to_s.capitalize } +
+                         [persona] + summaries).compact.uniq.join("\n")
+                     end
+
+        {
+          tags:        (existing_tags(previous).reject { |t| t.to_s.start_with?(FACET_TAG_PREFIX) } + facet_tags).uniq,
+          summary:     [present_or_nil(base_summary(previous)), present_or_nil(essence)].compact.join("\n"),
+          temperature: previous[:temperature],
+          working_dir: previous[:working_dir],
+          thinking:    previous[:thinking]
+        }
+      end
+
+      def base_summary(aegis_state)
+        summary = aegis_state[:summary].to_s
+        idx = summary.index('COMPANION VEILED')
+        idx ? summary[0...idx].strip : summary.strip
+      end
 
       def current_aegis
         Mnemosyne.aegis || { tags: [], summary: '', temperature: 1.0,
