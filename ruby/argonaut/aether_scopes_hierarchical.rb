@@ -101,16 +101,73 @@ module AetherScopesHierarchical
       exports:   []
     },
 
-    # CSS patterns
+    # CSS patterns — selectors open a scope via `{`; property fields
+    # (`color: red`) are deliberately NOT symbols: they are content. The
+    # selector capture is trimmed so `.btn {` yields `.btn`, not `  .btn `.
     css:          {
       hierarchy: [
-        { type: :selector, pattern: /^([^{]+)\{/, level: :container },
+        { type: :selector, pattern: /^\s*([^{]*?)\s*\{/, level: :container },
         { type: :at_rule, pattern: /^@(\w+)/, level: :directive }
       ],
       imports:   [
         { type: :import, pattern: /@import\s+(?:url\()?['"]([^'"]+)['"]/ }
       ],
       exports:   []
+    },
+
+    # SCSS (brace syntax, `$var`). Variables are nodes (variable assignment);
+    # their value-level references to other variables become graph edges.
+    scss:         {
+      hierarchy: [
+        { type: :selector, pattern: /^\s*([^{]*?)\s*\{/, level: :container },
+        { type: :variable, pattern: /^\s*(\$[\w-]+)\s*:/, level: :member },
+        { type: :at_rule, pattern: /^@(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :import, pattern: /@import\s+(?:url\()?['"]([^'"]+)['"]/ },
+        { type: :use, pattern: /@use\s+['"]([^'"]+)['"]/ },
+        { type: :forward, pattern: /@forward\s+['"]([^'"]+)['"]/ }
+      ],
+      exports:   [],
+      references: [
+        { type: :var_ref, definition: /^\s*(\$[\w-]+)\s*:\s*(.+)$/, token: /\$[\w-]+/ }
+      ]
+    },
+
+    # SASS (indented syntax, no braces, `$var`). A line is a selector when it
+    # is neither a comment, an at-rule, a variable definition, nor a property
+    # (`key: value`). Property fields stay content; only selectors + variables
+    # become symbols.
+    sass:         {
+      hierarchy: [
+        { type: :variable, pattern: /^(\$[\w-]+)\s*:/, level: :member },
+        { type: :selector, pattern: /^(?!\s*(?:\/\/|\/\*))(?!\s*[@$])(?!\s*[\w-]+\s*:\s+\S)(.+)$/, level: :container },
+        { type: :at_rule, pattern: /^@(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :import, pattern: /@import\s+['"]([^'"]+)['"]/ },
+        { type: :use, pattern: /@use\s+['"]([^'"]+)['"]/ }
+      ],
+      exports:   [],
+      references: [
+        { type: :var_ref, definition: /^\s*(\$[\w-]+)\s*:\s*(.+)$/, token: /\$[\w-]+/ }
+      ]
+    },
+
+    # LESS (brace syntax, `@var`).
+    less:         {
+      hierarchy: [
+        { type: :selector, pattern: /^\s*([^{]*?)\s*\{/, level: :container },
+        { type: :variable, pattern: /^\s*(@[\w-]+)\s*:/, level: :member },
+        { type: :at_rule, pattern: /^@(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :import, pattern: /@import\s+(?:url\()?['"]([^'"]+)['"]/ }
+      ],
+      exports:   [],
+      references: [
+        { type: :var_ref, definition: /^\s*(@[\w-]+)\s*:\s*(.+)$/, token: /@[\w-]+/ }
+      ]
     },
 
     # CoffeeScript patterns
@@ -458,7 +515,7 @@ module AetherScopesHierarchical
     '.rb' => :ruby, '.rake' => :ruby, '.gemspec' => :ruby, '.ru' => :ruby,
     '.py' => :python, '.pyw' => :python,
     '.html' => :html, '.htm' => :html,
-    '.css' => :css, '.scss' => :css, '.sass' => :css, '.less' => :css,
+    '.css' => :css, '.scss' => :scss, '.sass' => :sass, '.less' => :less,
     '.c' => :c,
     '.h' => :c, # disambiguated to :cpp by content when C++ markers present
     '.cpp' => :cpp, '.cc' => :cpp, '.cxx' => :cpp, '.c++' => :cpp,
@@ -507,6 +564,7 @@ module AetherScopesHierarchical
       @hierarchy = []
       @imports = []
       @exports = []
+      @references = []
       @current_scope = []
     end
 
@@ -518,20 +576,22 @@ module AetherScopesHierarchical
         # Parse hierarchy elements
         parse_hierarchy line, line_number
 
-        # Parse imports and exports
+        # Parse imports, exports, and variable references
         parse_imports line, line_number
         parse_exports line, line_number
+        parse_references line, line_number
       end
 
       # Close any scope still open at end-of-file so spans never dangle.
       @current_scope.reverse_each { |scope| close_scope(scope, @lines.size) }
 
       {
-        language:  @language,
-        hierarchy: @hierarchy,
-        imports:   @imports,
-        exports:   @exports,
-        structure: analyze_structure
+        language:   @language,
+        hierarchy:  @hierarchy,
+        imports:    @imports,
+        exports:    @exports,
+        references: @references,
+        structure:  analyze_structure
       }
     end
 
@@ -623,8 +683,10 @@ module AetherScopesHierarchical
 
         # puts "    Pattern #{pattern[:type]} matched! Captured: #{match[1]}"
 
-        # Handle special cases for naming
-        name = match[1]
+        # Handle special cases for naming. `.strip` trims leading/trailing
+        # whitespace the regex may capture (e.g. the indented SASS selector
+        # `(.+)` grabs leading indentation) so symbols carry clean names.
+        name = match[1]&.strip
 
         # puts "    Raw captured name: #{name.inspect}, pattern type: #{pattern[:type]}"
 
@@ -749,6 +811,33 @@ module AetherScopesHierarchical
     end
 
 
+    # Variable references (SASS/SCSS/LESS): a definition `$primary: $brand`
+    # links `$primary` to every variable token in its value. Property fields
+    # (`color: $primary`) are intentionally not scanned here — only variable-to-
+    # variable relations are wired, matching the graph's goal of linking
+    # variables to each other rather than inventorying style content.
+    def parse_references(line, line_number)
+      patterns = LANGUAGE_PATTERNS[@language]&.[](:references) || []
+
+      patterns.each do |pattern|
+        next unless (defm = line.match pattern[:definition])
+
+        source = defm[1]
+        value = defm[2]
+        value.scan(pattern[:token]).each do |token|
+          next if token == source
+
+          @references << {
+            type:   pattern[:type],
+            source: source,
+            target: token,
+            line:   line_number
+          }
+        end
+      end
+    end
+
+
     def analyze_structure
       {
         total_lines:       @lines.size,
@@ -797,6 +886,7 @@ module AetherScopesHierarchical
       hierarchy:        analysis[:hierarchy],
       imports:          analysis[:imports],
       exports:          analysis[:exports],
+      references:       analysis[:references],
       structure:        analysis[:structure],
       summary:          generate_summary(analysis),
       line_hints:       line_hints,

@@ -96,8 +96,19 @@ class Mnemosyne
           content: "#{File.basename(rel)} #{rel}"
         )
 
+        symbol_index = {}
         overview[:hierarchy].each do |item|
-          register_symbol(item, rel, language, file_id, file_id)
+          register_symbol(item, rel, language, file_id, file_id, symbol_index)
+        end
+
+        # Wire intra-file variable references: `$primary: $brand` becomes an
+        # edge from the `$primary` symbol node to the `$brand` symbol node.
+        (overview[:references] || []).each do |ref|
+          source_id = symbol_index[ref[:source]]
+          target_id = symbol_index[ref[:target]]
+          next unless source_id && target_id
+
+          insert_edge(source_id, target_id, 'references', "#{ref[:source]} -> #{ref[:target]}")
         end
 
         imports = overview[:imports].map do |imp|
@@ -109,7 +120,7 @@ class Mnemosyne
         [nil, []]
       end
 
-      def register_symbol(item, path, language, file_id, parent_id)
+      def register_symbol(item, path, language, file_id, parent_id, symbol_index = {})
         id = insert_node(
           kind: 'symbol',
           path: path,
@@ -124,10 +135,11 @@ class Mnemosyne
           indent: item[:indent],
           content: "#{item[:name]} #{item[:qualified_name]} #{item[:type]}"
         )
+        symbol_index[item[:name]] = id
         insert_edge(file_id, id, 'defines', item[:type])
         insert_edge(parent_id, id, 'contains') if parent_id
         (item[:children] || []).each do |child|
-          register_symbol(child, path, language, file_id, id)
+          register_symbol(child, path, language, file_id, id, symbol_index)
         end
         id
       end
