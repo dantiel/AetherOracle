@@ -13,10 +13,15 @@ class Mnemosyne
   # from a fresh sounding.
   class Corpus
     SCAN_EXTENSIONS = %w[
-      .rb .js .ts .jsx .coffee .litcoffee .py .c .h .cpp .hpp .swift .m .mm
-      .css .scss .sass .less .html .htm .md .txt .json .yml .yaml .gemspec
-      .rake .sh
+      .rb .js .jsx .mjs .cjs .ts .tsx .mts .cts .coffee .litcoffee .py .pyw
+      .c .h .cpp .hpp .hh .hxx .cc .cxx .swift .m .mm .css .scss .sass .less
+      .html .htm .md .markdown .txt .text .json .yml .yaml .gemspec .rake .sh
+      .bash .zsh .fish .go .rs .java .kt .kts .cs .php .sql .toml .xml .svg
+      .xhtml .ex .exs .lua .mk .dockerfile
     ].freeze
+
+    # Extensionless build/config files still worth sounding.
+    BUILD_FILENAMES = %w[makefile gnumakefile dockerfile containerfile].freeze
 
     SKIP_DIRS = %w[
       .git .hg .svn vendor_bundle .vendor_bundle .vendor vendored node_modules
@@ -35,7 +40,9 @@ class Mnemosyne
 
           rel = abs.delete_prefix(prefix).tr(File::SEPARATOR, '/')
           next if rel.split('/').any? { |seg| SKIP_DIRS.include?(seg) }
-          next unless SCAN_EXTENSIONS.include?(File.extname(abs).downcase)
+
+          ext = File.extname(abs).downcase
+          next unless SCAN_EXTENSIONS.include?(ext) || BUILD_FILENAMES.include?(File.basename(abs).downcase)
 
           files << rel
         end

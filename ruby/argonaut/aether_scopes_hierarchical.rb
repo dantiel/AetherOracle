@@ -52,14 +52,14 @@ module AetherScopesHierarchical
     # JavaScript patterns
     javascript:   {
       hierarchy: [
-        { type: :class, pattern: /^\s*class\s+(\w+)/, level: :container },
-        { type: :function, pattern: /^\s*function\s+(\w+)/, level: :member },
+        { type: :class, pattern: /^\s*(?:export\s+)?class\s+(\w+)/, level: :container },
+        { type: :function, pattern: /^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)/, level: :member },
         { type:    :arrow_function,
-          pattern: /^\s*const\s+(\w+)\s*=\s*\([^)]*\)\s*=>/,
+          pattern: /^\s*(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/,
           level:   :member },
-        { type: :const, pattern: /^\s*const\s+(\w+)\s*=/, level: :member },
-        { type: :let, pattern: /^\s*let\s+(\w+)\s*=/, level: :member },
-        { type: :var, pattern: /^\s*var\s+(\w+)\s*=/, level: :member }
+        { type: :const, pattern: /^\s*(?:export\s+)?const\s+(\w+)\s*=/, level: :member },
+        { type: :let, pattern: /^\s*(?:export\s+)?let\s+(\w+)\s*=/, level: :member },
+        { type: :var, pattern: /^\s*(?:export\s+)?var\s+(\w+)\s*=/, level: :member }
       ],
       imports:   [
         { type: :import, pattern: /^\s*import\s+(?:[^'"\n]+from\s+)?['"]([^'"]+)['"]/ },
@@ -212,7 +212,7 @@ module AetherScopesHierarchical
       exports:   []
     },
 
-    # Shell patterns (.sh/.bash/.zsh)
+    # Shell patterns (.sh/.bash/.zsh/.fish)
     shell:        {
       hierarchy: [
         { type: :function, pattern: /^\s*(\w+)\s*\(\)\s*\{/, level: :member },
@@ -222,7 +222,274 @@ module AetherScopesHierarchical
         { type: :source, pattern: /^\s*(?:source|\.)\s+([^\s]+)/ }
       ],
       exports:   []
+    },
+
+    # TypeScript patterns (.ts/.tsx/.mts/.cts)
+    typescript:   {
+      hierarchy: [
+        { type: :interface, pattern: /^\s*(?:export\s+)?interface\s+(\w+)/, level: :container },
+        { type: :class, pattern: /^\s*(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/, level: :container },
+        { type: :enum, pattern: /^\s*(?:export\s+)?enum\s+(\w+)/, level: :container },
+        { type: :type_alias, pattern: /^\s*(?:export\s+)?type\s+(\w+)\s*=/, level: :member },
+        { type: :function, pattern: /^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)/, level: :member },
+        { type: :arrow_function, pattern: /^\s*(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/, level: :member },
+        { type: :const, pattern: /^\s*(?:export\s+)?const\s+(\w+)\s*[:=]/, level: :member },
+        { type: :let, pattern: /^\s*(?:export\s+)?let\s+(\w+)\s*[:=]/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+(?:[^'"\n]+from\s+)?['"]([^'"]+)['"]/ }
+      ],
+      exports:   [
+        { type: :export, pattern: /^\s*export\s+(?:default\s+)?(?:class|function|const|let|var|interface|type|enum)/ }
+      ]
+    },
+
+    # Go patterns (.go)
+    go:           {
+      hierarchy: [
+        { type: :func, pattern: /^\s*func\s+(?:\([^)]*\)\s+)?(\w+)/, level: :member },
+        { type: :struct, pattern: /^\s*type\s+(\w+)\s+struct/, level: :container },
+        { type: :interface, pattern: /^\s*type\s+(\w+)\s+interface/, level: :container },
+        { type: :type, pattern: /^\s*type\s+(\w+)\s+/, level: :member },
+        { type: :const, pattern: /^\s*const\s+(?:\(?\s*)?(\w+)/, level: :member },
+        { type: :var, pattern: /^\s*var\s+(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+(?:\w+\s+)?['"]([^'"]+)['"]/ }
+      ],
+      exports:   []
+    },
+
+    # Rust patterns (.rs)
+    rust:         {
+      hierarchy: [
+        { type: :struct, pattern: /^\s*(?:pub\s+)?struct\s+(\w+)/, level: :container },
+        { type: :enum, pattern: /^\s*(?:pub\s+)?enum\s+(\w+)/, level: :container },
+        { type: :trait, pattern: /^\s*(?:pub\s+)?trait\s+(\w+)/, level: :container },
+        { type: :impl, pattern: /^\s*impl(?:<[^>]*>)?\s+(\w+)/, level: :container },
+        { type: :fn, pattern: /^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/, level: :member },
+        { type: :const, pattern: /^\s*(?:pub\s+)?const\s+(\w+)/, level: :member },
+        { type: :static, pattern: /^\s*(?:pub\s+)?static\s+(\w+)/, level: :member },
+        { type: :let, pattern: /^\s*let\s+(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :use, pattern: /^\s*use\s+([^;]+)/ },
+        { type: :mod, pattern: /^\s*mod\s+(\w+)/ }
+      ],
+      exports:   [
+        { type: :pub, pattern: /^\s*pub\s+/ }
+      ]
+    },
+
+    # Java patterns (.java)
+    java:         {
+      hierarchy: [
+        { type: :class, pattern: /^\s*(?:(?:public|private|protected|abstract|final|static|sealed)\s+)*(?:class|interface|enum|record)\s+(\w+)/, level: :container },
+        { type: :method, pattern: /^\s*(?:[\w<>\[\]]+\s+)+(\w+)\s*\(/, level: :member },
+        { type: :annotation, pattern: /^\s*@(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+(?:static\s+)?([\w.]+)/ }
+      ],
+      exports:   [
+        { type: :package, pattern: /^\s*package\s+/ }
+      ]
+    },
+
+    # Kotlin patterns (.kt/.kts)
+    kotlin:       {
+      hierarchy: [
+        { type: :class, pattern: /^\s*(?:(?:data|sealed|abstract|open|annotation|private|internal|public|inner|enum)\s+)*(?:class|interface|object)\s+(\w+)/, level: :container },
+        { type: :fun, pattern: /^\s*(?:(?:override|open|suspend|inline|private|public|internal|protected|abstract|final|tailrec|operator|infix)\s+)*fun\s+(\w+)/, level: :member },
+        { type: :val, pattern: /^\s*(?:val|var)\s+(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+([\w.]+)/ }
+      ],
+      exports:   []
+    },
+
+    # C++ patterns (.cpp/.cc/.cxx/.hpp/.hh/.hxx)
+    cpp:          {
+      hierarchy: [
+        { type: :namespace, pattern: /^\s*namespace\s+(\w+)/, level: :container },
+        { type: :class, pattern: /^\s*(?:template\s*<[^>]*>\s*)?(?:class|struct)\s+(\w+)/, level: :container },
+        { type: :function, pattern: /^\s*(?:[\w:<>]+\s+)+(\w+)\s*\(/, level: :member },
+        { type: :typedef, pattern: /^\s*typedef\s+/, level: :directive },
+        { type: :using, pattern: /^\s*using\s+namespace\s+(\w+)/, level: :directive },
+        { type: :macro, pattern: /^\s*#define\s+(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :include, pattern: /^\s*#include\s+[<"]([^>"]+)[>"]/ }
+      ],
+      exports:   []
+    },
+
+    # C# patterns (.cs)
+    csharp:       {
+      hierarchy: [
+        { type: :namespace, pattern: /^\s*namespace\s+([\w.]+)/, level: :container },
+        { type: :class, pattern: /^\s*(?:(?:public|private|protected|internal|abstract|sealed|static|partial)\s+)*(?:class|interface|struct|enum|record)\s+(\w+)/, level: :container },
+        { type: :method, pattern: /^\s*(?:[\w<>\[\]]+\s+)+(\w+)\s*\(/, level: :member },
+      ],
+      imports:   [
+        { type: :using, pattern: /^\s*using\s+([\w.]+);/ }
+      ],
+      exports:   []
+    },
+
+    # PHP patterns (.php)
+    php:          {
+      hierarchy: [
+        { type: :class, pattern: /^\s*(?:abstract\s+|final\s+)?class\s+(\w+)/, level: :container },
+        { type: :interface, pattern: /^\s*interface\s+(\w+)/, level: :container },
+        { type: :trait, pattern: /^\s*trait\s+(\w+)/, level: :container },
+        { type: :function, pattern: /^\s*(?:(?:public|private|protected|static)\s+)*function\s+(\w+)/, level: :member },
+        { type: :const, pattern: /^\s*const\s+(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :namespace, pattern: /^\s*namespace\s+([\w\\]+)/ },
+        { type: :use, pattern: /^\s*use\s+([\w\\]+)/ },
+        { type: :require, pattern: /^\s*(?:require|include)(?:_once)?\s+['"]([^'"]+)['"]/ }
+      ],
+      exports:   []
+    },
+
+    # SQL patterns (.sql)
+    sql:          {
+      hierarchy: [
+        { type: :table, pattern: /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w."]+)/i, level: :container },
+        { type: :view, pattern: /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+([\w."]+)/i, level: :container },
+        { type: :function, pattern: /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w."]+)/i, level: :member },
+        { type: :index, pattern: /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+([\w."]+)/i, level: :member }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # TOML patterns (.toml)
+    toml:         {
+      hierarchy: [
+        { type: :array_table, pattern: /^\s*\[\[([^\]]+)\]\]/, level: :container },
+        { type: :table, pattern: /^\s*\[([^\]]+)\]/, level: :container },
+        { type: :key, pattern: /^\s*([A-Za-z_][\w-]*)\s*=/, level: :member }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # XML patterns (.xml/.svg/.xhtml)
+    xml:          {
+      hierarchy: [
+        { type: :element, pattern: /<([\w:-]+)/, level: :container }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # Elixir patterns (.ex/.exs)
+    elixir:       {
+      hierarchy: [
+        { type: :module, pattern: /^\s*defmodule\s+([\w.]+)/, level: :container },
+        { type: :defmacro, pattern: /^\s*defmacro\s+(\w+)/, level: :member },
+        { type: :def, pattern: /^\s*def\s+(\w+)/, level: :member },
+        { type: :defp, pattern: /^\s*defp\s+(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+([\w.]+)/ },
+        { type: :alias, pattern: /^\s*alias\s+([\w.]+)/ },
+        { type: :require, pattern: /^\s*require\s+([\w.]+)/ }
+      ],
+      exports:   []
+    },
+
+    # Lua patterns (.lua)
+    lua:          {
+      hierarchy: [
+        { type: :function, pattern: /^\s*function\s+([\w.:]+)/, level: :member },
+        { type: :local_function, pattern: /^\s*local\s+function\s+(\w+)/, level: :member },
+        { type: :local, pattern: /^\s*local\s+(\w+)\s*=/, level: :variable }
+      ],
+      imports:   [
+        { type: :require, pattern: /^\s*[\w]+\s*=\s*require\s*\(?['"]([^'"]+)['"]/ }
+      ],
+      exports:   []
+    },
+
+    # Makefile patterns (Makefile/makefile/GNUmakefile/.mk)
+    makefile:     {
+      hierarchy: [
+        { type: :target, pattern: /^\.?([A-Za-z_][\w.%-]*)\s*:/, level: :container },
+        { type: :variable, pattern: /^([A-Za-z_][\w]*)\s*[:?+]?=/, level: :member }
+      ],
+      imports:   [
+        { type: :include, pattern: /^-?include\s+([^\s]+)/ }
+      ],
+      exports:   []
+    },
+
+    # Dockerfile patterns (Dockerfile/Containerfile/.dockerfile)
+    dockerfile:   {
+      hierarchy: [
+        { type: :stage, pattern: /^\s*FROM\s+([^\s]+)/i, level: :container },
+        { type: :instruction, pattern: /^\s*(RUN|COPY|ADD|ENV|ARG|LABEL|EXPOSE|WORKDIR|CMD|ENTRYPOINT|VOLUME|USER|HEALTHCHECK)\s/i, level: :member }
+      ],
+      imports:   [
+        { type: :from, pattern: /^\s*FROM\s+([^\s]+)/i }
+      ],
+      exports:   []
+    },
+
+    # Plain text (.txt/.text) — no structure to extract
+    text:         {
+      hierarchy: [],
+      imports:   [],
+      exports:   []
     }
+  }.freeze
+
+  # Extension → language map for the corpus scanner's primary detection path.
+  # Unambiguous extensions resolve here; content signatures only disambiguate
+  # the few ambiguous ones (`.h`) and extensionless files.
+  EXTENSION_LANGUAGE = {
+    '.coffee' => :coffeescript, '.litcoffee' => :coffeescript,
+    '.js' => :javascript, '.mjs' => :javascript, '.cjs' => :javascript,
+    '.jsx' => :javascript,
+    '.rb' => :ruby, '.rake' => :ruby, '.gemspec' => :ruby, '.ru' => :ruby,
+    '.py' => :python, '.pyw' => :python,
+    '.html' => :html, '.htm' => :html,
+    '.css' => :css, '.scss' => :css, '.sass' => :css, '.less' => :css,
+    '.c' => :c,
+    '.h' => :c, # disambiguated to :cpp by content when C++ markers present
+    '.cpp' => :cpp, '.cc' => :cpp, '.cxx' => :cpp, '.c++' => :cpp,
+    '.hpp' => :cpp, '.hh' => :cpp, '.hxx' => :cpp,
+    '.swift' => :swift,
+    '.m' => :objective_c, '.mm' => :objective_c,
+    '.json' => :json,
+    '.yml' => :yaml, '.yaml' => :yaml,
+    '.md' => :markdown, '.markdown' => :markdown,
+    '.sh' => :shell, '.bash' => :shell, '.zsh' => :shell, '.fish' => :shell,
+    '.ts' => :typescript, '.tsx' => :typescript, '.mts' => :typescript, '.cts' => :typescript,
+    '.go' => :go,
+    '.rs' => :rust,
+    '.java' => :java,
+    '.kt' => :kotlin, '.kts' => :kotlin,
+    '.cs' => :csharp,
+    '.php' => :php,
+    '.sql' => :sql,
+    '.toml' => :toml,
+    '.xml' => :xml, '.svg' => :xml, '.xhtml' => :xml,
+    '.ex' => :elixir, '.exs' => :elixir,
+    '.lua' => :lua,
+    '.mk' => :makefile,
+    '.txt' => :text, '.text' => :text,
+    '.dockerfile' => :dockerfile
+  }.freeze
+
+  # Well-known extensionless build/config files, matched by basename (downcased).
+  FILENAME_LANGUAGE = {
+    'makefile' => :makefile, 'gnumakefile' => :makefile,
+    'dockerfile' => :dockerfile, 'containerfile' => :dockerfile
   }.freeze
 
   # Symbol levels (container/member/variable/attribute/directive) are declared
@@ -272,13 +539,50 @@ module AetherScopesHierarchical
 
 
     def detect_language(content)
-      # Enhanced language detection with file extension support and CoffeeScript detection
+      # Extension-first detection: an unambiguous file extension is the
+      # strongest signal available. Content signatures only disambiguate the
+      # few ambiguous extensions (`.h`) and handle extensionless files.
       lines = content.lines
-
-      # Check first 20 lines for language signatures
       sample = lines[0..19].join
+      ext = @file_path ? File.extname(@file_path).downcase : nil
+      base = @file_path ? File.basename(@file_path).downcase : nil
 
-      # First, check for CoffeeScript patterns (function definitions, -> arrows)
+      # 1. Well-known extensionless build files, by basename.
+      if base && (lang = FILENAME_LANGUAGE[base])
+        return lang
+      end
+
+      # 2. Extensionless scripts: the shebang is the only reliable signal.
+      if ext.nil? || ext.empty?
+        return :shell if sample =~ /^#!.*\b(?:sh|bash|zsh|fish)\b/
+        return :python if sample =~ /^#!.*\bpython/
+        return :ruby if sample =~ /^#!.*\bruby/
+        return detect_by_content(sample)
+      end
+
+      # 3. Ambiguous extension: `.h` may be a C or a C++ header.
+      return detect_c_vs_cpp(sample) if ext == '.h'
+
+      # 4. Unambiguous extension: resolve directly.
+      lang = EXTENSION_LANGUAGE[ext]
+      return lang if lang
+
+      # 5. Unknown extension: fall back to content heuristics.
+      detect_by_content(sample)
+    end
+
+
+    def detect_c_vs_cpp(sample)
+      if sample =~ /^\s*(?:class|namespace|template)\s+|^\s*#include\s*[<"](?:string|vector|iostream|memory|map|set|algorithm|utility|fstream|sstream|cstdint|functional)>/
+        :cpp
+      else
+        :c
+      end
+    end
+
+
+    def detect_by_content(sample)
+      # CoffeeScript's `->` arrows are unambiguous.
       if sample =~ /^\s*\w+\s*[:=]\s*\([^)]*\)\s*->/ ||
          (sample =~ /^\s*class\s+\w+/ && sample =~ /\bconstructor:\s*->/) ||
          sample =~ /^\s*\w+\s*=\s*\([^)]*\)\s*->/
@@ -286,42 +590,26 @@ module AetherScopesHierarchical
         return :coffeescript
       end
 
-      # Then check other languages
       case sample
+      when /^---\s*$/ then :yaml
+      when /\A\s*[{\[]/ then :json
+      when /^\s*<\?xml/ then :xml
+      when /<html|<!DOCTYPE/i then :html
       when /^\s*#include\s*[<"]/ then :c
       when /^\s*#import\s*[<"]/ then :objective_c
       when /^\s*import\s+(?:Foundation|UIKit|SwiftUI|AppKit|Swift)\b|^\s*func\s+\w+/ then :swift
-      when /^#!.*\b(?:sh|bash|zsh)\b/ then :shell
-      when /^---\s*$/ then :yaml
-      when /^\s*class\s+\w+.*:\s*$/ then :python
-      when /^\s*function\s+\w+|^\s*const\s+\w+\s*=|^\s*let\s+\w+\s*=/ then :javascript
+      when /^\s*package\s+\w+/ then :go
+      when /^\s*use\s+\w+::|^\s*(?:pub\s+)?(?:async\s+)?fn\s+\w+|^\s*(?:pub\s+)?struct\s+\w+/ then :rust
+      when /^\s*defmodule\s+|^\s*defmacro\s+/ then :elixir
+      when /^\s*namespace\s+\w+\./ then :csharp
+      when /^\s*<\?php/i then :php
+      when /^\s*(?:CREATE|SELECT|INSERT|UPDATE|DELETE|ALTER|DROP|WITH)\s/i then :sql
+      when /^\s*interface\s+\w+|^\s*type\s+\w+\s*=/ then :typescript
+      when /^\s*function\s+\w+|^\s*const\s+\w+\s*=|^\s*let\s+\w+\s*=|^\s*import\s+[^'"\n]+from\s+['"]/ then :javascript
+      when /^\s*def\s+\w+\s*\(.*\)\s*:|^\s*class\s+\w+\s*(?:\(.*\))?\s*:/ then :python
       when /^\s*def\s+\w+|^\s*class\s+\w+|^\s*module\s+\w+/ then :ruby
-      when /\A\s*[{\[]/ then :json
       when /@import|^[^{]*\{[^}]*\}/ then :css
-      when /<html|<!DOCTYPE/i then :html
-      else
-        # Fallback: check file extension if available
-        if @file_path
-          case File.extname(@file_path).downcase
-          when '.coffee', '.litcoffee' then :coffeescript
-          when '.js', '.jsx', '.mjs' then :javascript
-          when '.rb', '.rake', '.gemspec' then :ruby
-          when '.py' then :python
-          when '.html', '.htm' then :html
-          when '.css', '.scss', '.sass', '.less' then :css
-          when '.c', '.h' then :c
-          when '.swift' then :swift
-          when '.m', '.mm' then :objective_c
-          when '.json' then :json
-          when '.yml', '.yaml' then :yaml
-          when '.md', '.markdown' then :markdown
-          when '.sh', '.bash', '.zsh' then :shell
-          else
-            :ruby # Default to Ruby for this codebase
-          end
-        else
-          :ruby # Default to Ruby for this codebase
-        end
+      else :ruby
       end
     end
 
