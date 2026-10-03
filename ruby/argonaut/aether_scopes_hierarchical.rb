@@ -131,17 +131,103 @@ module AetherScopesHierarchical
         { type: :module_export, pattern: /^\s*module\.exports\s*=/ },
         { type: :export, pattern: /^\s*export\s+default/ }
       ]
+    },
+
+    # C patterns (.c/.h)
+    c:            {
+      hierarchy: [
+        { type: :function, pattern: /^\s*[A-Za-z_]\w*\s+(\w+)\s*\([^;]*\)\s*\{/, level: :member },
+        { type: :struct, pattern: /^\s*struct\s+(\w+)/, level: :container },
+        { type: :enum, pattern: /^\s*enum\s+(\w+)/, level: :container },
+        { type: :typedef, pattern: /^\s*typedef\s+/, level: :directive },
+        { type: :macro, pattern: /^\s*#define\s+(\w+)/, level: :directive }
+      ],
+      imports:   [
+        { type: :include, pattern: /^\s*#include\s+[<"]([^>"]+)[>"]/ }
+      ],
+      exports:   []
+    },
+
+    # Objective-C patterns (.m/.mm)
+    objective_c:  {
+      hierarchy: [
+        { type: :interface, pattern: /^\s*@interface\s+(\w+)/, level: :container },
+        { type: :implementation, pattern: /^\s*@implementation\s+(\w+)/, level: :container },
+        { type: :protocol, pattern: /^\s*@protocol\s+(\w+)/, level: :container },
+        { type: :method, pattern: /^\s*[-+]\s*\([^)]*\)\s*(\w+)/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*#import\s+[<"]([^>"]+)[>"]/ },
+        { type: :include, pattern: /^\s*#include\s+[<"]([^>"]+)[>"]/ }
+      ],
+      exports:   []
+    },
+
+    # Swift patterns (.swift)
+    swift:        {
+      hierarchy: [
+        { type: :class, pattern: /^\s*class\s+(\w+)/, level: :container },
+        { type: :struct, pattern: /^\s*struct\s+(\w+)/, level: :container },
+        { type: :enum, pattern: /^\s*enum\s+(\w+)/, level: :container },
+        { type: :protocol, pattern: /^\s*protocol\s+(\w+)/, level: :container },
+        { type: :extension, pattern: /^\s*extension\s+(\w+)/, level: :container },
+        { type: :func, pattern: /^\s*func\s+(\w+)/, level: :member },
+        { type: :let, pattern: /^\s*let\s+(\w+)\s*=/, level: :member },
+        { type: :var, pattern: /^\s*var\s+(\w+)\s*=/, level: :member }
+      ],
+      imports:   [
+        { type: :import, pattern: /^\s*import\s+(\w+)/ }
+      ],
+      exports:   [
+        { type: :public, pattern: /^\s*public/ },
+        { type: :open, pattern: /^\s*open/ }
+      ]
+    },
+
+    # JSON patterns (.json)
+    json:         {
+      hierarchy: [
+        { type: :key, pattern: /^\s*"(\w+)"\s*:/, level: :member }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # YAML patterns (.yml/.yaml)
+    yaml:         {
+      hierarchy: [
+        { type: :key, pattern: /^\s*([A-Za-z_][\w-]*)\s*:/, level: :member },
+        { type: :anchor, pattern: /&(\w+)/, level: :attribute }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # Markdown patterns (.md/.markdown)
+    markdown:     {
+      hierarchy: [
+        { type: :heading, pattern: /^(\#{1,6})\s+(.+)/, level: :container }
+      ],
+      imports:   [],
+      exports:   []
+    },
+
+    # Shell patterns (.sh/.bash/.zsh)
+    shell:        {
+      hierarchy: [
+        { type: :function, pattern: /^\s*(\w+)\s*\(\)\s*\{/, level: :member },
+        { type: :variable, pattern: /^\s*(\w+)=/, level: :variable }
+      ],
+      imports:   [
+        { type: :source, pattern: /^\s*(?:source|\.)\s+([^\s]+)/ }
+      ],
+      exports:   []
     }
   }.freeze
 
-  # Scope levels for hierarchical organization
-  SCOPE_LEVELS = {
-    container: 1, # Modules, classes, functions that contain other elements
-    member:    2, # Methods, constants within containers
-    variable:  3, # Variables (instance, class, local, global)
-    attribute: 4,  # HTML attributes, CSS properties
-    directive: 5   # Import/export directives, at-rules
-  }.freeze
+  # Symbol levels (container/member/variable/attribute/directive) are declared
+  # per LANGUAGE_PATTERNS entry and drive summary counting. Nesting itself
+  # follows source indentation — see HierarchicalParser#add_to_hierarchy.
 
 
 
@@ -169,6 +255,9 @@ module AetherScopesHierarchical
         parse_imports line, line_number
         parse_exports line, line_number
       end
+
+      # Close any scope still open at end-of-file so spans never dangle.
+      @current_scope.reverse_each { |scope| close_scope(scope, @lines.size) }
 
       {
         language:  @language,
@@ -199,9 +288,15 @@ module AetherScopesHierarchical
 
       # Then check other languages
       case sample
+      when /^\s*#include\s*[<"]/ then :c
+      when /^\s*#import\s*[<"]/ then :objective_c
+      when /^\s*import\s+(?:Foundation|UIKit|SwiftUI|AppKit|Swift)\b|^\s*func\s+\w+/ then :swift
+      when /^#!.*\b(?:sh|bash|zsh)\b/ then :shell
+      when /^---\s*$/ then :yaml
       when /^\s*class\s+\w+.*:\s*$/ then :python
       when /^\s*function\s+\w+|^\s*const\s+\w+\s*=|^\s*let\s+\w+\s*=/ then :javascript
       when /^\s*def\s+\w+|^\s*class\s+\w+|^\s*module\s+\w+/ then :ruby
+      when /\A\s*[{\[]/ then :json
       when /@import|^[^{]*\{[^}]*\}/ then :css
       when /<html|<!DOCTYPE/i then :html
       else
@@ -210,10 +305,17 @@ module AetherScopesHierarchical
           case File.extname(@file_path).downcase
           when '.coffee', '.litcoffee' then :coffeescript
           when '.js', '.jsx', '.mjs' then :javascript
-          when '.rb' then :ruby
+          when '.rb', '.rake', '.gemspec' then :ruby
           when '.py' then :python
           when '.html', '.htm' then :html
           when '.css', '.scss', '.sass', '.less' then :css
+          when '.c', '.h' then :c
+          when '.swift' then :swift
+          when '.m', '.mm' then :objective_c
+          when '.json' then :json
+          when '.yml', '.yaml' then :yaml
+          when '.md', '.markdown' then :markdown
+          when '.sh', '.bash', '.zsh' then :shell
           else
             :ruby # Default to Ruby for this codebase
           end
@@ -254,6 +356,7 @@ module AetherScopesHierarchical
           type:         pattern[:type],
           name:         name,
           line:         line_number,
+          indent:       line[/^\s*/].length,
           level:        pattern[:level],
           children:     [],
           parent_scope: pattern[:parent_scope] || false
@@ -267,32 +370,63 @@ module AetherScopesHierarchical
 
 
     def add_to_hierarchy(element)
-      level_weight = SCOPE_LEVELS[element[:level]] || 99
-
-      # Variables should be children of the current method/scope
+      # Variables attach to the innermost open scope (method/class/module).
       if element[:parent_scope] && !@current_scope.empty?
-        # Add variable as child of current scope
-        @current_scope.last[:children] << element
+        parent = @current_scope.last
+        element[:parent_name] = parent[:name]
+        element[:parent_type] = parent[:type]
+        element[:qualified_name] = qualified_name_for(element, parent)
+        parent[:children] << element
         return
       end
 
-      # Find appropriate parent based on scope level
+      # Pop scopes at the same-or-deeper indentation: those are siblings, not
+      # ancestors. Indentation is the structural signal the flat regex scan
+      # otherwise loses — it restores true nesting (class in module, method in
+      # class) that the old level-weight heuristic flattened.
       while !@current_scope.empty? &&
-            SCOPE_LEVELS[@current_scope.last[:level]] >= level_weight
+            @current_scope.last[:indent] >= element[:indent]
 
-        @current_scope.pop
+        close_scope(@current_scope.pop, element[:line])
       end
 
-      if @current_scope.empty?
-        @hierarchy << element
+      parent = @current_scope.last
+      if parent
+        element[:parent_name] = parent[:name]
+        element[:parent_type] = parent[:type]
+        element[:qualified_name] = qualified_name_for(element, parent)
+        parent[:children] << element
       else
-        @current_scope.last[:children] << element
+        element[:qualified_name] = element[:name].to_s
+        @hierarchy << element
       end
 
-      # Push to current scope if it's a container or member (methods)
+      # Containers and members open a scope for their children.
       return unless %i[container member].include? element[:level]
 
       @current_scope << element
+    end
+
+
+    # A scope closes the line before its first successor at the same-or-higher
+    # level. Regex parsing cannot see an `end` keyword, so this is a best-effort
+    # span — precise enough to bound a symbol's body without a grammar.
+    def close_scope(scope, at_line)
+      scope[:end_line] ||= at_line - 1
+    end
+
+
+    # Ancestry chain: container nesting uses `::`, methods `#`, leaves `.`.
+    # Mirrors the grammar-tree `ancestor_matching` insight from the retired
+    # Textpow parser, but stays a plain string — no object back-references.
+    def qualified_name_for(element, parent)
+      sep = case element[:level]
+            when :container then '::'
+            when :member then '#'
+            else '.'
+            end
+      prefix = parent[:qualified_name] || parent[:name].to_s
+      "#{prefix}#{sep}#{element[:name]}"
     end
 
 

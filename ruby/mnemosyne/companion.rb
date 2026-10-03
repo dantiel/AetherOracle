@@ -5,7 +5,7 @@ class Mnemosyne
   # One crystal, many facets: every companion reads and writes through its own
   # facet, but the store is single. Three layers:
   #   * episodic    → facet-tagged project_notes  (shared store, facet-filtered)
-  #   * procedural  → companion_recipe             (distilled action recipes)
+  #   * procedural  → companion_skill              (distilled action skills)
   #   * identitary  → companion_state              (accumulated self per glyph)
   class Companion
     FACET_TAG_PREFIX = 'facet:'
@@ -31,19 +31,19 @@ class Mnemosyne
         load_state(glyph, limit: 1).first
       end
 
-      # -- Procedural layer (action recipes) --
+      # -- Procedural layer (action skills) --
 
-      def save_recipe(glyph:, trigger:, steps:, tools:, output_type:, refine_by: nil)
+      def save_skill(glyph:, trigger:, steps:, tools:, output_type:, refine_by: nil)
         Mnemosyne.db.execute \
-          'INSERT INTO companion_recipe (glyph, trigger, steps, tools, output_type, refine_by, created_at) ' \
+          'INSERT INTO companion_skill (glyph, trigger, steps, tools, output_type, refine_by, created_at) ' \
           'VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
           [glyph.to_s, trigger, JSON.generate(Array(steps)), JSON.generate(Array(tools)),
            output_type, refine_by]
       end
 
-      def load_recipe(glyph, limit: 1)
+      def load_skill(glyph, limit: 1)
         rows = Mnemosyne.db.execute \
-          'SELECT glyph, trigger, steps, tools, output_type, refine_by, created_at FROM companion_recipe ' \
+          'SELECT glyph, trigger, steps, tools, output_type, refine_by, created_at FROM companion_skill ' \
           'WHERE glyph = ? ORDER BY created_at DESC, id DESC LIMIT ?', [glyph.to_s, limit]
         rows.map do |r|
           r.transform_keys(&:to_sym).tap do |h|
@@ -53,8 +53,8 @@ class Mnemosyne
         end
       end
 
-      def recipe(glyph)
-        load_recipe(glyph, limit: 1).first
+      def skill(glyph)
+        load_skill(glyph, limit: 1).first
       end
 
       # -- Episodic layer (facet-tagged notes) --

@@ -8,8 +8,6 @@ require_relative '../config'
 require_relative '../mnemosyne/mnemosyne'
 require_relative '../instrumentarium/diff_crepusculum'
 require_relative '../instrumentarium/semantic_patch'
-require_relative 'simple_scopes'
-require_relative 'aether_scopes_enhanced'
 require_relative 'aether_scopes_hierarchical'
 require_relative 'lexicon_resonantia'
 # require_relative 'temp_create_file'  # Moved to instrumentarium domain system
@@ -259,7 +257,7 @@ class Argonaut
       path:          path
     }
 
-    # Add enhanced symbolic structural overview using AetherScopesEnhanced
+    # Add hierarchical symbolic structural overview
     symbolic_overview = if File.exist?(fullpath) && File.readable?(fullpath)
                           # puts "DEBUG: File exists and is readable: #{fullpath}"
                           begin

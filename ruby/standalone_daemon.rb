@@ -194,23 +194,23 @@ class StandaloneDaemon
   end
 
   # The companion pantheon for Swift: key/glyph/name/temperature/thinking plus
-  # the recipe's domain (trigger/grant/reach/tools), so the companion menu can
-  # show each voice's abilities and permission without duplicating the recipes.
+  # the skill's domain (trigger/grant/reach/tools), so the companion menu can
+  # show each voice's abilities and permission without duplicating the skills.
   # One roster, two worlds — correspondence, not duplication.
   def companion_roster
     COMPANION_PERSONALITIES.map do |key, p|
       t = COMPANION_TEMPERAMENTS[key] || {}
-      recipe = (defined?(CompanionPrograms) && CompanionPrograms::COMPANION_RECIPES[key]) || {}
+      skill = (defined?(CompanionPrograms) && CompanionPrograms::COMPANION_SKILLS[key]) || {}
       {
         key: key.to_s,
         glyph: p[:glyph],
         name: p[:name],
         temperature: t[:temperature],
         thinking: t[:thinking],
-        trigger: recipe[:trigger].to_s,
-        grant: recipe[:grant].to_s,
-        reach: recipe[:reach].to_s,
-        tools: Array(recipe[:tools])
+        trigger: skill[:trigger].to_s,
+        grant: skill[:grant].to_s,
+        reach: skill[:reach].to_s,
+        tools: Array(skill[:tools])
       }
     end
   end

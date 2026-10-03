@@ -3,11 +3,11 @@
 require_relative '../mnemosyne/mnemosyne'
 
 # CompanionPrograms — the procedural layer of the companions.
-# Each companion owns a RECIPE: a deterministic flow skeleton (steps + curated tools
-# + output type + refinement hook) into which the Oracle pours content. The recipe
-# lives in companion_recipe (evolving); the constant below is the seed/fallback.
+# Each companion owns a SKILL: a deterministic flow skeleton (steps + curated tools
+# + output type + refinement hook) into which the Oracle pours content. The skill
+# lives in companion_skill (evolving); the constant below is the seed/fallback.
 module CompanionPrograms
-  COMPANION_RECIPES = {
+  COMPANION_SKILLS = {
     owl:       {
       trigger:    'Überblick / Architektur / "wie hängt das zusammen"',
       steps:      ['Einstiegsdatei lokalisieren', 'Symbol-Karte erstellen',
@@ -156,9 +156,9 @@ module CompanionPrograms
   }.freeze
 
   class << self
-    # Resolve the recipe for a glyph: evolving DB version first, seed constant as fallback.
-    def recipe(glyph)
-      Mnemosyne.companion_recipe(glyph) || COMPANION_RECIPES[glyph.to_sym]
+    # Resolve the skill for a glyph: evolving DB version first, seed constant as fallback.
+    def skill(glyph)
+      Mnemosyne.companion_skill(glyph) || COMPANION_SKILLS[glyph.to_sym]
     end
 
     # Accumulated self-state for a glyph (identitary layer).
@@ -173,7 +173,7 @@ module CompanionPrograms
 
     # Every companion tool name — used to strip them from the main agent's core set.
     def companion_tool_names
-      COMPANION_RECIPES.keys.flat_map { |g| companion_tools(g) }
+      COMPANION_SKILLS.keys.flat_map { |g| companion_tools(g) }
     end
 
     # Tools the MAIN agent gains for a set of active companions: their namespaced
@@ -181,7 +181,7 @@ module CompanionPrograms
     def toolset(glyphs)
       glyphs = Array(glyphs).compact.map(&:to_sym)
       per    = glyphs.flat_map { |g| companion_tools(g) }
-      domain = glyphs.flat_map { |g| Array(recipe(g)&.dig(:tools)) }.map(&:to_sym).uniq
+      domain = glyphs.flat_map { |g| Array(skill(g)&.dig(:tools)) }.map(&:to_sym).uniq
       (per + domain).uniq
     end
 
@@ -190,7 +190,7 @@ module CompanionPrograms
     def self_toolset(glyph)
       glyph = glyph.to_sym
       base = (%W[#{glyph}_suggest #{glyph}_say #{glyph}_commit].map(&:to_sym) +
-        Array(recipe(glyph)&.dig(:tools)).map(&:to_sym)).uniq
+        Array(skill(glyph)&.dig(:tools)).map(&:to_sym)).uniq
       return base unless reach_for(glyph) == :seer
 
       (base + ADVANCED_COMM_TOOLS.map(&:to_sym)).uniq
@@ -214,17 +214,17 @@ module CompanionPrograms
     #   spy      — read-only (read + run_command, no write tools)
     #   scribe   — full write, no confirmation (reversible refactors)
     #   executor — full write + confirmation for destructive verbs
-    # Grants are a stable permission, not an evolving recipe detail: read them
-    # from the seed constant (version-controlled), never from the DB recipe.
+    # Grants are a stable permission, not an evolving skill detail: read them
+    # from the seed constant (version-controlled), never from the DB skill.
     def grant_for(glyph)
-      tier = COMPANION_RECIPES[glyph.to_sym]&.dig(:grant) || :spy
+      tier = COMPANION_SKILLS[glyph.to_sym]&.dig(:grant) || :spy
       GRANT_TIERS[tier.to_sym] || GRANT_TIERS[:spy]
     end
 
     # Reach tier: :seer carries the æther (metempsychosis + task orchestration),
     # :local stays in the crystal. Independent of grant tiers.
     def reach_for(glyph)
-      (COMPANION_RECIPES[glyph.to_sym]&.dig(:reach) || :local).to_sym
+      (COMPANION_SKILLS[glyph.to_sym]&.dig(:reach) || :local).to_sym
     end
 
     # Concrete tool names that require confirmation for an executor-tier companion.
@@ -305,7 +305,7 @@ module CompanionPrograms
     end
 
     def build_system_prompt(glyph, persona_prompt)
-      r = recipe(glyph)
+      r = skill(glyph)
       return persona_prompt unless r
 
       protocol = [

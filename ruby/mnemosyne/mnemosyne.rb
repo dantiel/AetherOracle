@@ -24,9 +24,10 @@ require_relative 'seal_ledger'
 require_relative 'chronicle'
 require_relative 'fragments'
 require_relative 'vectors'
+require_relative 'corpus'
 
 class Mnemosyne
-  DB_VERSION = 11
+  DB_VERSION = 14
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -272,7 +273,7 @@ class Mnemosyne
         SQL
 
         db.execute <<~SQL
-          CREATE TABLE IF NOT EXISTS companion_recipe (
+          CREATE TABLE IF NOT EXISTS companion_skill (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             glyph TEXT,
             trigger TEXT,
@@ -365,6 +366,56 @@ class Mnemosyne
         db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_kind ON memory_tokens (kind)'
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '12')"
       end
+      # Version 13 -- companion_recipe → companion_skill (Begriffskorrektur:
+      # das prozedurale Fluss-Skelett ist eine Fertigkeit, kein Rezept). Rennt
+      # die Tabelle auf Bestands-DBs um, die Schritt 7 bereits passiert haben.
+      if 13 > db_version
+        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('companion_recipe','companion_skill')").map { |r| r['name'] }
+        if tables.include?('companion_recipe') && !tables.include?('companion_skill')
+          db.execute 'ALTER TABLE companion_recipe RENAME TO companion_skill'
+        end
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '13')"
+      end
+      # Version 14 -- Corpus-Graph (Stufe 0): die projekt-native Basis der
+      # Kaskade. corpus_nodes (Datei + Symbol) und corpus_edges (defines /
+      # contains / imports). Jeder Knoten wird ins memory_tokens-Substrat
+      # indiziert (unit_type 'corpus_node') -- Mnemosyne-Grundabdeckung,
+      # bevor die erste Notiz gemuenzt wird.
+      if 14 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_nodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            path TEXT,
+            language TEXT,
+            name TEXT,
+            qualified_name TEXT,
+            symbol_type TEXT,
+            parent_name TEXT,
+            parent_type TEXT,
+            line INTEGER,
+            end_line INTEGER,
+            indent INTEGER,
+            content TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_edges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER,
+            target_id INTEGER,
+            kind TEXT,
+            meta TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_nodes_kind ON corpus_nodes (kind)'
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_nodes_path ON corpus_nodes (path)'
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_source ON corpus_edges (source_id)'
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_kind ON corpus_edges (kind)'
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '14')"
+      end
     end
 
     def tokenize(text)
@@ -413,15 +464,23 @@ class Mnemosyne
 
     # -- Vectors --
     def recall_by_vector(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil) = Vectors.recall_by_vector(query, limit: limit, max_content_length: max_content_length, context_path: context_path, channel_weights: channel_weights)
+    def recall_units(query, unit_type:, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil) = Vectors.recall_units(query, unit_type: unit_type, limit: limit, max_content_length: max_content_length, context_path: context_path, channel_weights: channel_weights)
+    def recall_corpus(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil) = Vectors.recall_corpus(query, limit: limit, max_content_length: max_content_length, context_path: context_path, channel_weights: channel_weights)
     def rebuild_vectors = Vectors.rebuild
+
+    # -- Corpus --
+    def corpus_sound!(root = Argonaut.project_root) = Corpus.sound!(root)
+    def corpus_source_files = Corpus.source_files
+    def corpus_nodes_count = Corpus.count_nodes
+    def corpus_edges_count = Corpus.count_edges
 
     # -- Companion --
     def companion_save_state(glyph:, summary:, tags: [], score: nil, domain_model: nil) = Companion.save_state(glyph: glyph, summary: summary, tags: tags, score: score, domain_model: domain_model)
     def companion_load_state(glyph, limit: 1) = Companion.load_state(glyph, limit: limit)
     def companion_state(glyph) = Companion.state(glyph)
-    def companion_save_recipe(glyph:, trigger:, steps:, tools:, output_type:, refine_by: nil) = Companion.save_recipe(glyph: glyph, trigger: trigger, steps: steps, tools: tools, output_type: output_type, refine_by: refine_by)
-    def companion_load_recipe(glyph, limit: 1) = Companion.load_recipe(glyph, limit: limit)
-    def companion_recipe(glyph) = Companion.recipe(glyph)
+    def companion_save_skill(glyph:, trigger:, steps:, tools:, output_type:, refine_by: nil) = Companion.save_skill(glyph: glyph, trigger: trigger, steps: steps, tools: tools, output_type: output_type, refine_by: refine_by)
+    def companion_load_skill(glyph, limit: 1) = Companion.load_skill(glyph, limit: limit)
+    def companion_skill(glyph) = Companion.skill(glyph)
     def companion_remember_facet(content:, facet:, links: nil, tags: []) = Companion.remember_facet(content: content, facet: facet, links: links, tags: tags)
     def companion_recall_facet(facet, query: '', limit: 5, max_content_length: nil) = Companion.recall_facet(facet, query: query, limit: limit, max_content_length: max_content_length)
     def companion_veil(glyph, persona = nil) = Companion.veil(glyph, persona)

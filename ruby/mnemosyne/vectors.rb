@@ -16,6 +16,15 @@ class Mnemosyne
   class Vectors
     DEFAULT_CHANNEL_WEIGHTS = { content: 1.0, tag: 2.0, path: 1.0 }.freeze
 
+    # Polymorphic resolution: unit_type -> source table + columns. Notes and
+    # fragments share the metaformat; corpus_nodes are the project-native
+    # graph (Stufe 0). One substrate, many observers.
+    UNIT_SOURCES = {
+      'note'        => { table: 'project_notes', cols: %w[id content tags links context_path created_at] },
+      'fragment'    => { table: 'fragments', cols: %w[id content tags links context_path ttl created_at] },
+      'corpus_node' => { table: 'corpus_nodes', cols: %w[id kind path language name qualified_name symbol_type parent_name parent_type line end_line indent content created_at] }
+    }.freeze
+
     class << self
       def index_unit(unit_type, unit_id, content, tags: nil, links: nil, path: nil)
         unindex_unit(unit_type, unit_id)
@@ -51,21 +60,43 @@ class Mnemosyne
       end
 
       # Rebuild the whole substrate from the durable layers (notes + live
-      # fragments). Idempotent -- the vector index is derived state.
+      # fragments + corpus graph). Idempotent -- the vector index is derived
+      # state.
       def rebuild
-        Mnemosyne.db.execute('DELETE FROM memory_tokens')
-        Mnemosyne.db.execute('SELECT id, content, tags, links, context_path FROM project_notes').each do |row|
-          index_unit('note', row['id'], row['content'], tags: row['tags'].to_s.split(','), path: row['context_path'])
-        end
-        Mnemosyne.db.execute('SELECT id, content, tags, links, context_path FROM fragments').each do |row|
-          index_unit('fragment', row['id'], row['content'], tags: row['tags'].to_s.split(','), path: row['context_path'])
+        Mnemosyne.db.transaction do
+          Mnemosyne.db.execute('DELETE FROM memory_tokens')
+          Mnemosyne.db.execute('SELECT id, content, tags, links, context_path FROM project_notes').each do |row|
+            index_unit('note', row['id'], row['content'], tags: row['tags'].to_s.split(','), path: row['context_path'])
+          end
+          Mnemosyne.db.execute('SELECT id, content, tags, links, context_path FROM fragments').each do |row|
+            index_unit('fragment', row['id'], row['content'], tags: row['tags'].to_s.split(','), path: row['context_path'])
+          end
+          reindex_corpus
         end
       end
 
-      # Lazily seed the substrate for pre-Stufe-3 databases.
+      # Reindex the project-native graph into the substrate without rescanning.
+      # Runs inside the caller's transaction (rebuild), so no nested transaction.
+      def reindex_corpus
+        Mnemosyne.db.execute("DELETE FROM memory_tokens WHERE unit_type = 'corpus_node'")
+        Mnemosyne.db.execute('SELECT id, kind, path, language, name, qualified_name, symbol_type, content FROM corpus_nodes').each do |row|
+          tags = ['corpus', row['kind'].to_s, row['symbol_type'].to_s, row['language'].to_s].reject(&:empty?)
+          index_unit('corpus_node', row['id'], row['content'].to_s, tags: tags, path: row['path'])
+        end
+      end
+
+      # Lazily seed the substrate for pre-Stufe-3 databases. First touch also
+      # bootstraps the corpus graph (base coverage) if it has never been
+      # sounded -- once per process.
       def ensure_indexed
         count = Mnemosyne.db.execute('SELECT COUNT(*) AS c FROM memory_tokens').first['c'].to_i
-        rebuild if count.zero?
+        return if count.positive?
+
+        if defined?(Corpus) && !@corpus_bootstrap_done
+          @corpus_bootstrap_done = true
+          Corpus.sound! if Corpus.count_nodes.zero?
+        end
+        rebuild
       end
 
       # Query tokens -> { unit_id => channel-blended cosine } for one
@@ -104,30 +135,50 @@ class Mnemosyne
         per_unit.transform_values { |chans| total_w.positive? ? chans.values.sum / total_w : 0.0 }
       end
 
-      # The pure vector path -- recall without literal LIKE filtering, ranked
-      # by channel-blended cosine only. This is the search style the neural
-      # Mnemosyne speaks.
-      def recall_by_vector(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil)
+      # Generic polymorphic recall: cosine over the substrate for one unit_type,
+      # then resolve rows from that type's source table. One engine, many
+      # observers -- the substrate collapses differently per unit_type.
+      def recall_units(query, unit_type:, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil)
         query_tokens = Mnemosyne.tokenize(query)
         return [] if query_tokens.empty?
 
         ensure_indexed
-        map = cosine_map(query_tokens, unit_type: 'note', channel_weights: channel_weights)
+        map = cosine_map(query_tokens, unit_type: unit_type, channel_weights: channel_weights)
         return [] if map.empty?
+
+        source = UNIT_SOURCES[unit_type.to_s]
+        return [] unless source
 
         placeholders = (['?'] * map.size).join(',')
         rows = Mnemosyne.db.execute(
-          "SELECT id, content, tags, links, context_path, created_at FROM project_notes WHERE id IN (#{placeholders})",
+          "SELECT #{source[:cols].join(', ')} FROM #{source[:table]} WHERE id IN (#{placeholders})",
           map.keys
         )
-        rows.map do |note|
-          note.transform_keys!(&:to_sym)
-          note[:score] = map.fetch(note[:id], 0.0)
-          note
+        rows.map do |row|
+          row.transform_keys!(&:to_sym)
+          row[:score] = map.fetch(row[:id], 0.0)
+          row[:unit_type] = unit_type.to_s
+          row
         end
-        .sort_by { |note| -note[:score] }
+        .sort_by { |row| -row[:score] }
         .take(limit)
-        .map { |note| Notes.present_note(note, max_content_length) }
+      end
+
+      # The pure vector path -- recall without literal LIKE filtering, ranked
+      # by channel-blended cosine only. Backwards-compatible note lens.
+      def recall_by_vector(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil)
+        recall_units(query, unit_type: 'note', limit: limit,
+                     max_content_length: max_content_length,
+                     context_path: context_path, channel_weights: channel_weights)
+          .map { |note| Notes.present_note(note, max_content_length) }
+      end
+
+      # The project-native lens: recall corpus nodes (files + symbols) by
+      # channel-blended cosine -- Mnemosyne base coverage.
+      def recall_corpus(query, limit: 5, max_content_length: nil, context_path: nil, channel_weights: nil)
+        recall_units(query, unit_type: 'corpus_node', limit: limit,
+                     max_content_length: max_content_length,
+                     context_path: context_path, channel_weights: channel_weights)
       end
     end
   end

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative '../argonaut/aether_scopes'
 require_relative 'scriptorium'
 require_relative 'metaprogramming_utils'
 

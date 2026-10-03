@@ -495,6 +495,33 @@ instrument :recall_notes,
  end
  
  
+ instrument :recall_corpus,
+           description: 'Recall corpus nodes (files + symbols) from the project-native graph ' \
+                        '(Stufe 0). An Argonaut sounding scans the repo into corpus_nodes / ' \
+                        'corpus_edges and indexes every node into the token substrate -- ' \
+                        'Mnemosyne base coverage, recallable by channel-blended cosine.',
+           params: { query: { type: String, required: false },
+                     limit: { type: Integer, required: false, default: 5 } },
+           returns: { nodes: Array, error: String } do |query: '', limit: 5|
+  { nodes: Mnemosyne.recall_corpus(query, limit: limit) }
+ rescue StandardError => e
+  { error: e.message }
+ end
+ 
+ 
+ instrument :corpus_sound,
+           description: 'Run an Argonaut sounding of the whole repo: scan every source file ' \
+                        'into corpus_nodes (files + symbols) and corpus_edges (imports / ' \
+                        'nesting / defines), then index each node into the token substrate ' \
+                        '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph.',
+           params: {},
+           returns: { files: Integer, nodes: Integer, edges: Integer, error: String } do
+  Mnemosyne.corpus_sound!
+ rescue StandardError => e
+  { error: e.message }
+ end
+ 
+ 
  instrument :file_overview,
            description: <<~DESC,
              Fetch file information with symbolic parsing. Returns lightweight metadata:
