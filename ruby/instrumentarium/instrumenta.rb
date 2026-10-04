@@ -1488,14 +1488,20 @@ end
 # Visual truth — capture the screen-plane for AI inspection
 instrument :take_screenshot,
            description: <<~DESC,
-             Capture a screenshot using native OS APIs (macOS + Windows). Use autonomously whenever
-             visual inspection would improve task quality — UI changes, layout bugs,
-             rendering issues, Xcode simulator, browser output, etc.
+             Capture a screenshot using native OS APIs (macOS + Windows), or read an existing image
+             file for vision analysis. Use autonomously whenever visual inspection would improve
+             task quality — UI changes, layout bugs, rendering issues, Xcode simulator, browser
+             output, an uploaded graphic, etc.
 
-             The agent should automatically decide when screenshots are needed and
-             never claim a UI is correct without visual verification.
+             The agent should automatically decide when visuals are needed and never claim a UI is
+             correct without visual verification.
 
-             **Modes:**
+             **Reading an existing image (no capture):**
+             Pass `path` to load a graphic straight from disk for vision analysis, e.g.
+             `take_screenshot(path: "/tmp/logo.png")`. The file is encoded and sent to the vision
+             model; no screen capture happens. Omit `mode` entirely when `path` is given.
+
+             **Modes:** (capture only — omit `mode` when `path` is given)
              - `screen`: entire display
              - `window`: capture a specific window by title/ID, or frontmost window
              - `area`: specific rectangle (requires x, y, width, height)
@@ -1510,14 +1516,18 @@ instrument :take_screenshot,
 
              After capture, the image path is returned for vision model analysis.
              No user interaction required — fully autonomous.
-             
+             Alias: `captura_visus`.
+
              **For large screens:** Use mode: 'info' first to check display sizes,
              then use mode: 'area' with reduced width/height for actual capture.
            DESC
            params: { mode:    { type:        String,
-                                required:    true,
+                                required:    false,
                                 enum:        %w[screen window area display active-app menu-bar info],
-                                description: 'Capture mode' },
+                                description: 'Capture mode (omit when reading an existing image via `path`)' },
+                     path:    { type:        String,
+                                required:    false,
+                                description: 'Read an existing image file directly for vision analysis (no capture). Filesystem path to a png/jpg/jpeg/webp.' },
                      display: { type:        Integer,
                                 required:    false,
                                 description: 'Display number (for display mode)' },
@@ -1564,9 +1574,21 @@ instrument :take_screenshot,
            returns: { path: String, bytes: Integer, format: String, mode: String, error: String,
                       timestamp: String, platform: String, displays: Array, frontmost_app: Hash,
                       visible_windows: Array, menu_bar: Hash } \
-           do |mode:, display: nil, x: nil, y: nil, width: nil, height: nil,
+           do |mode: nil, path: nil, display: nil, x: nil, y: nil, width: nil, height: nil,
                 format: 'png', delay: 0, cursor: true, shadow: true, output: nil,
                 window_title: nil, window_id: nil|
+  # Image-reading: load an existing graphic for vision analysis (no capture).
+  if path && !path.to_s.strip.empty?
+    result = CapturaVisus.read_image(path.to_s)
+    if result[:error]
+      HorologiumAeternum.screenshot_failed('file', result[:error])
+    else
+      HorologiumAeternum.screenshot_captured('file', result[:path], result[:bytes], execution_time: 0.0)
+    end
+    next result
+  end
+
+  mode ||= 'screen'
   start = Time.now
   result = CapturaVisus.capture(mode:, display:, x:, y:, width:, height:,
                                 format:, delay:, cursor:, shadow:, output:,
