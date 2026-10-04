@@ -8,6 +8,7 @@ require_relative 'terminal_stream'
 require_relative 'terminal_markdown'
 require_relative 'theme'
 require_relative 'instrumentum_renderer'
+require_relative 'token_ledger'
 begin
   require 'tty-reader'
   HAVE_TTY_READER = true
@@ -158,7 +159,9 @@ class ÆtherChamber
 
   def run
     force_utf8_console
+    TokenLedger.reset_session!
     banner
+    puts TokenLedger.opening_line
     Readline.completion_proc = ->(s) { slash_commands.grep(/\A#{Regexp.escape(s)}/) } if HAVE_READLINE
 
     loop do
@@ -1901,7 +1904,7 @@ class ÆtherChamber
 
   def slash_commands
     %w[/help /morph /unmorph /personae /file /clear /history /config /context /tools
-       /markdown /highlight /theme /exit]
+       /markdown /highlight /theme /cost /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -1924,6 +1927,7 @@ class ÆtherChamber
     when '/markdown'                then toggle_markdown
     when '/highlight'               then toggle_highlight
     when '/theme'                   then set_theme(arg)
+    when '/cost'                    then cost_summary
     when '/exit', '/quit' then @quit = true
     else
       puts "Unbekannter Befehl: #{cmd}"
@@ -1950,6 +1954,7 @@ class ÆtherChamber
         /markdown           Markdown-Rendering an/aus
         /highlight          Syntax-Highlighting an/aus
         /theme <name>       Highlight-Theme wählen (argonaut - aethernaut - aethernight - aetherlight)
+        /cost               Token-Kosten der Sitzung und gesamt zeigen
         /exit, exit         Die Kammer verlassen
 
       \e[2mBegleiter: owl kitsune phoenix ouroboros bastet fenrir undine schwan
@@ -2099,6 +2104,17 @@ class ÆtherChamber
 
   # -------------------------------------------------------------- framing --
 
+  def cost_summary
+    s = TokenLedger.session
+    p = TokenLedger.persisted
+    puts "\e[1mToken-Ledger\e[0m"
+    puts "  Session:  #{TokenLedger.format_usd(s[:cost])} — " \
+         "#{s[:prompt_tokens]} prompt + #{s[:completion_tokens]} completion (#{s[:turns]} turns)"
+    puts "  All-time: #{TokenLedger.format_usd(p[:cost])} — " \
+         "#{p[:prompt_tokens]} prompt + #{p[:completion_tokens]} completion (#{p[:sessions]} sessions)"
+    puts "  Model:    #{CONFIG.model} / flash #{CONFIG.fast_model}"
+  end
+
   def banner
     glyph = @veiled.empty? ? '*' : active_glyphs_display
     puts "\e[1m+- Dialog-Kammer -- ÆtherCodex -----------------------------+\e[0m"
@@ -2110,5 +2126,7 @@ class ÆtherChamber
 
   def farewell
     puts "\e[2m  :: Der Schleier schließt sich. Möge der Äther dich tragen.\e[0m"
+    puts TokenLedger.closing_line
+    TokenLedger.end_session!
   end
 end

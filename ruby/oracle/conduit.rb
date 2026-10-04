@@ -10,6 +10,7 @@ require_relative '../instrumentarium/scriptorium'
 require_relative '../mnemosyne/mnemosyne'
 require_relative 'error_handler'
 require_relative 'conduit_anthropic_helper'
+require_relative 'token_ledger'
 using TokenExtensions
 
 
@@ -1079,7 +1080,7 @@ class Conduit
           execution_time = Time.now - start_time
           puts "[CONDUIT][GENERATE_AI_RESPONSE]: response after #{execution_time.round 2}s"
 
-          stream_token_usage json
+          stream_token_usage json, body[:model]
 
           log_json(json: json.transform_values do |v|
             v.to_s.truncate 200
@@ -1090,7 +1091,7 @@ class Conduit
     end
 
 
-    def stream_token_usage(json)
+    def stream_token_usage(json, model = nil)
       usage = json.is_a?(Hash) ? (json['usage'] || json[:usage]) : nil
       return unless usage.is_a?(Hash)
 
@@ -1099,10 +1100,17 @@ class Conduit
       total = usage['total_tokens'] || usage[:total_tokens]
       total ||= (prompt.to_i + completion.to_i) if prompt || completion
 
+      model = json['model'] || json[:model] || json['modelVersion'] || json[:modelVersion] if model.to_s.strip.empty?
+      model = CONFIG.model if model.to_s.strip.empty?
+
+      ledger = TokenLedger.record!(model, prompt, completion)
+
       HorologiumAeternum.send_status('token_usage', {
                                        total_tokens: total,
                                        prompt_tokens: prompt,
                                        completion_tokens: completion,
+                                       cost_usd: ledger[:cost],
+                                       model: model,
                                      })
     rescue StandardError => e
       # Token stats are best-effort; never let them break the divination.
