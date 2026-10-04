@@ -479,9 +479,9 @@ class PrimaMateria
       'listtasks'         => 'list_tasks',
       'removetask'        => 'remove_task',
       'tmp_create_file'   => 'temp_create_file',
-      'captura_visus'     => 'take_screenshot',
-      'capturavisus'      => 'take_screenshot',
-      'screenshot'        => 'take_screenshot'
+      'take_screenshot'   => 'captura_visus',
+      'capturavisus'      => 'captura_visus',
+      'screenshot'        => 'captura_visus'
     }
   end
 

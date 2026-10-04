@@ -547,8 +547,8 @@ class Conduit
     # Builds a helpful notice message for the agent explaining what happened
     def build_payload_notice(removed_count, final_size)
       tips = [
-        "Use smaller area: take_screenshot(mode: 'area', x: 0, y: 0, width: 800, height: 600)",
-        "Use JPG format: take_screenshot(format: 'jpg')",
+        "Use smaller area: captura_visus(mode: 'area', x: 0, y: 0, width: 800, height: 600)",
+        "Use JPG format: captura_visus(format: 'jpg')",
         "Capture only relevant region instead of full screen",
       ]
 

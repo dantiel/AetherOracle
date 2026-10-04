@@ -1486,7 +1486,7 @@ end
 
 
 # Visual truth — capture the screen-plane for AI inspection
-instrument :take_screenshot,
+instrument :captura_visus,
            description: <<~DESC,
              Capture a screenshot using native OS APIs (macOS + Windows), or read an existing image
              file for vision analysis. Use autonomously whenever visual inspection would improve
@@ -1498,7 +1498,7 @@ instrument :take_screenshot,
 
              **Reading an existing image (no capture):**
              Pass `path` to load a graphic straight from disk for vision analysis, e.g.
-             `take_screenshot(path: "/tmp/logo.png")`. The file is encoded and sent to the vision
+             `captura_visus(path: "/tmp/logo.png")`. The file is encoded and sent to the vision
              model; no screen capture happens. Omit `mode` entirely when `path` is given.
 
              **Modes:** (capture only — omit `mode` when `path` is given)
@@ -1516,7 +1516,7 @@ instrument :take_screenshot,
 
              After capture, the image path is returned for vision model analysis.
              No user interaction required — fully autonomous.
-             Alias: `captura_visus`.
+             Aliases: `take_screenshot`, `screenshot`, `capturavisus`.
 
              **For large screens:** Use mode: 'info' first to check display sizes,
              then use mode: 'area' with reduced width/height for actual capture.

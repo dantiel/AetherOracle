@@ -636,8 +636,8 @@ module CapturaVisus
 
   def self.generate_suggestions
     [
-      'Use take_screenshot(mode: "area", x: 100, y: 100, width: 800, height: 600) for specific regions',
-      'Use take_screenshot(mode: "window") for frontmost window only',
+      'Use captura_visus(mode: "area", x: 100, y: 100, width: 800, height: 600) for specific regions',
+      'Use captura_visus(mode: "window") for frontmost window only',
       'Use format: "jpg" for smaller files than png',
       'Full screen: mode: "screen", Single display: mode: "display", Active app: mode: "active-app"',
       'Use delay: 2 to wait for UI changes before capture',
