@@ -58,14 +58,23 @@ class TerminalStream
 
     choices = options || %w[Yes No]
     @write_mutex.synchronize do
-      STDOUT.print "\e[35m? #{message}\e[0m"
-      STDOUT.print " [#{choices.join('/')}]" unless choices.empty?
-      STDOUT.print ': '
+      STDOUT.print "\e[35m? #{message}\e[0m\n"
+      if choices.size > 2
+        choices.each_with_index { |choice, i| STDOUT.print "  #{i + 1}. #{choice}\n" }
+        STDOUT.print "  (number to select, or type your own): "
+      elsif !choices.empty?
+        STDOUT.print "  [#{choices.join('/')}]: "
+      else
+        STDOUT.print '  '
+      end
       STDOUT.flush
     end
     answer = $stdin.gets&.strip
     return { error: 'No terminal response received' } if answer.nil?
     return { response: answer } if choices.empty?
+
+    n = answer.to_i
+    return { response: choices[n - 1] } if n.between?(1, choices.size)
 
     selected = choices.find { |choice| choice.casecmp?(answer) || choice[0]&.casecmp?(answer[0]) }
     { response: selected || answer }
@@ -81,7 +90,7 @@ class TerminalStream
       thinking_time = data[:thinking_time]
       puts "\e[2m  > Thought for #{thinking_time}s\e[0m"
     when 'oracle_revelation'
-      # Content is shown as answer, not during streaming
+      render_markdown_event(data, keys: %i[raw_content content], block: true)
     when 'oracle_conjuration_revelation'
       render_markdown_event(data, keys: %i[raw_content content], block: true)
     when 'file_reading'

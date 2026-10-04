@@ -122,13 +122,14 @@ task_prima.add_instrument :task_metempsychosis,
                             unsubscribe:    { type: 'boolean', required: false, default: false, description: 'Remove the other task\'s context from your Aegis orientation' },
                             from_context:   { type: 'string', required: false, description: 'Remote context name — query peer\'s memory via ÆtherLink' },
                             to_context:     { type: 'string', required: false, description: 'Remote context name — push notes into peer\'s memory' },
-                            create_task_in: { type: 'string', required: false, description: 'Remote context name — spawn a task on peer' }
+                            create_task_in: { type: 'string', required: false, description: 'Remote context name — spawn a task on peer' },
+                            invoke_in:      { type: 'string', required: false, description: 'Remote context name — execute query as a prompt there (via metempsychosis)' }
                           } do |query:, from_task: nil, limit: 5, subscribe: false, unsubscribe: false,
-                                 from_context: nil, to_context: nil, create_task_in: nil|
+                                 from_context: nil, to_context: nil, create_task_in: nil, invoke_in: nil|
   result = Mnemosyne.metempsychosis(query: query, from_task: from_task, limit: limit,
                                     subscribe: subscribe, unsubscribe: unsubscribe,
                                     from_context: from_context, to_context: to_context,
-                                    create_task_in: create_task_in)
+                                    create_task_in: create_task_in, invoke_in: invoke_in)
   HorologiumAeternum.notes_recalled "metempsychosis(task #{task_id} -> #{from_task}): #{query}",
                                     limit, result[:notes] if result[:notes]
   result

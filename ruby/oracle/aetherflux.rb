@@ -112,8 +112,14 @@ class Aetherflux
       answer, companion_suggestions = CompanionPrograms.extract_companion_suggestions(answer)
       # Merge suggestions emitted via the `suggest` instrument with the text-block ones.
       companion_suggestions = (companion_suggestions + collect_tool_suggestions(tool_results)).uniq { |s| [s[:glyph], s[:prompt]] }
+      # Intermediary assistant messages (arts[:prelude]) precede the companion
+      # say-logs, mirroring limen.rb's do_ask so the chat flow shows the oracle's
+      # running reasoning between tool calls, not only the final answer.
+      prelude_logs = (arts[:prelude] || []).map do |t|
+        { type: 'prelude', data: Scriptorium.html_with_syntax_highlight(t.to_s) }
+      end
       # Collect `say`/`_ask` info messages into the chat-flow logs.
-      logs = collect_say_logs(tool_results)
+      logs = prelude_logs + collect_say_logs(tool_results)
 
       html = Scriptorium.html_with_syntax_highlight answer.to_s
       #HorologiumAeternum.oracle_revelation answer.to_s unless answer.to_s.strip.empty?

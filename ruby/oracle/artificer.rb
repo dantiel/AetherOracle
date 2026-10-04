@@ -75,6 +75,10 @@ class Artificer
       result
     rescue HermeticExecutionDomain::Error => e
       handle_hermetic_execution_error e, 'Hermetic execution failed'
+    ensure
+      # Release the tool uuid once the call finishes so subsequent assistant
+      # content (oracle_revelation) is not grouped under this tool by the stream.
+      Thread.current[:aether_tool_uuid] = nil
     end
 
 
@@ -119,6 +123,10 @@ class Artificer
       result
     rescue HermeticExecutionDomain::Error => e
       handle_hermetic_execution_error e, 'Hermetic execution failed'
+    ensure
+      # Release the tool uuid once the call finishes so subsequent assistant
+      # content (oracle_revelation) is not grouped under this tool by the stream.
+      Thread.current[:aether_tool_uuid] = nil
     end
 
 

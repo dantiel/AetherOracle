@@ -487,7 +487,7 @@ class Mnemosyne
     def companion_release(previous) = Companion.release(previous)
 
     # -- MetempsychosisRouter --
-    def metempsychosis(query:, from_task: nil, limit: 3, subscribe: false, unsubscribe: false, from_context: nil, to_context: nil, create_task_in: nil) = MetempsychosisRouter.metempsychosis(query: query, from_task: from_task, limit: limit, subscribe: subscribe, unsubscribe: unsubscribe, from_context: from_context, to_context: to_context, create_task_in: create_task_in)
+    def metempsychosis(query:, from_task: nil, limit: 3, subscribe: false, unsubscribe: false, from_context: nil, to_context: nil, create_task_in: nil, invoke_in: nil) = MetempsychosisRouter.metempsychosis(query: query, from_task: from_task, limit: limit, subscribe: subscribe, unsubscribe: unsubscribe, from_context: from_context, to_context: to_context, create_task_in: create_task_in, invoke_in: invoke_in)
 
     # -- TaskLedger --
     def create_task(title:, plan:, workflow_type: 'full', parent_task_id: nil) = TaskLedger.create_task(title: title, plan: plan, workflow_type: workflow_type, parent_task_id: parent_task_id)

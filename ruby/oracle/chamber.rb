@@ -100,6 +100,33 @@ class ÆtherChamber
   COMPANION_SIGIL_RE = /@(#{COMPANION_ALT})\b/
   FILE_SIGIL_RE = /@file:([^\s]+)/
 
+  # Inline markdown spans highlighted in the prompt editor. `prefix` is the
+  # number of raw characters of the opening marker; `group` names the capture
+  # carrying the visible text. group-0 patterns (sigils / paste tags) are
+  # coloured in place -- their markers are not rewritten -- while markdown
+  # spans drop their markers and colour only the visible text.
+  INLINE_PATTERNS = [
+    { re: PASTE_TAG_RE,          group: 0, prefix: 0, style: :paste },
+    { re: FILE_SIGIL_RE,         group: 0, prefix: 0, style: :file_sigil },
+    { re: COMPANION_SIGIL_RE,    group: 0, prefix: 0, style: :companion_sigil },
+    { re: /`([^`\n]+)`/,         group: 1, prefix: 1, style: :code },
+    { re: /\*\*([^*\n]+)\*\*/,   group: 1, prefix: 2, style: :bold },
+    { re: /~~([^~\n]+)~~/,       group: 1, prefix: 2, style: :strike },
+    { re: /(?<!\*)\*([^*\n]+)\*(?!\*)/, group: 1, prefix: 1, style: :italic },
+    { re: /\[([^\]\n]+)\]\(([^)\n]+)\)/, group: 1, prefix: 1, style: :link }
+  ].freeze
+
+  STYLE_CODES = {
+    code: "\e[36m",
+    bold: "\e[1m",
+    strike: "\e[9m",
+    italic: "\e[3m",
+    link: "\e[4;34m",
+    paste: "\e[2;36m",
+    file_sigil: "\e[2;36m",
+    companion_sigil: "\e[1;35m"
+  }.freeze
+
   attr_reader :history, :veiled
 
   def initialize(tools: Instrumenta, stream: nil, theme: nil)
@@ -857,11 +884,15 @@ class ÆtherChamber
 
   # Arrow-key vertical menu over `options`, reusing the chamber's unified input
   # sources (ÆtherWinConsole on Windows, TTY::Reader elsewhere). Enter confirms
-  # the highlight, 1-9 jumps directly, Esc/Ctrl-C cancels.
+  # the highlight, 1-9 jumps directly, Esc/Ctrl-C cancels. Typing any other
+  # printable character opens a free-text "other" line so the practitioner may
+  # specify a value beyond the offered options; Enter confirms it, Esc returns
+  # to the menu.
   def interactive_select_menu(options)
     return read_select_plain(options) unless $stdin.tty?
 
     idx = 0
+    custom = nil
     @select_menu_lines = 0
     use_win = win_console_available?
     if use_win
@@ -875,26 +906,59 @@ class ÆtherChamber
 
     begin
       loop do
-        redraw_select_menu(options, idx)
+        custom.nil? ? redraw_select_menu(options, idx) : redraw_select_custom(options, custom)
         input = use_win ? ÆtherWinConsole.next_input : tty_editor_input
         return nil if input.nil?
-        next unless input.is_a?(Hash) && input[:kind] == :key
+        next unless input.is_a?(Hash)
 
-        case input[:action]
-        when :up, :ctrl_up
-          idx = (idx - 1) % options.size
-        when :down, :ctrl_down
-          idx = (idx + 1) % options.size
-        when :enter, :return, :right
-          return confirm_select_choice(options[idx])
-        when :escape, :ctrl_c
-          STDOUT.print "\n"
-          return nil
-        when :literal
-          ch = (input[:char] || input[:text]).to_s
-          if ch.match?(/\A[1-9]\z/)
-            n = ch.to_i - 1
-            return confirm_select_choice(options[n]) if n < options.size
+        if custom.nil?
+          case input[:kind]
+          when :key
+            case input[:action]
+            when :up, :ctrl_up then idx = (idx - 1) % options.size
+            when :down, :ctrl_down then idx = (idx + 1) % options.size
+            when :enter, :return, :right then return confirm_select_choice(options[idx])
+            when :escape, :ctrl_c
+              STDOUT.print "\n"
+              return nil
+            when :literal
+              ch = (input[:char] || '').to_s
+              if ch.match?(/\A[1-9]\z/)
+                n = ch.to_i - 1
+                return confirm_select_choice(options[n]) if n < options.size
+              elsif ch.match?(/\A[[:graph:]]\z/)
+                custom = +ch
+              end
+            end
+          when :literal, :paste
+            text = input[:text].to_s.gsub(/\r?\n/, ' ')
+            next if text.empty?
+            if text.match?(/\A[1-9]\z/) && text.to_i <= options.size
+              return confirm_select_choice(options[text.to_i - 1])
+            else
+              custom = text
+            end
+          end
+        else
+          case input[:kind]
+          when :key
+            case input[:action]
+            when :enter, :return
+              return confirm_select_choice(custom) unless custom.empty?
+            when :escape
+              custom = nil
+            when :ctrl_c
+              STDOUT.print "\n"
+              return nil
+            when :backspace
+              custom = custom[0...-1]
+              custom = nil if custom.empty?
+            when :literal
+              custom << (input[:char] || '').to_s
+            end
+          when :literal, :paste
+            text = input[:text].to_s.gsub(/\r?\n/, ' ')
+            custom << text unless text.empty?
           end
         end
       end
@@ -908,6 +972,23 @@ class ÆtherChamber
     end
   end
 
+  # Render the free-text "other" entry beneath a dimmed option list while the
+  # practitioner types a custom answer, reusing the same erase-and-redraw frame
+  # as redraw_select_menu.
+  def redraw_select_custom(options, custom)
+    n = @select_menu_lines
+    STDOUT.print "\e[#{n}A" if n.positive?
+    STDOUT.print "\r\e[J"
+
+    rows = options.map { |opt| "    #{@palette.dim(opt)}" }
+    rows << "   #{@palette.accent('other')} #{custom}#{@palette.accent('_')}"
+    rows << @palette.dim('  type - enter confirm - esc back to options')
+    @select_menu_lines = rows.size
+    STDOUT.print rows.join("\n")
+    STDOUT.print "\n"
+    STDOUT.flush
+  end
+
   def confirm_select_choice(choice)
     STDOUT.print "\n"
     STDOUT.puts "  #{@palette.accent('->')} #{choice}"
@@ -915,9 +996,11 @@ class ÆtherChamber
   end
 
   # Numbered fallback for a piped/non-TTY session where arrow keys are
-  # meaningless: list the options and read one line.
+  # meaningless: list the options and read one line. A number picks the option,
+  # anything else is returned verbatim as the practitioner's custom answer.
   def read_select_plain(options)
     options.each_with_index { |opt, i| STDOUT.puts "  #{i + 1}. #{opt}" }
+    STDOUT.puts @palette.dim('  (number to select, or type your own)')
     STDOUT.print "  #{@palette.accent('>')} "
     STDOUT.flush
     line = $stdin.gets&.strip
@@ -939,7 +1022,7 @@ class ÆtherChamber
       label = i == idx ? opt : @palette.dim(opt)
       "   #{marker} #{label}"
     end
-    rows << @palette.dim('  ^/v choose - enter confirm - 1-9 jump - esc cancel')
+    rows << @palette.dim('  ^/v choose - enter confirm - type for other - esc cancel')
     @select_menu_lines = rows.size
     STDOUT.print rows.join("\n")
     STDOUT.print "\n"
@@ -1023,6 +1106,11 @@ class ÆtherChamber
     return read_prompt_plain if !use_win && !HAVE_TTY_READER
 
     @editor_win = use_win
+    bracketed = false
+    unless use_win
+      enable_bracketed_paste
+      bracketed = true
+    end
     begin
       loop do
         redraw_inline(buffer, cursor, selection, mention)
@@ -1066,13 +1154,21 @@ class ÆtherChamber
           case input[:action]
           when :tab, :back_tab
             selection = next_tab(selection, input[:action] == :tab ? 1 : -1)
+          when :newline
+            selection = nil
+            buffer.insert(cursor, "\n")
+            cursor += 1
           when :enter, :return
-            selection ? clear_inline_preview : print("\n")
+            if selection
+              clear_inline_preview
+              print "\n"
+            else
+              commit_prompt
+            end
             return finish_prompt(buffer, selection)
           when :escape
             selection = nil
           when :ctrl_c
-            print "\n"
             buffer = +''
             cursor = 0
             selection = nil
@@ -1181,6 +1277,7 @@ class ÆtherChamber
       $stderr.puts "!! native console reader unavailable (#{e.message}) -- falling back to line input" if $DEBUG
       return read_prompt_plain
     ensure
+      disable_bracketed_paste if bracketed
       ÆtherWinConsole.end_raw_input if use_win
       @editor_win = nil
     end
@@ -1202,6 +1299,11 @@ class ÆtherChamber
 
     char = complete_extended_key(char)
     return tty_read_paste if char.start_with?("\e[200~")
+
+    # Shift+Enter (and a raw LF, e.g. a paste that arrived without bracketed
+    # paste) inserts a line break; Enter itself (CR) submits. Keeping the two
+    # distinct means a multi-line paste can never fire the prompt early.
+    return { kind: :key, action: :newline } if char == "\n" || char == "\e[13;2u" || char == "\e[13;2~"
 
     action = @tty_keymap[char]
     action = tty_decode_action(char) if action.nil?
@@ -1270,105 +1372,216 @@ class ÆtherChamber
   end
 
   def redraw_inline(buffer, cursor, selection, mention = nil)
-    n = [@rendered_lines.to_i - 1, 0].max
-    print "\e[#{n}A" if n.positive?
-    print "\r\e[J"
-
     width = terminal_width
-    rows = []
+    overlay_rows = if mention
+                     mention_overlay_rows(mention, width)
+                   elsif selection
+                     el = tab_positions[selection]
+                     rows = focus_list_rows(selection, width)
+                     rows.concat(instrumentum_preview_rows(el, selection, width)) if el[:type] == :instrumentum
+                     rows
+                   else
+                     []
+                   end
 
-    if mention
-      rows.concat(mention_overlay_rows(mention, width))
-    elsif selection
+    if selection
       el = tab_positions[selection]
-      rows.concat(focus_list_rows(selection, width))
-      rows.concat(instrumentum_preview_rows(el, selection, width)) if el[:type] == :instrumentum
-    end
-
-    rows.each { |line| print "#{line}\n" }
-    @rendered_lines = rows.size + 1
-
-    print prompt_marker
-    avail = [width - display_width(prompt_marker), 1].max
-    if mention
-      text, col = prompt_line(buffer, cursor, avail)
-      print text
-      back = display_width(text) - col
-      print "\e[#{back}D" if back.positive?
-    elsif selection
-      print "\e[1;35m#{truncate_visible(tab_label_for(el), avail)}\e[0m"
+      label = truncate_visible(tab_label_for(el), [width - display_width(prompt_marker), 1].max)
+      prompt_rows = ["\e[1;35m#{label}\e[0m"]
+      block_row = overlay_rows.size
+      block_col = display_width(label)
     else
-      text, col = prompt_line(buffer, cursor, avail)
-      print text
-      back = display_width(text) - col
-      print "\e[#{back}D" if back.positive?
+      prompt_rows, brow, bcol = render_prompt_geometry(buffer, cursor, width)
+      block_row = overlay_rows.size + brow
+      block_col = bcol
     end
+
+    redraw_block(overlay_rows + prompt_rows, block_row, block_col)
     $stdout.flush
   end
 
-  # Colour `[PASTED_CONTENT_n]` tags dim-cyan so they read as placeholders,
-  # distinct from the text they will expand into on submit.
-  def render_prompt_buffer(buffer)
-    buffer.gsub(PASTE_TAG_RE) { |tag| "\e[2;36m#{tag}\e[0m" }
-          .gsub(FILE_SIGIL_RE) { |m| "\e[2;36m#{m}\e[0m" }
-          .gsub(COMPANION_SIGIL_RE) { |m| "\e[1;35m#{m}\e[0m" }
-  end
+  # Render the prompt buffer -- which may now contain literal newlines -- into
+  # the physical rows to draw plus the cursor's (row, col) inside that block.
+  # The prompt marker occupies the left edge of the first row; every following
+  # row is indented by the same width so wrapped text stays aligned.
+  def render_prompt_geometry(buffer, cursor, width)
+    mw = display_width(prompt_marker)
+    content_width = [width - mw, 1].max
+    rows = []
+    cursor_row = nil
+    cursor_col = nil
+    raw_offset = 0
 
-  # Single-line prompt rendering (no wrapping). When the buffer is wider than
-  # the terminal, scroll horizontally so the cursor stays visible; a leading
-  # "..." marks text hidden to the left. Returns [text, cursor_col] where
-  # cursor_col is the cursor's column within `text` (after the "..."). Keeping
-  # the prompt on exactly one physical line is what makes the redraw arithmetic
-  # (`\e[nA` + `\r\e[J`) exact -- a wrapped prompt throws the line count off and
-  # leaves the previous rows repeating on every keystroke.
-  def prompt_line(buffer, cursor, width)
-    rendered = render_prompt_buffer(buffer)
-    total = display_width(buffer)
-    cursor_col = display_width(buffer[0...cursor])
-    return [rendered, cursor_col] if total <= width
+    buffer.split("\n", -1).each_with_index do |raw_line, li|
+      line_start = raw_offset
+      line_end = raw_offset + raw_line.length
+      loc = (cursor >= line_start && cursor <= line_end) ? cursor - line_start : nil
 
-    start = [cursor_col - (width / 2), 0].max
-    start = [start, total - (width - 1)].min
-    [slice_visible(rendered, start, width), cursor_col - start + (start.positive? ? 1 : 0)]
-  end
-
-  # ANSI-aware horizontal slice of `text`: keep the visible columns from
-  # `from_col` for at most `max_width` columns, prefixing "..." when columns on
-  # the left were dropped. Colour codes inside the window are preserved.
-  def slice_visible(text, from_col, max_width)
-    prefix = from_col.positive? ? "\e[2m...\e[0m" : ''
-    budget = max_width - (from_col.positive? ? 1 : 0)
-    return prefix if budget <= 0
-
-    out = +''
-    visible = 0
-    emitted = 0
-    rest = text.dup
-    while !rest.empty? && emitted < budget
-      if (m = rest.match(ANSI_TOKEN))
-        out << m[0]
-        rest = rest[m[0].length..]
-        next
+      sub_rows, sub_row, sub_col = wrap_tokens(tokenize_inline(raw_line), loc, content_width)
+      sub_rows.each_with_index do |text, ri|
+        prefix = (li.zero? && ri.zero?) ? prompt_marker : (' ' * mw)
+        rows << "#{prefix}#{text}"
       end
-      ch = rest[0]
-      cw = char_width(ch)
-      if visible + cw > from_col
-        break if emitted + cw > budget # width-2 char would overrun -- stop clean
-        out << ch
-        emitted += cw
+
+      if sub_row
+        cursor_row = rows.size - sub_rows.size + sub_row
+        cursor_col = mw + sub_col
       end
-      visible += cw
-      rest = rest[1..]
+
+      raw_offset = line_end + 1
     end
-    out << "\e[0m"
-    prefix + out
+
+    [rows, cursor_row || 0, cursor_col || mw]
+  end
+
+  # Split one logical prompt line into styled tokens. Each token is
+  # { raw:, prefix:, plain:, style: } -- `raw` is the exact source span,
+  # `prefix` the raw length of its opening marker (chars consumed before the
+  # visible `plain` text), and `style` a STYLE_CODES key (nil = plain text).
+  # Literal runs are single characters so raw offsets map 1:1 to columns.
+  def tokenize_inline(raw)
+    tokens = []
+    i = 0
+    n = raw.length
+    while i < n
+      matched = nil
+      INLINE_PATTERNS.each do |pat|
+        m = raw.match(pat[:re], i)
+        next unless m && m.begin(0) == i
+
+        matched = { raw: m[0], prefix: pat[:prefix], plain: m[pat[:group]], style: pat[:style] }
+        break
+      end
+
+      if matched
+        tokens << matched
+        i += matched[:raw].length
+      else
+        tokens << { raw: raw[i], prefix: 0, plain: raw[i], style: nil }
+        i += 1
+      end
+    end
+    tokens
+  end
+
+  def render_token(token)
+    code = STYLE_CODES[token[:style]]
+    code ? "#{code}#{token[:plain]}\e[0m" : token[:plain]
+  end
+
+  # Wrap a logical line's tokens into physical rows (each at most `width`
+  # display columns) and locate the cursor. `cursor_offset` is the cursor's raw
+  # offset within the logical line, or nil when the cursor is elsewhere.
+  def wrap_tokens(tokens, cursor_offset, width)
+    lines = []
+    current = +''
+    col = 0
+    crow = nil
+    ccol = nil
+    tcol = nil
+    raw_pos = 0
+
+    tokens.each do |t|
+      raw_start = raw_pos
+      raw_end = raw_pos + t[:raw].length
+      styled = render_token(t)
+      pw = display_width(t[:plain])
+
+      if cursor_offset && cursor_offset >= raw_start && cursor_offset < raw_end
+        local = cursor_offset - raw_start
+        tcol = if local <= t[:prefix]
+                 0
+               elsif local <= t[:prefix] + t[:plain].length
+                 display_width(t[:plain][0...(local - t[:prefix])])
+               else
+                 pw
+               end
+        crow = lines.size
+        ccol = col + tcol
+      end
+
+      if col + pw > width && col.positive?
+        lines << current
+        current = +''
+        col = 0
+        if tcol
+          crow = lines.size
+          ccol = tcol
+        end
+      end
+
+      current << styled
+      col += pw
+      raw_pos = raw_end
+      tcol = nil
+    end
+
+    lines << current
+    if cursor_offset && crow.nil?
+      crow = lines.size - 1
+      ccol = col
+    end
+    [lines, crow, ccol]
+  end
+
+  # Replace exactly the previous prompt block with `rows`, then place the
+  # cursor at (cursor_row, cursor_col). Only the block's own lines are touched:
+  # `\r\e[K` rewrites one line at a time instead of `\e[J` erasing to the
+  # bottom of the screen, so nothing below the prompt is ever repainted.
+  def redraw_block(rows, cursor_row, cursor_col)
+    prev = @rendered_lines.to_i
+    cur = rows.size
+
+    up = @cursor_row.to_i
+    print "\e[#{up}A" if up.positive?
+    print "\r"
+
+    rows.each do |line|
+      print "\e[K"
+      print line
+      print "\n"
+    end
+
+    extra = [prev - cur, 0].max
+    extra.times { print "\e[K\n" }
+
+    up_to_cursor = cur + extra - cursor_row
+    print "\e[#{up_to_cursor}A" if up_to_cursor.positive?
+    print "\r"
+    print "\e[#{cursor_col}C" if cursor_col.positive?
+
+    @cursor_row = cursor_row
+    @rendered_lines = cur
+  end
+
+  # Move the cursor to the fresh line just below the prompt block and leave it
+  # clean, so the answer stream starts there. The entered text stays on screen.
+  def commit_prompt
+    down = @rendered_lines.to_i - @cursor_row.to_i
+    print "\e[#{down}B" if down.positive?
+    print "\r\e[K"
+    @rendered_lines = 0
+    @cursor_row = 0
+  end
+
+  def enable_bracketed_paste
+    print "\e[?2004h"
+    $stdout.flush
+  end
+
+  def disable_bracketed_paste
+    print "\e[?2004l"
+    $stdout.flush
   end
 
   def clear_inline_preview
-    n = [@rendered_lines.to_i - 1, 0].max
-    print "\e[#{n}A" if n.positive?
-    print "\r\e[J"
+    up = @cursor_row.to_i
+    print "\e[#{up}A" if up.positive?
+    print "\r"
+    @rendered_lines.to_i.times { print "\e[K\n" }
+    print "\e[#{@rendered_lines.to_i}A" if @rendered_lines.to_i.positive?
     @rendered_lines = 0
+    @cursor_row = 0
   end
 
   def instrumentum_at?(index)
@@ -1393,14 +1606,10 @@ class ÆtherChamber
     line
   end
 
-  # Step through the line history, re-folding any multi-line entry back into a
-  # paste tag so the single-line editor never has to render a literal newline.
+  # Step through the line history. Multi-line entries are recalled verbatim --
+  # the prompt editor now supports literal newlines, so no re-folding is needed.
   def recall_history(buffer, hist, delta)
-    buffer, hist = history_step(buffer, hist, delta)
-    return [buffer, hist] unless buffer.include?("\n")
-
-    @paste_register << buffer
-    [+"[PASTED_CONTENT_#{@paste_register.size}]", hist]
+    history_step(buffer, hist, delta)
   end
 
   # Expand `[PASTED_CONTENT_n]` back into the text it stood in for. Unknown

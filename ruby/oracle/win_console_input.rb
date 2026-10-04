@@ -331,7 +331,7 @@ module ÆtherWinConsole
       alt  = e[:alt]
 
       case vk
-      when VK_RETURN then { kind: :key, action: :enter }
+      when VK_RETURN then { kind: :key, action: e[:shift] ? :newline : :enter }
       when VK_TAB    then { kind: :key, action: e[:shift] ? :back_tab : :tab }
       when VK_ESCAPE then { kind: :key, action: :escape }
       when VK_BACK   then { kind: :key, action: (ctrl || alt) ? :word_backspace : :backspace }
