@@ -21,13 +21,15 @@ require_relative 'companion'
 require_relative 'metempsychosis_router'
 require_relative 'task_ledger'
 require_relative 'seal_ledger'
+require_relative 'aethernaut_manifest'
 require_relative 'chronicle'
 require_relative 'fragments'
 require_relative 'vectors'
 require_relative 'corpus'
+require_relative 'import'
 
 class Mnemosyne
-  DB_VERSION = 14
+  DB_VERSION = 15
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -45,6 +47,24 @@ class Mnemosyne
 
   DEFAULT_ACTIVE_MEMORY_WINDOW = 5
   DEFAULT_PRIORITY_DECAY_RATE = 1.0
+
+  # -- Recency decay — the one law both memory and interface obey -----------------
+  # Presence is an exponential function of distance from the live edge:
+  #   presence = RECENCY_DECAY_BASE * e^(-distance / rate)
+  # `Chronicle.format_history_tool_calls` already applies this same law
+  # (base_priority = exp(-index/1.0) * 3) to progressively truncate token
+  # history. `compaction_level` maps that *same* presence onto four interface
+  # tiers, so the visible timeline decays with the identical arithmetic as the
+  # hidden context — correspondence, not duplication. Memory measures distance
+  # in *turns* (rate 1.0); an interface measuring *flow entries* may pass a
+  # gentler rate, but the law itself is shared.
+  RECENCY_DECAY_BASE = 3.0
+  RECENCY_DECAY_RATE = 1.0
+
+  COMPACTION_LEVELS = %i[expanded medium compact micro].freeze
+  # Presence thresholds separating the four tiers:
+  #   expanded  ≥ [0],  medium ≥ [1],  compact ≥ [2],  else micro.
+  COMPACTION_THRESHOLDS = [1.8, 0.6, 0.18].freeze
 
   DEFAULT_TOKEN_LIMITS = {
     active_memory:       8000,
@@ -115,6 +135,25 @@ class Mnemosyne
       else
         "#{content[0...max_length]}..."
       end
+    end
+
+    # The one decay law, exposed generically: presence as a function of distance
+    # from the live edge. `rate` is the half-life scale (memory uses turns; an
+    # interface may use flow entries). Never negative: the live edge is the floor.
+    def recency_presence(distance, rate: RECENCY_DECAY_RATE, base: RECENCY_DECAY_BASE)
+      base * Math.exp(-[distance.to_f, 0.0].max / rate)
+    end
+
+    # Map a distance from the live edge onto one of the four interface tiers.
+    # Universal across instrumenta: the present is always `:expanded`, deep
+    # history collapses to `:micro`. Tunable via COMPACTION_THRESHOLDS.
+    def compaction_level(distance, rate: RECENCY_DECAY_RATE)
+      presence = recency_presence(distance, rate: rate)
+      return COMPACTION_LEVELS[0] if presence >= COMPACTION_THRESHOLDS[0]
+      return COMPACTION_LEVELS[1] if presence >= COMPACTION_THRESHOLDS[1]
+      return COMPACTION_LEVELS[2] if presence >= COMPACTION_THRESHOLDS[2]
+
+      COMPACTION_LEVELS[3]
     end
 
     def db_path
@@ -322,9 +361,12 @@ class Mnemosyne
       # is bound to the context path (folder) it was minted in; recall ranks
       # local > ancestors (distance decay) > tag-resonant peers. The parent
       # context stays observer-only: child scopes whisper nothing upward.
+      # The `context_path` column is ensured unconditionally: a DB that reached
+      # version 10 through the earlier import-fork (which stamped provenance into
+      # `context`/`source_note_id` instead) must still gain the cascade column.
+      existing_note_columns = db.execute('PRAGMA table_info(project_notes)').map { |col| col['name'] }
+      db.execute 'ALTER TABLE project_notes ADD COLUMN context_path TEXT' unless existing_note_columns.include?('context_path')
       if 10 > db_version
-        existing_note_columns = db.execute('PRAGMA table_info(project_notes)').map { |col| col['name'] }
-        db.execute 'ALTER TABLE project_notes ADD COLUMN context_path TEXT' unless existing_note_columns.include?('context_path')
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '10')"
       end
       # Version 11 -- Stufe 2 + 3 der Kaskade: fragments (transient cognition
@@ -415,6 +457,32 @@ class Mnemosyne
         db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_source ON corpus_edges (source_id)'
         db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_kind ON corpus_edges (kind)'
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '14')"
+
+# Version 15 — AethernautManifest: Pythia's agenda. The intention queue
+# where companion suggestions land and act polymorphically (suggestion /
+# directive / recovery / ritual / conjuration / insight). One manifest,
+# many shapes. Fresh DBs run this after the v10-14 cascade steps; existing
+# v14 DBs cross into it additively.
+if 15 > db_version
+  db.execute <<~SQL
+    CREATE TABLE IF NOT EXISTS aethernaut_manifest (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT DEFAULT 'suggestion',
+      aspect TEXT DEFAULT 'aegis',
+      glyph TEXT,
+      title TEXT,
+      body TEXT,
+      action TEXT,
+      payload TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'pending',
+      priority INTEGER DEFAULT 0,
+      source TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  SQL
+  db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '15')"
+end
       end
     end
 
@@ -499,6 +567,14 @@ class Mnemosyne
     def update_task(task_id, **fields) = TaskLedger.update_task(task_id, **fields)
     def remove_task(id) = TaskLedger.remove_task(id)
     def manage_tasks(params) = TaskLedger.manage_tasks(params)
+
+    # -- AethernautManifest (Pythia's agenda) --
+    def agenda(status: nil, limit: nil) = AethernautManifest.agenda(status: status, limit: limit)
+    def enqueue_intent(kind:, title:, aspect: nil, glyph: nil, body: nil, action: nil, payload: {}, priority: 0, source: nil) = AethernautManifest.enqueue(kind: kind, title: title, aspect: aspect, glyph: glyph, body: body, action: action, payload: payload, priority: priority, source: source)
+    def intent_act(intention) = AethernautManifest.act(intention)
+    def intent_complete(id) = AethernautManifest.complete(id)
+    def intent_dismiss(id, reason: nil) = AethernautManifest.dismiss(id, reason: reason)
+    def intent_promote(id, priority) = AethernautManifest.promote(id, priority)
 
     # -- Chronicle --
     def fetch_history(limit: 7, max_tokens: nil, include_tool_calls: false) = Chronicle.fetch_history(limit: limit, max_tokens: max_tokens, include_tool_calls: include_tool_calls)

@@ -13,11 +13,43 @@ that makes "one oracle, many voices" true across platforms.
 
 | Endpoint | Method | Purpose | Payload → Response |
 |----------|--------|---------|--------------------|
-| `/aether/heartbeat` | GET | discovery | → `{ name, port, path, version, capabilities, busy }` |
+| `/aether/heartbeat` | GET | discovery | → `{ name, port, path, version, capabilities, busy, agenda_count }` |
 | `/aether/invoke` | POST | a turn | `{ prompt, type:"chat", from_context, active_companions? }` → `{ answer, html?, source_context? }` |
+| `/aether/manifest` | GET | hoist agenda | → `{ name, count, pending, manifest:[…], updated_at }` |
+| `/aether/manifest` | POST | sign intention | `{ kind, title, aspect?, body?, action?, payload?, priority?, from_context? }` → `{ ok, intention }` |
 | `/aether/aegis` | GET | reasoning state | → `{ thinking, temperature, summary, tags, working_dir? }` |
 | `/aether/voices` | GET | vox roster | → `{ voices: [{ name, locale, language }] }` |
 | `/aether/speak` | POST | speak | `{ text, voice? }` → `{ ok }` |
+
+## The Aethernaut's Manifest (framed JSON)
+
+Companion suggestions are intentions. The manifest is **Pythia's agenda**: the
+intention queue Aegis holds while companion aspects act polymorphically.
+
+Over the æther the same manifest sails as HTTP: `GET /aether/manifest` hoists a
+peer's freshly-updated agenda (any Aether OS pulls the shared course), and
+`POST /aether/manifest` signs a new intention into that peer's manifest — one
+queue, everywhere. The `aether_link.rb` client mirrors this as `AetherLink.manifest`
+/ `AetherLink.sign_manifest`; the stdlib link tier exposes it as
+`aetheroracle manifest <peer>` / `aetheroracle sign <peer> <kind> "title"`.
+
+Locally the same manifest is also reached as daemon commands over the framed
+protocol (STDIN/STDOUT or `--listen` socket):
+
+| Command | Purpose |
+|---|---|
+| `agenda` | read the ordered pending + active intentions |
+| `intent` | sign an intention: `{ kind, title, aspect?, glyph?, body?, action?, payload?, priority?, source? }` |
+| `intent_take` | consume the next intention (mark active) |
+| `intent_act` | resolve an intention into its polymorphic action descriptor |
+| `intent_done` | complete it (`id`) |
+| `intent_dismiss` | release it (`id`, `reason?`) |
+| `intent_promote` | raise its priority (`id`, `priority`) |
+
+Kinds: `suggestion` ✨ · `directive` 🎯 · `recovery` 🪡 · `ritual` 🔮 ·
+`conjuration` 🌀 · `insight` 💠. The companion **riss** path also signs a
+`recovery` intention (aspect `phoenix`) before emitting `recover_suggestion`, so
+a torn thread is already the next chapter in the agenda.
 
 ## Invariants
 

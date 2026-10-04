@@ -196,10 +196,11 @@ get '/aether/heartbeat' do
     name:         AetherLink.own_name,
     path:         CONFIG.project_root,
     port:         AetherLink.own_port,
-    capabilities: %w[metempsychosis task_spawn invoke],
-    version:      '1.1',
+    capabilities: %w[metempsychosis task_spawn invoke manifest],
+    version:      '1.2',
     busy:         @ask_thread&.alive? || false,
-    active_tasks: active_tasks
+    active_tasks: active_tasks,
+    agenda_count: Mnemosyne::AethernautManifest.count
   }.to_json
 end
 
@@ -251,6 +252,47 @@ post '/aether/invoke' do
     { error: e.message }.to_json
   ensure
     @ask_thread = nil
+  end
+end
+
+# ── Aethernaut's Manifest over the æther ──
+# The Aegis agenda sails between contexts: any peer may hoist freshly-updated
+# manifest winds (GET) or sign a new intention into this brain's course (POST).
+# One queue, everywhere — the same agenda the companions and the oracle share.
+get '/aether/manifest' do
+  content_type :json
+  statuses = Array(params['status'] || Mnemosyne::AethernautManifest::ACTIVE_STATUSES)
+  limit    = params['limit']&.to_i
+  agenda   = Mnemosyne::AethernautManifest.agenda(status: statuses, limit: limit)
+  {
+    name:       AetherLink.own_name,
+    count:      agenda.size,
+    pending:    Mnemosyne::AethernautManifest.count,
+    manifest:   agenda,
+    updated_at: Time.now.utc.iso8601
+  }.to_json
+end
+
+post '/aether/manifest' do
+  content_type :json
+  begin
+    payload = JSON.parse(request.body.read, symbolize_names: true)
+    intent = Mnemosyne::AethernautManifest.enqueue(
+      kind:     payload[:kind] || 'suggestion',
+      title:    payload[:title].to_s,
+      aspect:   payload[:aspect],
+      glyph:    payload[:glyph],
+      body:     payload[:body],
+      action:   payload[:action],
+      payload:  payload[:payload] || {},
+      priority: payload.fetch(:priority, 0),
+      source:   payload[:source] || "aether:#{payload[:from_context]}"
+    )
+    HorologiumAeternum.system_message "🧭 <b>#{payload[:from_context] || 'the æther'}</b> signed #{intent[:glyph]} ##{intent[:id]} into Pythia's agenda"
+    { ok: true, intention: intent }.to_json
+  rescue StandardError => e
+    status 500
+    { ok: false, error: e.message }.to_json
   end
 end
 

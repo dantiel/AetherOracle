@@ -112,11 +112,13 @@ require_relative 'mnemosyne/seal_ledger'
 require_relative 'oracle/oracle'
 require_relative 'oracle/coniunctio'
 require_relative 'oracle/aetherflux'
+require_relative 'oracle/gist_bus'
 require_relative 'instrumentarium/instrumenta'
 require_relative 'instrumentarium/prima_materia'
 require_relative 'instrumentarium/horologium_aeternum'
 require_relative 'magnum_opus/magnum_opus_engine'
 require_relative 'shell_session'
+require_relative 'textmate_tokenizer'
 
 # PipeStream adapts HorologiumAeternum's WebSocket-style sink to STDOUT frames.
 # HorologiumAeternum.send builds a JSON string {"method":...,"result":{...}}
@@ -160,7 +162,10 @@ class StandaloneDaemon
     ping activate_context interrupt aegis history get_note remove_note
     list_tasks create_task remove_task recall user_response
     seal_create seal_list seal_status seal_delegate
-    task_detail
+    task_detail tokenize
+    agenda intent intent_take intent_act intent_done intent_dismiss intent_promote
+    memory_sources memory_list
+    gist
   ].freeze
 
   def initialize
@@ -231,6 +236,20 @@ class StandaloneDaemon
         Thread.current[:aether_request_id] = request_id
         Thread.current[:aether_sink] = sink
 
+        # Gist Bus: register this turn as a live flow so sibling flows see its
+        # public silhouette (who + when + Aegis summary, never its reasoning or
+        # tool bodies). The thread-local carries the flow's identity into the
+        # conduit build so the turn can exclude itself and filter broadcasts.
+        flow_id = request_id || "req_#{SecureRandom.hex(6)}"
+        meta = flow_metadata(request)
+        GistBus.begin_flow(id: flow_id, kind: meta[:kind], label: meta[:label],
+                           companion: meta[:companion], project: $project_root)
+        GistBus.set_aegis(flow_id, (Mnemosyne.aegis || {})[:summary].to_s)
+        Thread.current[:aether_flow] = {
+          id: flow_id, kind: meta[:kind], label: meta[:label],
+          companion: meta[:companion], project: $project_root
+        }
+
         turn_shell = @shell.branch
         $aether_shell = turn_shell
 
@@ -251,15 +270,26 @@ class StandaloneDaemon
           # macro instead of a dead end. The last intention lives in Aegis.
           begin
             last_intent = (Mnemosyne.aegis || {})[:summary].to_s
+            # The riss becomes an intention in Pythia's agenda (aspect: phoenix,
+            # the facet that rises from failure) — recovery is not a dead end but
+            # the next chapter already signed into the manifest.
+            intent = begin
+              Mnemosyne::AethernautManifest.enqueue(
+                kind: :recovery, aspect: :phoenix, source: 'riss',
+                title: 'Hier riss der Faden — weiterweben?',
+                body: last_intent[0, 400], action: 'recover_last_intent'
+              )
+            rescue Exception
+              nil
+            end
             emit(type: 'recover_suggestion',
                  request_id: request_id,
                  glyph: '🦊',
                  prompt: 'Hier riss der Faden — weiterweben?',
                  action: 'recover_last_intent',
+                 intent_id: intent && intent[:id],
                  last_intent: last_intent[0, 400])
           rescue Exception
-            # Best-effort: the failure result is already emitted. Swallowing even
-            # non-StandardError here keeps the worker alive for the next turn.
             nil
           end
         ensure
@@ -268,6 +298,8 @@ class StandaloneDaemon
           # project's cwd; the stale branch must not clobber it).
           @shell.merge_from(turn_shell) if $aether_shell.equal?(turn_shell)
           $aether_shell = @shell
+          GistBus.end_flow(flow_id)
+          Thread.current[:aether_flow] = nil
           Thread.current[:paused] = false
           Thread.current[:aether_request_id] = nil
         end
@@ -397,6 +429,19 @@ class StandaloneDaemon
       Mnemosyne.remember(content: args['content'], links: args['links'], tags: args['tags'])
     when 'recall'
       Mnemosyne.recall_notes(args['query'].to_s, limit: args.fetch('limit', 5))
+    when 'memory_sources'
+      Mnemosyne::Import.sources
+    when 'memory_list'
+      Mnemosyne::Import.list(path: args['path'], query: args['query'], tag: args['tag'], limit: args.fetch('limit', 50))
+    when 'memory_import'
+      Mnemosyne::Import.import(
+        path: args['path'],
+        ids: args.fetch('ids', []),
+        query: args['query'],
+        tag: args['tag'],
+        include_companions: args.fetch('include_companions', true),
+        label: args['label']
+      )
     when 'get_note'
       Mnemosyne.get_note(args['id'])
     when 'remove_note'
@@ -407,6 +452,33 @@ class StandaloneDaemon
     # -- Aegis --
     when 'aegis'
       handle_aegis(args)
+
+    # -- Gist Bus (flow-event bus: broadcasts + running flows) --
+    when 'gist'
+      handle_gist(args)
+
+    # -- AethernautManifest (Pythia's agenda) --
+    when 'agenda'
+      Mnemosyne::AethernautManifest.agenda(status: args['status'], limit: args['limit'])
+    when 'intent'
+      Mnemosyne::AethernautManifest.enqueue(
+        kind: args.fetch('kind', 'suggestion'),
+        title: args.fetch('title'),
+        aspect: args['aspect'], glyph: args['glyph'], body: args['body'],
+        action: args['action'], payload: args['payload'] || {},
+        priority: args.fetch('priority', 0), source: args['source']
+      )
+    when 'intent_take'
+      Mnemosyne::AethernautManifest.take
+    when 'intent_act'
+      intention = args['intention'] || Mnemosyne::AethernautManifest.find(args.fetch('id'))
+      Mnemosyne::AethernautManifest.act(intention)
+    when 'intent_done'
+      Mnemosyne::AethernautManifest.complete(args.fetch('id'))
+    when 'intent_dismiss'
+      Mnemosyne::AethernautManifest.dismiss(args.fetch('id'), reason: args['reason'])
+    when 'intent_promote'
+      Mnemosyne::AethernautManifest.promote(args.fetch('id'), args.fetch('priority'))
 
     # -- Oracle / chat / companions --
     when 'oracle', 'chat', 'conjuration'
@@ -451,6 +523,10 @@ class StandaloneDaemon
     # -- Metempsychosis --
     when 'metempsychosis'
       Mnemosyne.metempsychosis(**symbolize_keys(args))
+
+    # -- TextMate grammar tokenizer (breadth syntax highlighting) --
+    when 'tokenize'
+      handle_tokenize(args)
 
     # -- Pythia CLI (polymorphic shell shared with the agent's run_command) --
     when 'cli'
@@ -570,24 +646,66 @@ class StandaloneDaemon
     ($aether_shell || @shell).run(cmd, timeout: args.fetch('timeout', 30))
   end
 
+  # Tokenize `text` with a TextMate grammar. Accepts a full `grammar_path` so the
+  # Swift side owns resource resolution (dev vs. bundled-app layout differ). This
+  # runs on the control path — textpow is fast and must never queue behind a
+  # heavy agentic turn.
+  def handle_tokenize(args)
+    path = args['grammar_path'].to_s
+    text = args['text'].to_s
+    return { error: 'tokenize: no grammar_path' } if path.empty?
+    return { error: "tokenize: grammar not found: #{path}" } unless File.file?(path)
+
+    TextmateTokenizer.tokenize(path, text)
+  end
+
   def handle_aegis(args)
     case args['action']
     when 'get'
       Mnemosyne.restore_aegis
-      Mnemosyne.aegis
+      state = Mnemosyne.aegis.dup
+      tags = state[:tags]
+      state[:tags] = tags.is_a?(String) ? tags.split(',').map(&:strip) : Array(tags)
+      state[:notes] = Mnemosyne.recall_aegis_notes
+      state
     when 'notes'
       Mnemosyne.recall_aegis_notes(max_tokens: args['max_tokens'], max_content_length: args['max_content_length'])
+    when 'agenda'
+      Mnemosyne::AethernautManifest.agenda(status: args['status'], limit: args['limit'])
     when 'update', 'unveil'
-      Mnemosyne.unveil_aegis(
-        summary: args['summary'],
-        tags: args.fetch('tags', []),
-        temperature: args.fetch('temperature', 1.0),
-        thinking: args['thinking'],
-        working_dir: args['working_dir']
-      )
+      opts = {}
+      opts[:summary] = args['summary'] if args.key?('summary')
+      opts[:tags] = args['tags'] if args.key?('tags')
+      opts[:temperature] = args['temperature'] if args.key?('temperature')
+      opts[:thinking] = args['thinking'] if args.key?('thinking')
+      opts[:working_dir] = args['working_dir'] if args.key?('working_dir')
+      Mnemosyne.unveil_aegis(**opts)
       { ok: true, aegis: Mnemosyne.aegis }
     else
       { error: "Unknown aegis action: #{args['action']}" }
+    end
+  end
+
+  # The Gist Bus control surface: broadcast a message into every relevant flow's
+  # conduit (or one companion's), and read the live flow society. Runs inline
+  # (control command) so a broadcast reaches queued flows even mid-computation.
+  def handle_gist(args)
+    case args['action']
+    when 'broadcast', 'announce'
+      content = args['content'].to_s
+      return { error: 'gist broadcast: no content' } if content.strip.empty?
+
+      entry = GistBus.broadcast(content: content, author: args.fetch('author', 'user'),
+                                target: args['target'])
+      { ok: true, broadcast: entry }
+    when 'running', 'flows'
+      GistBus.running.map { |f| gist_flow_view(f) }
+    when 'broadcasts'
+      GistBus.broadcasts.map do |m|
+        { id: m[:id], at: m[:at], author: m[:author], target: m[:target], content: m[:content] }
+      end
+    else
+      { error: "Unknown gist action: #{args['action']}" }
     end
   end
 
@@ -617,6 +735,43 @@ class StandaloneDaemon
   end
 
   private
+
+  # The public silhouette of a live flow for the Swift side — never its tool
+  # bodies or reasoning, only who/when/what (the Aegis summary).
+  def gist_flow_view(flow)
+    { id: flow[:id], kind: flow[:kind], label: flow[:label], companion: flow[:companion],
+      started_at: flow[:started_at].iso8601, aegis: flow[:aegis] }
+  end
+
+  # Classify a queued request into a Gist Bus flow label + companion key, so
+  # sibling flows see *who* is running without guessing. Companion turns carry
+  # their own key (for broadcast filtering); everything else is the main agent.
+  def flow_metadata(request)
+    args = request['arguments'] || {}
+    case request['command']
+    when 'companion'
+      key = (args['name'] || args['companion']).to_s
+      { kind: :companion, label: companion_display(key), companion: key }
+    when 'oracle', 'chat', 'conjuration'
+      key = (args['companion'] || args['name']).to_s
+      if key && !key.empty?
+        { kind: :companion, label: companion_display(key), companion: key }
+      elsif args['active_companions'].to_a.any?
+        { kind: :oracle, label: 'Pythia (conclave)', companion: nil }
+      else
+        { kind: :oracle, label: 'Pythia', companion: nil }
+      end
+    when 'execute_task', 'evaluate_task', 'seal_run'
+      { kind: :task, label: 'Magnum Opus', companion: nil }
+    else
+      { kind: :oracle, label: 'Pythia', companion: nil }
+    end
+  end
+
+  def companion_display(key)
+    return 'Pythia' if key.to_s.strip.empty?
+    defined?(CompanionPrograms) ? CompanionPrograms.display_name(key) : key.to_s
+  end
 
   def symbolize_keys(hash)
     hash.each_with_object({}) { |(k, v), h| h[k.to_sym] = v }

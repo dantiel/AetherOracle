@@ -397,8 +397,13 @@ class Oracle
       aegis_notes = context.dig :extra_context, :aegis_notes
       aegis_notes = if aegis_notes.present?
         aegis_notes.map!{ |note| note.to_s_no_quotes }
-        "AEGIS NOTES: #{aegis_notes.join "\n------\n"}" 
-      end      
+        "AEGIS NOTES: #{aegis_notes.join "\n------\n"}"
+      end
+
+      # The live flow society: running siblings + global broadcasts. Rendered
+      # near the Aegis orientation so the agent weighs "what is happening now"
+      # alongside "where I am and who I am".
+      concurrent_gist = context.dig :extra_context, :concurrent_gist
       
       system_prompt = [
         (reasoning ? REASONING_PROMPT : SYSTEM_PROMPT),
@@ -406,6 +411,7 @@ class Oracle
         project_summary,
         aegis_notes,
         aegis_orientation,
+        concurrent_gist,
         hermetic_manifest
       ].compact.join "\n\n=======\n\n"
 

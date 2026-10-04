@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'tiktoken_ruby'
+require_relative 'gist_bus'
 require_relative '../mnemosyne/mnemosyne'
 require_relative '../instrumentarium/metaprogramming_utils'
 require_relative '../instrumentarium/prima_materia'
@@ -84,11 +85,21 @@ module Coniunctio
       end
 
       ephemeral = params[:ephemeral]
+      # The Gist Bus: running sibling flows + broadcasts weave into this turn's
+      # conduit. Ephemeral one-shots (flash conjuration) stay silent — they must
+      # never inhale the live flow society, mirroring how they skip Aegis/manifest.
+      flow = Thread.current[:aether_flow]
+      concurrent_gist = if flow && !ephemeral
+                          GistBus.conduit_block(exclude_id: flow[:id], project: flow[:project],
+                                                companion: flow[:companion])
+                        end
+
       ctx = { history:       prepend_summaries(history),
               extra_context: build_extra_context(attachments, project_summary, aegis_notes,
-                                                 params[:context], ephemeral:)
+                                                  params[:context], ephemeral:)
                   .merge(flash_auto: params[:flash_auto],
-                         temperature: params[:temperature]) }
+                         temperature: params[:temperature],
+                         concurrent_gist: concurrent_gist) }
 
       # Update aegis orientation with first attachment if available
       first_attachment = attachments.first

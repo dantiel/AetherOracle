@@ -89,7 +89,10 @@ class Mnemosyne
           aegis.compact!
           aegis[:working_dir] ||= Mnemosyne.aegis[:working_dir] # Preserve existing working_dir
           Mnemosyne.aegis.merge! aegis
-          Mnemosyne.save_aegis_state(**aegis)
+          # Persist the FULL merged state, not the delta. Partial updates
+          # (e.g. only temperature) must not wipe summary/tags on the next
+          # restore — the delta-only save was the source of "reload empties it".
+          Mnemosyne.save_aegis_state(**Mnemosyne.aegis)
 
           recall_aegis_notes
         end
@@ -139,6 +142,14 @@ class Mnemosyne
           notes
         end
 
+
+        # Pythia's agenda — the Aethernaut's Manifest surfaced through Aegis.
+        # The voice's schedule IS the oracle's orientation: companion intentions
+        # act polymorphically while Aegis holds the course. Reads the manifest
+        # without mutating it (pending + active intentions, priority-ordered).
+        def agenda(status: AethernautManifest::ACTIVE_STATUSES, limit: nil)
+          AethernautManifest.agenda(status: status, limit: limit)
+        end
 
 
     end

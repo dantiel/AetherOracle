@@ -13,6 +13,7 @@ module AetherOracle
     SCAN_RANGE = (4550..4610).freeze
     HEARTBEAT_PATH = '/aether/heartbeat'.freeze
     INVOKE_PATH = '/aether/invoke'.freeze
+    MANIFEST_PATH = '/aether/manifest'.freeze
     CONNECT_TIMEOUT = 2
     READ_TIMEOUT = 180
 
@@ -47,7 +48,8 @@ module AetherOracle
           busy: info[:busy] || info['busy'] || false,
           version: info[:version] || info['version'],
           path: info[:path] || info['path'],
-          capabilities: info[:capabilities] || info['capabilities'] || []
+          capabilities: info[:capabilities] || info['capabilities'] || [],
+          agenda_count: info[:agenda_count] || info['agenda_count'] || 0
         }
       end
     end
@@ -70,10 +72,10 @@ module AetherOracle
         exit 1
       end
 
-      puts format('%-6s %-32s %-10s %-8s', 'PORT', 'NAME', 'BUSY', 'VERSION')
-      puts '-' * 66
+      puts format('%-6s %-32s %-6s %-8s %-6s', 'PORT', 'NAME', 'BUSY', 'VERSION', 'AGENDA')
+      puts '-' * 64
       list.each do |p|
-        puts format('%-6d %-32s %-10s %-8s', p[:port], p[:name], p[:busy] ? 'yes' : 'no', p[:version] || '?')
+        puts format('%-6d %-32s %-6s %-8s %-6d', p[:port], p[:name], p[:busy] ? 'yes' : 'no', p[:version] || '?', p[:agenda_count].to_i)
       end
     end
 
@@ -137,6 +139,78 @@ module AetherOracle
       exit 1
     end
 
+    # Hoist a peer's freshly-updated manifest (the Aegis agenda) — the sails.
+    def fetch_manifest(args)
+      peer = args.first
+      if peer.nil?
+        warn 'Usage: aetheroracle manifest <peer>'
+        exit 1
+      end
+      target = find_peer(peer)
+      if target.nil?
+        warn "No peer found: #{peer}"
+        exit 1
+      end
+      info = http_get(target[:port], MANIFEST_PATH)
+      if info.nil?
+        warn "No manifest on #{peer}"
+        exit 1
+      end
+      items = info[:manifest] || info['manifest'] || []
+      puts "🧭 #{info[:name] || peer} — Pythia's Agenda (#{items.size} intentions, #{info[:pending]} pending)"
+      puts '────────────────────────────────────────────'
+      if items.empty?
+        puts '(the manifest is empty — the course is clear)'
+      else
+        items.each do |i|
+          status = i[:status] == 'active' ? '▶' : '•'
+          puts "#{status} #{i[:glyph]} ##{i[:id]} [#{i[:kind]}] #{i[:title]}  (aspect: #{i[:aspect]}, prio: #{i[:priority]})"
+        end
+      end
+    end
+
+    # Sign an intention into a peer's manifest — inscribe a new sailor.
+    def sign_manifest(args)
+      if args.empty?
+        warn 'Usage: aetheroracle sign <peer> <kind> "intention"'
+        exit 1
+      end
+      peer = args.shift
+      kind = args.shift || 'suggestion'
+      title = args.join(' ').strip
+      if title.empty?
+        warn 'No intention given. Usage: aetheroracle sign <peer> <kind> "intention"'
+        exit 1
+      end
+      target = find_peer(peer)
+      if target.nil?
+        warn "No peer found: #{peer}"
+        exit 1
+      end
+      uri = URI("http://127.0.0.1:#{target[:port]}#{MANIFEST_PATH}")
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = CONNECT_TIMEOUT
+      http.read_timeout = READ_TIMEOUT
+      req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/json')
+      req.body = { kind: kind, title: title, from_context: 'aetheroracle-cli' }.to_json
+      res = http.request(req)
+      unless res.code.to_i == 200
+        warn "sign failed: HTTP #{res.code}"
+        exit 1
+      end
+      body = JSON.parse(res.body, symbolize_names: true)
+      if body[:ok]
+        i = body[:intention] || {}
+        puts "Signed ##{i[:id]} [#{i[:kind]}] #{i[:glyph]} into #{target[:name] || peer}'s agenda"
+      else
+        warn "sign failed: #{body[:error]}"
+        exit 1
+      end
+    rescue StandardError => e
+      warn "sign failed: #{e.message}"
+      exit 1
+    end
+
     def run(argv)
       command = argv.shift
       case command
@@ -146,6 +220,10 @@ module AetherOracle
         probe_heartbeat(argv)
       when 'invoke', 'ask-peer', 'link'
         invoke_peer(argv)
+      when 'manifest', 'pull'
+        fetch_manifest(argv)
+      when 'sign', 'push'
+        sign_manifest(argv)
       when 'help', '-h', '--help', nil
         print_help
       else
@@ -178,6 +256,8 @@ module AetherOracle
           config                     show configuration
           context                    show / create / switch the active context
           task <action>              task ledger (list / show <id> / create <title>)
+          agenda                     show the local Aethernaut's Manifest (Pythia's agenda)
+          intent add|take|done       act on the local manifest
           veil                       check, configure, and repair Aether setup
           logs                       tail the tagged log stream
 

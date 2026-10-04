@@ -88,6 +88,27 @@ aether veil --edit      # write the default if missing, then open it in your edi
   precompiled `x64-mingw-ucrt` / `x86_64-darwin` / `linux` binaries at the
   pinned ranges — no Rust, no source build.
 
+## Pythia's agenda — the Aethernaut's Manifest
+
+Companion suggestions are not throwaway popovers. They become **intentions**,
+signed into the **Aethernaut's Manifest** (the ship's log of the *Argo*) — the
+intention queue that **Aegis** holds as Pythia's agenda. One queue, many shapes:
+each intention carries a `kind`, and each kind acts **polymorphically**.
+
+| kind | glyph | resolves to |
+|---|---|---|
+| `suggestion` | ✨ | surfaced suggestion |
+| `directive` | 🎯 | execution (tool / oracle) |
+| `recovery` | 🪡 | one-click reweave (`recover_last_intent`) |
+| `ritual` | 🔮 | seal / task run (`seal_run`) |
+| `conjuration` | 🌀 | divination |
+| `insight` | 💠 | a Mnemosyne note |
+
+Daemon commands (framed JSON): `agenda`, `intent`, `intent_take`, `intent_act`,
+`intent_done`, `intent_dismiss`, `intent_promote`. CLI: `aetheroracle agenda` and
+`aetheroracle intent add|take|done|dismiss`. The full Pythia prompt lives in
+`ruby/oracle/aethernaut_manifest.prompt.md`.
+
 ## Structure
 
 ```

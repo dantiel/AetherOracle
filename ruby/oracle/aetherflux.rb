@@ -118,6 +118,10 @@ class Aetherflux
       prelude_logs = (arts[:prelude] || []).map do |t|
         { type: 'prelude', data: Scriptorium.html_with_syntax_highlight(t.to_s) }
       end
+      # Companion suggestions become intentions: sign them into the Aethernaut's
+      # Manifest so Aegis holds them as Pythia's agenda (aspect-driven aetheric
+      # engineering — one queue, many polymorphic shapes).
+      sign_suggestions_into_manifest(companion_suggestions)
       # Collect `say`/`_ask` info messages into the chat-flow logs.
       logs = prelude_logs + collect_say_logs(tool_results)
 
@@ -189,6 +193,34 @@ class Aetherflux
       CompanionPrograms.release(previous_aegis) if previous_aegis
     end
 
+
+    # Sign each companion suggestion into the Aethernaut's Manifest. Aspect is
+    # resolved from the glyph (owl/kitsune/phoenix/…); unknown glyphs fall back
+    # to the aegis aspect. Best-effort: a manifest write must never fail a turn.
+    def sign_suggestions_into_manifest(suggestions)
+      return if suggestions.nil? || suggestions.empty?
+      return unless defined?(Mnemosyne::AethernautManifest)
+
+      aspect_by_glyph = (defined?(COMPANION_PERSONALITIES) ? COMPANION_PERSONALITIES : {})
+                        .each_with_object({}) { |(key, p), h| h[p[:glyph]] = key }
+
+      Array(suggestions).each do |s|
+        glyph = s[:glyph].to_s
+        aspect = aspect_by_glyph[glyph] || :aegis
+        begin
+          Mnemosyne::AethernautManifest.enqueue(
+            kind: :suggestion,
+            aspect: aspect,
+            glyph: glyph,
+            title: s[:prompt].to_s,
+            body: s[:prompt].to_s,
+            source: 'companion'
+          )
+        rescue StandardError
+          nil
+        end
+      end
+    end
 
     def channel_oracle_conjuration(params, tools:, context: nil, timeout: nil)
       start_time = Time.now

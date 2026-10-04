@@ -8,7 +8,7 @@ module AetherOracle
   module CLI
     BRAIN_COMMANDS = %w[ask chamber dialog talk server config context task logs repl veil
                         read cat inspect ov write new mv rename files ast grep notes mem
-                        note history hist search find aegis seal seals].freeze
+                        note history hist search find aegis seal seals agenda intent].freeze
 
     def self.run(argv)
       command = argv.first

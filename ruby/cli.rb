@@ -43,6 +43,8 @@ class ÆtherCodexCLI
     when 'config'                      then config_mode
     when 'context'                     then context_mode
     when 'task'                        then task_mode
+    when 'agenda'                      then agenda_mode
+    when 'intent'                      then intent_mode
     when 'logs'                        then logs_mode
     when 'repl'                        then chamber_mode
     when 'veil'                        then veil_mode
@@ -324,6 +326,60 @@ class ÆtherCodexCLI
     end
   end
 
+  def agenda_mode
+    items = Mnemosyne.agenda
+    if items.empty?
+      puts "The Aethernaut's Manifest is empty — the course is clear."
+      return
+    end
+
+    puts "Pythia's Agenda — the Aethernaut's Manifest"
+    puts "────────────────────────────────────────────"
+    items.each do |i|
+      status = i[:status] == 'active' ? '▶' : '•'
+      puts "#{status} #{i[:glyph]} ##{i[:id]} [#{i[:kind]}] #{i[:title]}  (aspect: #{i[:aspect]}, prio: #{i[:priority]})"
+    end
+  end
+
+  def intent_mode
+    action = ARGV.shift || 'list'
+
+    case action
+    when 'list'
+      agenda_mode
+    when 'add', 'suggest'
+      kind = ARGV.shift || 'suggestion'
+      title = ARGV.join(' ').strip
+      if title.empty?
+        puts "Usage: aetheroracle intent add [kind] \"intention\""
+        puts "  kinds: suggestion, directive, recovery, ritual, conjuration, insight"
+        return
+      end
+      intent = Mnemosyne.enqueue_intent(kind: kind, title: title, source: 'cli')
+      puts "Signed into the manifest as ##{intent[:id]} [#{intent[:kind]}] #{intent[:glyph]}"
+    when 'take'
+      intent = Mnemosyne::AethernautManifest.take
+      if intent
+        act = Mnemosyne::AethernautManifest.act(intent)
+        puts "Taking ##{intent[:id]} #{intent[:glyph]} #{intent[:title]}"
+        puts "Resolves to: #{act[:type]} → #{act[:action]}"
+      else
+        puts "The manifest is empty."
+      end
+    when 'done'
+      id = ARGV.shift
+      Mnemosyne.intent_complete(id.to_i)
+      puts "Intention ##{id} completed."
+    when 'dismiss'
+      id = ARGV.shift
+      Mnemosyne.intent_dismiss(id.to_i)
+      puts "Intention ##{id} dismissed."
+    else
+      puts "Unknown intent action: #{action}"
+      puts "Available: list, add [kind] \"title\", take, done <id>, dismiss <id>"
+    end
+  end
+
   def logs_mode
     action = ARGV.shift
     require_relative 'oracle/log_viewer'
@@ -385,6 +441,8 @@ class ÆtherCodexCLI
     puts "  task show <id>   Show task details"
     puts "  task create      Create a new task"
     puts "  task execute <id> Execute a task"
+    puts "  agenda           Show Pythia's agenda (the Aethernaut's Manifest)"
+    puts "  intent add       Sign an intention into the manifest"
     puts "  help             Show this help"
     puts
     puts "Developer toolbelt (mirrors the oracle's own instruments):"

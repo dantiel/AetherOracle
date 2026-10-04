@@ -137,6 +137,46 @@ module AetherLink
       end
     end
 
+    # Hoist a peer's Aethernaut's Manifest — the freshly-updated Aegis agenda.
+    # Returns { name:, count:, pending:, manifest:[...], updated_at: } or nil.
+    def manifest(context_name, status: nil, limit: nil)
+      discover! if @known_contexts.empty?
+      ctx = lookup(context_name)
+      if ctx.nil?
+        discover!
+        ctx = lookup(context_name)
+      end
+      ctx or return nil
+
+      qs = []
+      qs << "status=#{Array(status).join(',')}" if status
+      qs << "limit=#{limit}" if limit
+      path = '/aether/manifest'
+      path = "#{path}?#{qs.join('&')}" unless qs.empty?
+
+      uri = URI("http://127.0.0.1:#{ctx[:port]}#{path}")
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.open_timeout = CONNECT_TIMEOUT
+      http.read_timeout = READ_TIMEOUT
+      res = http.get(uri.request_uri)
+      return nil unless res.code.to_i == 200
+
+      JSON.parse(res.body, symbolize_names: true)
+    rescue StandardError
+      mark_stale(context_name)
+      nil
+    end
+
+    # Sign an intention into a peer's manifest — the æther inscribes a new
+    # sailor into the shared course.
+    def sign_manifest(context_name, kind: 'suggestion', title:, aspect: nil,
+                      body: nil, action: nil, payload: {}, priority: 0,
+                      from_context: own_name)
+      query(context_name, '/aether/manifest',
+            { kind: kind, title: title, aspect: aspect, body: body, action: action,
+              payload: payload, priority: priority, from_context: from_context })
+    end
+
     # Mark a context as stale (unreachable) — retried on next discover!
     def mark_stale(name)
       ctx = @known_contexts[name]
