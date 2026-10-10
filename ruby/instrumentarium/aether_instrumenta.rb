@@ -29,17 +29,27 @@ module AetherInstrumenta
   EXTENSION = '*.rb'
   DIRECTORY = '.aether'
 
+  # Basenames that are never project instruments — diagnostics, probes, tests
+  # and specs. A stray `.aether/hold_probe.rb` (a manual diagnostic) would
+  # otherwise be `load`ed at boot and could block on a loop or spawn daemons,
+  # wedging the whole brain before the "ready" frame is ever emitted.
+  NON_INSTRUMENT_BASENAME = /(^|_)(probe|test|spec|diag|debug)(_|\.|$)/i
+
   module_function
 
   def directory(root = CONFIG.project_root)
     File.join(root, DIRECTORY)
   end
 
+  def instrument_file?(basename)
+    !basename.match?(NON_INSTRUMENT_BASENAME)
+  end
+
   def discover(root = CONFIG.project_root)
     dir = directory(root)
     return [] unless File.directory?(dir)
 
-    Dir.glob(File.join(dir, EXTENSION)).sort
+    Dir.glob(File.join(dir, EXTENSION)).select { |f| instrument_file?(File.basename(f)) }.sort
   end
 
   # Load every discovered instrumenta file. Returns a boot report:
