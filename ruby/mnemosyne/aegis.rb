@@ -114,14 +114,16 @@ class Mnemosyne
 
 
 
-        def recall_aegis_notes(max_tokens: nil, max_content_length: nil)
+        # The recall depth is the assembler's one exposed knob: how many
+        # Mnemosyne notes the orientation conveys (`limit`).
+        def recall_aegis_notes(max_tokens: nil, max_content_length: nil, limit: 8)
           tags = []
           unless Mnemosyne.aegis.nil?
             tags = Mnemosyne.aegis[:tags] unless Mnemosyne.aegis[:tags].nil?
             tags = Mnemosyne.aegis[:summary]&.gsub(' ', ',') if tags.empty?
           end
           tags = tags.split ',' if tags.is_a? String
-          notes = Mnemosyne.recall_notes(tags&.join(' '), limit: 8, max_content_length: max_content_length)
+          notes = Mnemosyne.recall_notes(tags&.join(' '), limit: limit, max_content_length: max_content_length)
 
           # Apply token limit if provided
           unless max_tokens.nil?

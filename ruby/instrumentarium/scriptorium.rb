@@ -166,8 +166,10 @@ module Scriptorium
         original_hunk_lines = []
         modified_hunk_lines = []
         unless path.nil?
-          line = line.gsub(/@@ -([0-9]+),([0-9]+) \+([0-9]+),([0-9]+) @@/,
-                           "<file path=\"#{path}\" line=\"\\3\">@@ -\\1,\\2 +\\3,\\4 @@</file>")
+          encoded = CGI.escape(path.to_s).gsub('+', '%20')
+          line = line.gsub(/@@ -([0-9]+),([0-9]+) \+([0-9]+),([0-9]+) @@/) do
+            "<a href=\"aethercodex://open?path=#{encoded}&line=#{$3}\">@@ -#{$1},#{$2} +#{$3},#{$4} @@</a>"
+          end
         end
 
         out += "<span class=\"info\">#{line.strip}</span>\n<div class=\"hunk-content\">"

@@ -1,0 +1,12 @@
+{
+  "description": "Fixture manifest for Artificer.extract_instrumenta_from_content tests",
+  "patterns": [
+    "json_markdown_fenced",
+    "xml_invoke_blocks",
+    "inline_tool_calls_key",
+    "inline_json_array",
+    "nested_brace_matching",
+    "edge_cases"
+  ],
+  "version": "1.0.0"
+}

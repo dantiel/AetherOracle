@@ -80,7 +80,9 @@ class HermeticExecutionDomain
       return block.call if timeout.nil? || timeout <= 0 || timeout >= 1_000_000
 
       carry = {}
-      %i[aether_sink aether_request_id aether_tool_uuid paused].each do |key|
+      %i[aether_sink aether_request_id aether_tool_uuid paused
+         aether_silent aether_task_runner aether_task_step
+         aether_task_tool_sink aether_task_tool_args].each do |key|
         carry[key] = Thread.current[key] if Thread.current.key?(key)
       end
 

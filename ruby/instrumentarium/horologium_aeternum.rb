@@ -69,6 +69,42 @@ module HorologiumAeternum
     # Ephemeral turns (flash conjuration) breathe silently: the flag suppresses
     # every status frame so a one-shot never leaks into Pythia's shared stream.
     return if Thread.current[:aether_silent]
+    # A Magnum Opus step's tool/file/oracle/CLI telemetry must never reach
+    # Pythia's transcript. But the ⚗️ panel needs the tool calls *live*, so we
+    # re-tag tool frames as `task_*` (Pythia ignores task_*, the panel catches
+    # them) and persist each completed call into the ledger incrementally.
+    if Thread.current[:aether_task_runner] && !type.to_s.start_with?('task_')
+      case type.to_s
+      when 'tool_starting'
+        uuid ||= Thread.current[:aether_tool_uuid]
+        if uuid
+          Thread.current[:aether_task_tool_args] ||= {}
+          Thread.current[:aether_task_tool_args][uuid] = data[:args]
+        end
+        name = data[:tool] || data[:name]
+        begin
+          # Append an in-flight placeholder so the ⚗️ panel shows the instrument
+          # the instant the model starts it — not only once it completes.
+          Thread.current[:aether_task_tool_sink]&.call(name, data[:args], nil, nil, done: false, uuid: uuid)
+        rescue StandardError => e
+          warn "Task tool start sink failed: #{e.message}"
+        end
+        send 'status', "task_#{type}", data.merge(task_id: Thread.current[:aether_task_runner]), uuid: uuid
+      when 'tool_completed'
+        uuid ||= Thread.current[:aether_tool_uuid]
+        args = Thread.current[:aether_task_tool_args]&.delete(uuid)
+        # Artificer reports the instrument as `name:`; Horologium's own helper
+        # uses `tool:`. Accept both so the sink always gets the real name.
+        name = data[:tool] || data[:name]
+        begin
+          Thread.current[:aether_task_tool_sink]&.call(name, args, data[:result], data[:execution_time], done: true, uuid: uuid)
+        rescue StandardError => e
+          warn "Task tool sink failed: #{e.message}"
+        end
+        send 'status', "task_#{type}", data.merge(task_id: Thread.current[:aether_task_runner]), uuid: uuid
+      end
+      return
+    end
     # Bridge to the terminal stream when a CLI chamber is driving the turn, so
     # the interactive REPL sees the same telemetry the web UI receives.
     Thread.current[:aether_terminal_stream]&.send_status(type, data, uuid:)
@@ -1085,10 +1121,19 @@ module HorologiumAeternum
   end
 
 
+  # Erzeugt den kanonischen Markdown-Datei-Link. Der Parser im Editor ist
+  # tolerant gegenüber Pfad-/Zeilen-/Spaltenvarianten — hier wird die saubere
+  # Form `aethercodex://open?path=…&line=…&column=…` erzeugt.
   def self.create_file_link(file, display_name = nil, line = nil, column = nil)
-    line = " line=\"#{line}\"" if line
-    column = " column=\"#{column}\"" if column
-    "<file path=\"#{file}\"#{line}#{column}>#{display_name || file}</file>"
+    params = ["path=#{uri_encode(file)}"]
+    params << "line=#{line}" if line
+    params << "column=#{column}" if column
+    label = display_name && !display_name.to_s.empty? ? display_name : file
+    "[#{label}](aethercodex://open?#{params.join('&')})"
+  end
+
+  def self.uri_encode(value)
+    CGI.escape(value.to_s).gsub('+', '%20')
   end
 
 

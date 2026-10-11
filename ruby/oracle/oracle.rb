@@ -224,7 +224,13 @@ class Oracle
           answer: answer
         }
 
-        # Check for pause signal — cooperative interruption
+        # ⏸ The user's hand: a held turn waits *here*, at the step boundary — the
+        # messages stay live and the stream stays open, so ▶ continues this very
+        # chapter and a word woven in during the hold is already in `messages`
+        # when the next step departs. A no-op unless somebody held the turn.
+        Thread.current[:pause_gate]&.arm(messages)&.wait
+
+        # Unwind signal (context switch, ⏹, watchdog) — end the chapter cleanly.
         if Thread.current[:paused]
           return { __divine_interrupt: true, __reason: :paused }
         end

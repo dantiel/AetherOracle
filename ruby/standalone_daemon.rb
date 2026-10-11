@@ -123,6 +123,110 @@ require_relative 'textmate_tokenizer'
 # PipeStream adapts HorologiumAeternum's WebSocket-style sink to STDOUT frames.
 # HorologiumAeternum.send builds a JSON string {"method":...,"result":{...}}
 # and calls @websocket.send(payload). We re-frame it as a typed stream event.
+# The held thread (⏸). A user pause is *not* an interrupt: the Oracle stops at
+# its next step boundary and waits — the worker thread, the live messages, the
+# stream and the msg_uuid all stay alive, so ▶ continues this very chapter and a
+# word woven in during the hold is already in `messages` when the next step
+# departs. Distinct from `:paused`, which *unwinds* the turn so a context switch
+# can rebase onto another project.
+#
+# One writer each: the worker waits, the control thread (⏸ / ▶ / ⏹ / weave)
+# signals. Frames are never written while the gate lock is held, so the lock
+# order (gate → frame) is consistent with every other emitter.
+class TurnGate
+  # While held the turn whispers into the stream now and then. Swift's watchdog
+  # only declares a daemon wedged after a fully *silent* window, so a long hold
+  # must keep breathing; the frame is otherwise ignored — it exists to prove life.
+  HEARTBEAT_INTERVAL = 15.0
+
+  def initialize(beat: nil)
+    @mutex = Mutex.new
+    @cv = ConditionVariable.new
+    @held = false
+    @aborted = false
+    @messages = nil
+    @pending = []
+    @beat = beat
+  end
+
+  # The worker hands the gate the live conversation at every boundary. The loop
+  # mutates that array in place (`messages.replace …`), so a later weave from the
+  # control thread reaches the very next API call. A word woven in *before* the
+  # first boundary (the turn was still assembling its context) is flushed here,
+  # so a hold is never lost to the gap between ⏸ and the first step.
+  def arm(messages)
+    @mutex.synchronize do
+      @messages = messages
+      @pending.each { |text| messages << { role: 'user', content: text } }
+      @pending.clear
+    end
+    self
+  end
+
+  def hold
+    @mutex.synchronize do
+      @held = true
+      @aborted = false
+    end
+    self
+  end
+
+  def held?
+    @mutex.synchronize { @held }
+  end
+
+  # Weave the user's word into the held chapter. Returns the new message count,
+  # or nil when nothing is held. Before the first boundary the word waits in
+  # `@pending` and lands with the next `arm`.
+  def inject(text)
+    @mutex.synchronize do
+      return nil unless @held
+      unless @messages
+        @pending << text.to_s
+        return 0
+      end
+      @messages << { role: 'user', content: text.to_s }
+      @messages.size
+    end
+  end
+
+  # ▶ — release the hold; the loop resumes with whatever has been woven in.
+  def release
+    @mutex.synchronize do
+      was = @held
+      @held = false
+      @aborted = false
+      @cv.broadcast
+      was
+    end
+  end
+
+  # ⏹ / context switch — tear the wait so the pending `:paused` unwind is actually
+  # reached and the chapter ends.
+  def abort!
+    @mutex.synchronize do
+      was = @held
+      @held = false
+      @aborted = true
+      @cv.broadcast
+      was
+    end
+  end
+
+  # Blocks while held. Called from the Oracle loop at every step boundary; a
+  # no-op (one mutex) when nobody held the turn.
+  def wait
+    @mutex.synchronize do
+      return :released unless @held
+      while @held
+        @cv.wait(@mutex, HEARTBEAT_INTERVAL)
+        @beat&.call if @held
+      end
+      @aborted ? :aborted : :released
+    end
+  end
+end
+
 class PipeStream
   def initialize(out = FRAME_IO)
     @out = out
@@ -150,16 +254,23 @@ class PipeStream
 end
 
 class StandaloneDaemon
+  # A held turn (⏸) whispers into the stream now and then: Swift's watchdog only
+  # declares a daemon wedged after a fully *silent* window, so a long hold must
+  # keep breathing. Pythia ignores the frame — it exists to prove life.
+  TURN_HEARTBEAT = -> { HorologiumAeternum.send_status('heartbeat', { held: true }) }
+
   # Commands that must stay responsive even while a heavy computation runs.
   # They execute on the main thread immediately; `interrupt` and
-  # `activate_context` additionally set the worker's cooperative pause flag.
+  # `activate_context` additionally set the worker's cooperative pause flag, and
+  # `pause_turn`/`resume_turn`/`weave_turn` are the user's hand on the live turn.
   # Control commands answer inline on the reader thread, so they stay responsive
   # while the single worker runs a heavy oracle turn. Only lightweight ledger
   # writes belong here — `execute_task`/`evaluate_task` must stay queued (they
   # own the worker), but `create_task` is a plain Mnemosyne insert and must never
   # wait behind a running computation: the UI's confirm has to answer at once.
   CONTROL_COMMANDS = %w[
-    ping activate_context interrupt aegis history get_note remove_note
+    ping activate_context interrupt pause_turn resume_turn weave_turn
+    aegis history get_note remove_note
     list_tasks create_task remove_task recall user_response
     seal_create seal_list seal_status seal_delegate
     task_detail tokenize
@@ -235,6 +346,8 @@ class StandaloneDaemon
         Thread.current[:paused] = false
         Thread.current[:aether_request_id] = request_id
         Thread.current[:aether_sink] = sink
+        # A fresh gate per turn: ⏸ holds *this* chapter, ▶ releases it, ⏹ tears it.
+        Thread.current[:pause_gate] = @worker_gate = TurnGate.new(beat: TURN_HEARTBEAT)
 
         # Gist Bus: register this turn as a live flow so sibling flows see its
         # public silhouette (who + when + Aegis summary, never its reasoning or
@@ -301,6 +414,8 @@ class StandaloneDaemon
           GistBus.end_flow(flow_id)
           Thread.current[:aether_flow] = nil
           Thread.current[:paused] = false
+          Thread.current[:pause_gate] = nil
+          @worker_gate = nil
           Thread.current[:aether_request_id] = nil
         end
       end
@@ -492,6 +607,8 @@ class StandaloneDaemon
                           workflow_type: args.fetch('workflow_type', 'full'))
     when 'execute_task'
       @engine.execute_task(args.fetch('id'))
+    when 'continue_task'
+      spawn_task_runner(args.fetch('id'), restart: args['restart'] ? true : false)
     when 'evaluate_task'
       @engine.evaluate_task(args.fetch('id'))
     when 'task_detail'
@@ -536,6 +653,14 @@ class StandaloneDaemon
     when 'activate_context'
       activate_context(args['path'].to_s)
 
+    # -- ⏸ / ▶ / weave — the user's hand on the running turn --
+    when 'pause_turn'
+      hold_turn
+    when 'resume_turn'
+      release_turn
+    when 'weave_turn'
+      weave_turn(args['text'])
+
     # -- Interrupt the in-flight Oracle computation --
     when 'interrupt'
       interrupt_computation
@@ -571,6 +696,24 @@ class StandaloneDaemon
     end
 
     Mnemosyne::SealLedger.seal_status(seal_id).merge(executed: executed)
+  end
+
+  # Launch a Magnum Opus task on its own thread and answer immediately, so the
+  # UI can run several tasks concurrently. Each runner drives the shared engine;
+  # SQLite I/O is serialized behind Mnemosyne's DB_LOCK while the oracle turns
+  # (the slow part) overlap. Telemetry flows through HorologiumAeternum's
+  # PipeStream, which is mutex-guarded and thread-safe.
+  def spawn_task_runner(task_id, restart: false)
+    Thread.new do
+      Thread.current.report_on_exception = true
+      begin
+        @engine.continue_task(task_id, restart: restart)
+      rescue StandardError => e
+        warn "[AETHER-DAEMON] task runner #{task_id} died: #{e.class}: #{e.message}"
+        warn(e.backtrace.join("\n")) if e.backtrace
+      end
+    end
+    { ok: true, id: task_id, started: true, restart: restart }
   end
 
   # Re-point the daemon at a different project root. The daemon is a singleton
@@ -666,10 +809,12 @@ class StandaloneDaemon
       state = Mnemosyne.aegis.dup
       tags = state[:tags]
       state[:tags] = tags.is_a?(String) ? tags.split(',').map(&:strip) : Array(tags)
-      state[:notes] = Mnemosyne.recall_aegis_notes
+      state[:notes] = Mnemosyne.recall_aegis_notes(limit: recall_depth(args))
       state
     when 'notes'
-      Mnemosyne.recall_aegis_notes(max_tokens: args['max_tokens'], max_content_length: args['max_content_length'])
+      Mnemosyne.recall_aegis_notes(max_tokens: args['max_tokens'],
+                                   max_content_length: args['max_content_length'],
+                                   limit: recall_depth(args))
     when 'agenda'
       Mnemosyne::AethernautManifest.agenda(status: args['status'], limit: args['limit'])
     when 'update', 'unveil'
@@ -684,6 +829,14 @@ class StandaloneDaemon
     else
       { error: "Unknown aegis action: #{args['action']}" }
     end
+  end
+
+  # The assembler's one exposed knob — how many notes the orientation carries.
+  # Defaults to the historical depth of 8; bounded so a stray value can never
+  # flood the context.
+  def recall_depth(args)
+    depth = args['limit'].to_i
+    depth.zero? ? 8 : depth.clamp(1, 40)
   end
 
   # The Gist Bus control surface: broadcast a message into every relevant flow's
@@ -731,7 +884,70 @@ class StandaloneDaemon
     context = args['context'] || {}
     context = context.merge(project_root: $project_root) unless context[:project_root] || context['project_root']
 
-    Aetherflux.channel_oracle_divination(params, tools: Instrumenta, context: context)
+    reply = Aetherflux.channel_oracle_divination(params, tools: Instrumenta, context: context)
+    normalize_held_reply(reply)
+  end
+
+  # A held (⏸) or torn (⏹ / context switch) turn returns the Oracle's divine
+  # interrupt signal instead of an answer. Normalize it into the one reply shape
+  # every other turn uses, flagged `held: true`, so Swift closes the chapter
+  # without rendering a phantom answer.
+  def normalize_held_reply(reply)
+    return reply unless reply.is_a?(Array)
+    signal = reply.first
+    return reply unless signal.is_a?(Hash) && signal[:__divine_interrupt]
+
+    {
+      status: :success,
+      response: {
+        answer: '', html: '', held: true,
+        reason: signal[:__reason].to_s,
+        companion_suggestions: [], logs: [], tool_results: [],
+        execution_time: 0, tool_call_count: 0
+      }
+    }
+  end
+
+  # ⏸ — hold the in-flight turn at its next step boundary. Not an interrupt: the
+  # turn keeps its thread, its messages and its stream, so ▶ continues the very
+  # same chapter and a woven word reaches the next step.
+  def hold_turn
+    gate = current_gate
+    return { held: false, note: 'no in-flight computation' } unless gate
+
+    gate.hold
+    { held: true, queued: @queue.size }
+  end
+
+  # ▶ — release a held turn; the loop resumes with whatever has been woven in.
+  def release_turn
+    gate = current_gate
+    return { released: false, held: false, note: 'no in-flight computation' } unless gate
+
+    { released: gate.release, held: gate.held? }
+  end
+
+  # ⏸ + a word: weave the user's addition into the held chapter *before* the next
+  # step and let it continue — the user's hand reaches the running turn instead of
+  # queueing behind it. No held thread (it closed first) → woven false, and the
+  # caller opens its own chapter with the word.
+  def weave_turn(text)
+    return { error: 'weave_turn: empty text' } if text.to_s.strip.empty?
+
+    gate = current_gate
+    return { woven: false, note: 'no held turn' } unless gate&.held?
+
+    woven = gate.inject(text)
+    gate.release
+    { woven: !woven.nil?, messages: woven, queued: @queue.size }
+  end
+
+  # The gate of the turn currently owned by the worker (nil between turns).
+  def current_gate
+    t = @worker_thread
+    return nil unless t && t.alive?
+
+    @worker_gate
   end
 
   private
@@ -761,7 +977,7 @@ class StandaloneDaemon
       else
         { kind: :oracle, label: 'Pythia', companion: nil }
       end
-    when 'execute_task', 'evaluate_task', 'seal_run'
+    when 'execute_task', 'continue_task', 'evaluate_task', 'seal_run'
       { kind: :task, label: 'Magnum Opus', companion: nil }
     else
       { kind: :oracle, label: 'Pythia', companion: nil }

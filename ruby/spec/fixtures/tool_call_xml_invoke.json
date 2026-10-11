@@ -1,0 +1,21 @@
+[
+  {
+    "description": "GLM-5 style XML invoke block",
+    "input": "I will check the file:\n<invoke name=\"read_file\">\n<parameter name=\"path\">config.rb</parameter>\n</invoke>\nThen proceed.",
+    "expected_count": 1,
+    "expected_tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "arguments": "{\"path\":\"config.rb\"}"
+        }
+      }
+    ]
+  },
+  {
+    "description": "Multiple XML invoke blocks",
+    "input": "<invoke name=\"run_command\">\n<parameter name=\"cmd\">grep -r pattern</parameter>\n</invoke>\n<invoke name=\"read_file\">\n<parameter name=\"path\">test.rb</parameter>\n<parameter name=\"line_numbers\">true</parameter>\n</invoke>",
+    "expected_count": 2
+  }
+]

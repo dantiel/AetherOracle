@@ -196,35 +196,22 @@ class Mnemosyne
             Mnemosyne.db.execute 'DELETE FROM tasks WHERE id = ?', [params[:id]]
             { ok: true }
           else # list
-            rows = Mnemosyne.db.execute 'SELECT * FROM tasks ORDER BY created_at DESC'
-            rows.map { |r| r.transform_keys!(&:to_sym) }
+            # Lightweight summary SELECT. The full row drags `step_results` and
+            # `tool_calls_json` — hundreds of KB on a completed task — which used
+            # to blow the old 1111-token cap and silently *drop* finished tasks
+            # from the ledger (a completed task with a large tool-call history
+            # simply vanished from the list). Every consumer of `:list` (Swift
+            # `listTasks`, the `list_tasks` instrument, CLI, ÆtherLink heartbeat)
+            # reads only summary fields, so return those and let nothing vanish.
+            rows = Mnemosyne.db.execute(
+              'SELECT id, title, plan, status, current_step, workflow_type, ' \
+              'parent_task_id, created_at, updated_at FROM tasks ORDER BY created_at DESC'
+            ).map { |r| r.transform_keys!(&:to_sym) }
 
             if params[:parent_task_id]
               rows = rows.filter { |task| params[:parent_task_id] == task[:parent_task_id] }
             end
 
-            max_tokens = 1111
-            token_count = 0
-            included_rows = []
-
-            rows.each do |row|
-              row_tokens = row.to_json.tok_len
-
-              if row_tokens > max_tokens
-                row[:message] = row[:message].to_s.gsub(/\n\s*```(\w*).*?\n\s*```\s*\n/m,
-                                                        '```\\1[CONTENT EXPIRED]```')
-                row_tokens = row.to_json.tok_len
-                next if row_tokens > max_tokens
-              end
-
-              break if token_count + row_tokens > max_tokens
-
-              included_rows << row
-              token_count += row_tokens
-            end
-
-            rows = included_rows
-            # puts "ROWS=#{rows}"
             rows
           end
         end

@@ -1,0 +1,17 @@
+[
+  {
+    "description": "Inline JSON with tool_calls key",
+    "input": "Here's the tool call: {\"tool_calls\": [{\"id\": \"inline_1\", \"type\": \"function\", \"function\": {\"name\": \"patch_file\", \"arguments\": \"{\\\"path\\\": \\\"app.rb\\\"}\"}}]}",
+    "expected_count": 1
+  },
+  {
+    "description": "Inline JSON array starting with tool object",
+    "input": "Executing: [{\"name\": \"read_file\", \"arguments\": \"{\\\"path\\\": \\\"spec.rb\\\"}\"}]",
+    "expected_count": 1
+  },
+  {
+    "description": "Nested JSON with escaped quotes in arguments",
+    "input": "Tool: {\"id\": \"t3\", \"type\": \"function\", \"function\": {\"name\": \"run_command\", \"arguments\": \"{\\\"cmd\\\": \\\"echo \\\\\\\"hello\\\\\\\"\\\"}\"}}",
+    "expected_count": 1
+  }
+]

@@ -795,18 +795,21 @@ class MagnumOpusEngine
       # `result` is truncated to keep the detail frame light; the full result stays
       # in `step_results` for the expanded phase view.
       tc_compact = if tc.respond_to?(:map)
-                     tc.map do |call|
-                       call = call.transform_keys(&:to_s) if call.respond_to?(:transform_keys)
-                       {
-                         name:           call['name'] || call[:name],
-                         args:           call['args'] || call[:args],
-                         result:         (call['result'] || call[:result]).to_s.truncate(400),
-                         execution_time: call['execution_time'] || call[:execution_time]
-                       }
-                     end
-                   else
-                     []
-                   end
+                      tc.map do |call|
+                        call = call.transform_keys(&:to_s) if call.respond_to?(:transform_keys)
+                        done = call['done'] || call[:done]
+                        done = true if done.nil?
+                        {
+                          name:           call['name'] || call[:name],
+                          args:           call['args'] || call[:args],
+                          result:         (call['result'] || call[:result]).to_s.truncate(400),
+                          execution_time: call['execution_time'] || call[:execution_time],
+                          done:           done
+                        }
+                      end
+                    else
+                      []
+                    end
       {
         index:            i,
         name:             name,
@@ -1114,39 +1117,20 @@ class MagnumOpusEngine
 
     update_state task_id, :active
 
-    # Start execution with current step
-    execute_task_internal(task_id, task[:current_step] || 0, workflow_type, max_steps)
+    # Resume-aware start point. A *pending* task starts from its stored step
+    # (usually 0). An *active* task that was interrupted mid-step carries
+    # `current_step` pointing at the INCOMPLETE step (execute_step advances it
+    # before the oracle call), so resuming from `current_step` would SKIP that
+    # step. `last_completed_step` derives the true resume point from the stored
+    # results instead — the interrupted phase re-runs.
+    resume_from = if 'pending' == task[:status]
+                    task[:current_step] || 0
+                  else
+                    last_completed_step(task_id, max_steps)
+                  end
 
-    # Re-fetch task state — execute_task_internal may have set :failed
-    task = @mnemosyne.get_task task_id
-    return if task && 'failed' == task[:status]
-
-    # Check if task is actually completed (all steps done)
-    current_step = self.current_step task_id
-    if current_step >= max_steps
-      # Task is truly completed - all steps executed
-      update_state task_id, :completed
-    else
-      # Task is not completed - just mark as active for next execution
-      update_state task_id, :active
-    end
-
-    # Dispatch pending sub-tasks — each inherits the parent's wisdom via shared context.
-    # Sub-tasks execute after the parent phase concludes (future: parallel agent dispatch).
-    execute_sub_tasks(task_id, 10)
-
-    # Broadcast task completion with duration
-    task = @mnemosyne.get_task task_id
-    if task && :completed == task[:status].to_sym
-      created_at = task[:created_at]
-      start_time = if created_at.is_a? String
-                     DateTime.parse(created_at).to_time.to_f
-                   else
-                     created_at || Time.now.to_f
-                   end
-      duration = Time.now.to_f - start_time
-      HorologiumAeternum.task_completed(duration, **task)
-    end
+    execute_task_internal(task_id, resume_from, workflow_type, max_steps)
+    finalize_task_run(task_id, max_steps)
   rescue MagnumOpusEngine::TaskStateError, MagnumOpusEngine::TaskCancelledError, Timeout::Error => e
     # TaskStateError and TaskCancelledError are expected control-flow exceptions — re-raise unchanged.
     # Timeout is transient — keep task active for retry.
@@ -1157,6 +1141,123 @@ class MagnumOpusEngine
     log_message task_id, "Task error: #{e.class} — #{e.message}"
     update_state task_id, :failed
     raise TaskStateError, "Task #{task_id} failed: #{e.message}"
+  end
+
+
+  # Resume a task that stopped (active/paused/failed) from its last clean step,
+  # or restart it from scratch. Pending tasks start from their stored step.
+  #
+  # `restart: true` re-runs the whole workflow from step 0 but keeps the stored
+  # history (results are overwritten per-step as each phase re-completes).
+  # `restart: false` re-winds to the last step that produced a clean result —
+  # a failed/interrupted step is re-run, not skipped.
+  def continue_task(task_id, restart: false)
+    task = @mnemosyne.get_task task_id
+    raise TaskStateError, "Task not found: #{task_id}" unless task
+
+    workflow_type = task[:workflow_type] || 'full'
+    max_steps = max_steps_for workflow_type
+
+    case task[:status]
+    when 'completed'
+      return { ok: true, id: task_id, status: 'completed', message: 'already completed' }
+    when 'cancelled'
+      raise TaskCancelledError, 'Task cancelled'
+    end
+
+    resume_from = if restart
+                    0
+                  elsif 'pending' == task[:status]
+                    task[:current_step] || 0
+                  else
+                    last_completed_step(task_id, max_steps)
+                  end
+
+    log_message task_id, "Continuing task #{task_id} from step #{resume_from} " \
+                         "(restart=#{restart}, status=#{task[:status]})"
+    update_state task_id, :active
+
+    execute_task_internal(task_id, resume_from, workflow_type, max_steps)
+    finalize_task_run(task_id, max_steps)
+  rescue MagnumOpusEngine::TaskStateError, MagnumOpusEngine::TaskCancelledError, Timeout::Error => e
+    log_message task_id, "Task timeout: #{e.message}" if e.is_a?(Timeout::Error)
+    raise e
+  rescue StandardError => e
+    log_message task_id, "Task error: #{e.class} — #{e.message}"
+    update_state task_id, :failed
+    raise TaskStateError, "Task #{task_id} failed: #{e.message}"
+  end
+
+
+  # Workflow-type → maximum alchemical steps (shared by execute/continue/detail).
+  def max_steps_for(workflow_type)
+    case workflow_type
+    when 'simple' then 3
+    when 'analysis' then 5
+    else WORKFLOW_STEPS
+    end
+  end
+
+
+  # Highest step index whose stored result is a *clean* completion — the true
+  # resume point. Interrupted/failed/retried steps are excluded so a continued
+  # task re-runs the phase that never finished instead of skipping it.
+  def last_completed_step(task_id, max_steps)
+    results = load_step_results task_id
+    last_clean = 0
+    (1..max_steps).each do |i|
+      plain = plain_step_result(results[i.to_s].to_s)
+      next if plain.empty?
+      next if failed_step_result? plain
+      last_clean = i
+    end
+    [[last_clean, 0].max, max_steps].min
+  end
+
+
+  # Strip the highlighted-HTML storage back to plain text for prefix detection.
+  def plain_step_result(raw)
+    raw.to_s.gsub(/<[^>]*>/, '')
+       .gsub('&lt;', '<').gsub('&gt;', '>').gsub('&amp;', '&')
+       .gsub('&quot;', '"').gsub('&#39;', "'").strip
+  end
+
+
+  # True when a stored step result is an error/rejection marker, not a clean
+  # phase narration. Mirrors the failure prefixes `task_detail` keys on.
+  def failed_step_result?(plain)
+    plain.start_with?('REJECTED:', 'ERROR', 'MAX_RETRIES_EXCEEDED',
+                      'NO_COMPLETION_SIGNAL', 'TIMEOUT:', 'CONTEXT_LENGTH_ERROR',
+                      'RATE_LIMIT_ERROR', 'NETWORK_ERROR', 'EMPTY_RESPONSE',
+                      'MEMORY_ERROR')
+  end
+
+
+  # Post-run bookkeeping shared by execute_task/continue_task: resolve the final
+  # status, dispatch sub-tasks, and broadcast completion with duration.
+  def finalize_task_run(task_id, max_steps)
+    task = @mnemosyne.get_task task_id
+    return if task && 'failed' == task[:status]
+
+    if current_step(task_id) >= max_steps
+      update_state task_id, :completed
+    else
+      update_state task_id, :active
+    end
+
+    execute_sub_tasks(task_id, 10)
+
+    task = @mnemosyne.get_task task_id
+    return unless task && :completed == task[:status].to_sym
+
+    created_at = task[:created_at]
+    start_time = if created_at.is_a? String
+                   DateTime.parse(created_at).to_time.to_f
+                 else
+                   created_at || Time.now.to_f
+                 end
+    duration = Time.now.to_f - start_time
+    HorologiumAeternum.task_completed(duration, **task)
   end
 
 
@@ -1473,14 +1574,41 @@ class MagnumOpusEngine
           debug "Message #{i} (#{msg[:role]}): #{msg[:content].to_s.length} characters"
         end
 
-        # Call oracle divination and capture the full response including tool calls
-        response, arts, tool_results = HermeticExecutionDomain.execute timeout: 1111 do
-          @aetherflux.channel_oracle_divination(
-            { system_prompt:, messages:, record: true, task_id: task_id, step_id: step_index },
-            tools:,
-            context: context,
-            timeout: 1111 # Extended timeout for implementation phases
-          )
+        # Call oracle divination and capture the full response including tool calls.
+        # The thread-local task-runner flag makes HorologiumAeternum keep only
+        # task_* frames on the shared stream — the step's own tool/file/oracle
+        # telemetry stays out of Pythia's transcript (it lives in the task ledger).
+        prev_task_runner = Thread.current[:aether_task_runner]
+        prev_task_step = Thread.current[:aether_task_step]
+        prev_task_sink = Thread.current[:aether_task_tool_sink]
+        prev_task_args = Thread.current[:aether_task_tool_args]
+        begin
+          Thread.current[:aether_task_runner] = task_id
+          Thread.current[:aether_task_step] = step_index
+          Thread.current[:aether_task_tool_args] = {}
+          # Live instrumenta ledger: every tool is upserted into the task's
+          # tool_calls_json *while* the step runs — an in-flight placeholder on
+          # `tool_starting`, its result + `done` on `tool_completed` — so the ⚗️
+          # panel redraws the phase's instruments in real time instead of only
+          # at step completion.
+          Thread.current[:aether_task_tool_sink] = lambda do |name, args, result, execution_time, done:, uuid: nil|
+            append_step_tool_call task_id, step_index,
+                                  name: name, args: args, result: result,
+                                  execution_time: execution_time, done: done, uuid: uuid
+          end
+          response, arts, tool_results = HermeticExecutionDomain.execute timeout: 1111 do
+            @aetherflux.channel_oracle_divination(
+              { system_prompt:, messages:, record: true, task_id: task_id, step_id: step_index },
+              tools:,
+              context: context,
+              timeout: 1111 # Extended timeout for implementation phases
+            )
+          end
+        ensure
+          Thread.current[:aether_task_runner] = prev_task_runner
+          Thread.current[:aether_task_step] = prev_task_step
+          Thread.current[:aether_task_tool_sink] = prev_task_sink
+          Thread.current[:aether_task_tool_args] = prev_task_args
         end
       rescue StandardError => e
         puts "DEBUG: Error calling Aetherflux.channel_oracle_divination: #{e.message}"
@@ -1747,6 +1875,45 @@ class MagnumOpusEngine
                 "Stored #{truncated_tool_calls.size} tool calls for step #{step_index} (#{step_name})"
     debug "Stored #{truncated_tool_calls.size} tool calls for step #{step_index} (#{step_name})"
   end
+
+
+ # Upsert a single tool call into the step's ledger entry the moment it starts
+ # or completes, so the ⚗️ panel can redraw the phase's instrumenta in real time
+ # — not only when the step finishes and store_step_tool_calls flushes the whole
+ # array. `tool_starting` writes an in-flight placeholder (done: false); the
+ # matching `tool_completed` (same uuid) merges in the result and marks it done.
+ def append_step_tool_call(task_id, step_index, name:, args: nil, result: nil, execution_time: nil, done: true, uuid: nil)
+   return if name.nil? || name.to_s.empty?
+
+   task = @mnemosyne.get_task task_id
+   return unless task
+
+   step_name = alchemical_phase_name(step_index)
+   parsed = @mnemosyne.safe_parse_json(task[:tool_calls_json], {})
+   current = parsed.is_a?(Hash) ? parsed.deep_symbolize_keys : {}
+   list = (current[step_name.to_sym] || current[step_name.to_s] || []).dup
+
+   entry = {
+     name:           name.to_s,
+     args:           args,
+     result:         result,
+     execution_time: execution_time,
+     done:           done
+   }
+   entry[:uuid] = uuid if uuid
+
+   # Match by the shared tool uuid so the completed call *updates* its in-flight
+   # placeholder instead of appending a duplicate "running" row.
+   idx = uuid && list.index { |c| (c[:uuid] || c['uuid']) == uuid }
+   if idx
+     list[idx] = list[idx].merge(entry)
+   else
+     list << entry
+   end
+
+   current[step_name.to_sym] = list
+   @mnemosyne.manage_tasks action: :update, id: task_id, tool_calls_json: current.to_json
+ end
 
 
   # Load tool calls for a specific step

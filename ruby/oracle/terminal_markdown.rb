@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rouge'
+require 'cgi'
 
 # ÆtherTerminalMarkdown -- renders Markdown to ANSI-colored terminal output.
 #
@@ -223,7 +224,7 @@ module ÆtherTerminalMarkdown
   end
 
   # Extract file references from markdown for the interactive navigator: every
-  # <file> tag plus markdown links that resolve to an existing file path.
+  # <file> tag plus markdown links (both aethercodex://open and bare paths).
   def extract_file_links(markdown)
     found = []
     markdown.to_s.scan(FILE_TAG_RE) do
@@ -237,6 +238,10 @@ module ÆtherTerminalMarkdown
     markdown.to_s.scan(/\[([^\]]+)\]\(([^)]+)\)/) do
       label = Regexp.last_match(1)
       url = Regexp.last_match(2)
+      if (link = parse_file_link(url))
+        found << { path: link[:path], line: link[:line], column: link[:column], label: label }
+        next
+      end
       path = url.to_s.split('#').first.to_s.strip
       next if path.empty? || url.to_s.match?(%r{\A(?:https?|ftp)://}i)
       next unless File.exist?(path)
@@ -275,13 +280,42 @@ module ÆtherTerminalMarkdown
     text.gsub(/\[([^\]]+)\]\(([^)]+)\)/) do
       label = $1
       url = $2
-      path = url.split('#').first.to_s
-      if url !~ %r{\A(?:https?|ftp)://}i && fileish?(path)
-        file_link(path, nil, nil, label)
+      if (link = parse_file_link(url))
+        file_link(link[:path], link[:line], link[:column], label)
       else
-        "#{Paint.wrap(label, Paint::UNDERLINE, Paint::BLUE)}#{Paint.dim(" #{url}")}"
+        path = url.split('#').first.to_s
+        if url !~ %r{\A(?:https?|ftp)://}i && fileish?(path)
+          file_link(path, nil, nil, label)
+        else
+          "#{Paint.wrap(label, Paint::UNDERLINE, Paint::BLUE)}#{Paint.dim(" #{url}")}"
+        end
       end
     end
+  end
+
+  # Parses an aethercodex://open URL (or nil) into path/line/column. Tolerant:
+  # also understands the legacy bare-path and `:line[:col]` suffixes.
+  def parse_file_link(url)
+    return nil unless url.to_s.match?(%r{\Aaethercodex://open}i)
+
+    qs = url.to_s.split('?', 2)[1].to_s
+    params = {}
+    qs.split('&').each do |pair|
+      k, v = pair.split('=', 2)
+      next if k.nil? || k.empty?
+      params[k] = CGI.unescape(v.to_s)
+    end
+    path = params['path'].to_s
+    return nil if path.empty?
+
+    # Fragment (#L482 / #L482C10) belongs to the navigator, not the file path.
+    if (m = path.match(/#L(\d+)(?:C(\d+))?\z/i))
+      params['line'] ||= m[1]
+      params['column'] ||= m[2]
+      path = path.sub(/#L(\d+)(?:C(\d+))?\z/i, '')
+    end
+
+    { path: path, line: params['line']&.to_i, column: params['column']&.to_i }
   end
 
   # Turn a <file> tag into a clickable OSC 8 hyperlink (file:// URI).

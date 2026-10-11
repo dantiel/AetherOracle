@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'monitor'
 require 'sqlite3'
 require 'stringio'
 require 'fileutils'
@@ -30,6 +31,13 @@ require_relative 'import'
 
 class Mnemosyne
   DB_VERSION = 15
+
+  # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
+  # task runners each drive their own engine thread; the connection is shared, so
+  # every statement (and every transaction, which nests statements) must lock the
+  # same monitor. Network/oracle time happens *outside* this lock — only the fast
+  # db I/O is serialized, so parallel tasks still overlap their oracle turns.
+  DB_LOCK = Monitor.new
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -167,8 +175,26 @@ class Mnemosyne
         db.results_as_hash = true
         migrate db
         restore_aegis db
-        db
+        guard_sqlite_connection(db)
       end
+    end
+
+    # Wrap the shared connection's statement methods in DB_LOCK so concurrent
+    # task threads never interleave SQLite I/O on the single connection. Uses a
+    # Monitor (reentrant) — a `transaction` block nests `execute` calls and must
+    # re-acquire the same lock without deadlocking.
+    def guard_sqlite_connection(db)
+      lock = DB_LOCK
+      %i[execute execute_batch get_first_row get_first_value last_insert_row_id changes transaction].each do |meth|
+        next unless db.respond_to?(meth)
+
+        unguarded = :"__mnemosyne_unguarded_#{meth}"
+        db.singleton_class.send(:alias_method, unguarded, meth)
+        db.singleton_class.send(:define_method, meth) do |*args, &blk|
+          lock.synchronize { send(unguarded, *args, &blk) }
+        end
+      end
+      db
     end
 
     # Re-open the memory db at the (possibly changed) CONFIG.memory_db_path and
@@ -512,7 +538,7 @@ end
     def unveil_aegis(**aegis) = Aegis.unveil_aegis(**aegis)
     def working_dir = Aegis.working_dir
     def set_working_dir(dir) = Aegis.set_working_dir(dir)
-    def recall_aegis_notes(max_tokens: nil, max_content_length: nil) = Aegis.recall_aegis_notes(max_tokens: max_tokens, max_content_length: max_content_length)
+    def recall_aegis_notes(max_tokens: nil, max_content_length: nil, limit: 8) = Aegis.recall_aegis_notes(max_tokens: max_tokens, max_content_length: max_content_length, limit: limit)
 
     # -- Notes --
     def get_note(note_id) = Notes.get_note(note_id)
@@ -594,36 +620,44 @@ end
     # debug puts are quarantined into a StringIO so CLI pipes stay clean.
     # Fire-and-forget: rescues everything, never breaks a turn.
     def inscribe(params, answer: nil, tool_calls: [], tool_call_count: nil, execution_time: 0)
-      args = {}
-      params&.each { |key, value| args[key.to_sym] = value unless value.nil? }
-      prompt = args[:prompt]
-      unless prompt
-        messages = args[:messages] || []
-        prompt = messages.filter_map do |m|
-          role = m[:role] || m['role']
-          next if role == 'system'
-          m[:content] || m['content']
-        end.join("\n")
+      # Serialize the whole inscription: concurrent task runners both redirect
+      # $stdout to a StringIO here, and a racy save/restore would leave the
+      # daemon's real stdout pointing at a throwaway StringIO (silence forever).
+      # DB_LOCK is reentrant — Chronicle.record re-acquires it for its db writes.
+      DB_LOCK.synchronize do
+        args = {}
+        params&.each { |key, value| args[key.to_sym] = value unless value.nil? }
+        prompt = args[:prompt]
+        unless prompt
+          messages = args[:messages] || []
+          prompt = messages.filter_map do |m|
+            role = m[:role] || m['role']
+            next if role == 'system'
+            m[:content] || m['content']
+          end.join("\n")
+        end
+        prompt = prompt.to_s[0, 6000]
+        real_stdout = $stdout
+        $stdout = StringIO.new
+        begin
+          Chronicle.record(prompt: prompt,
+                           attachments: args[:attachments] || [],
+                           tags: args[:tags],
+                           file: args[:file],
+                           execution_time: execution_time,
+                           tool_call_count: tool_call_count || Array(tool_calls).size,
+                           timestamp: args[:timestamp],
+                           answer: answer.to_s,
+                           tool_calls: tool_calls,
+                           task_id: args[:task_id],
+                           step_id: args[:step_id],
+                           mode: args[:mode])
+        ensure
+          $stdout = real_stdout if real_stdout
+        end
       end
-      prompt = prompt.to_s[0, 6000]
-      real_stdout = $stdout
-      $stdout = StringIO.new
-      Chronicle.record(prompt: prompt,
-                       attachments: args[:attachments] || [],
-                       tags: args[:tags],
-                       file: args[:file],
-                       execution_time: execution_time,
-                       tool_call_count: tool_call_count || Array(tool_calls).size,
-                       timestamp: args[:timestamp],
-                       answer: answer.to_s,
-                       tool_calls: tool_calls,
-                       task_id: args[:task_id],
-                       step_id: args[:step_id],
-                       mode: args[:mode])
     rescue StandardError
       nil
-    ensure
-      $stdout = real_stdout if real_stdout
     end
   end
 end

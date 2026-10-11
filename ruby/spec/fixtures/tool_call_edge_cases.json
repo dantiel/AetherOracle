@@ -1,0 +1,31 @@
+[
+  {
+    "description": "Empty tool_calls array",
+    "input": "{\"tool_calls\": []}",
+    "expected_count": 0
+  },
+  {
+    "description": "Malformed JSON in markdown fence",
+    "input": "```json\n{\"tool_calls\": [{\"id\": \"broken\""
+  },
+  {
+    "description": "Mixed valid and invalid tool objects",
+    "input": "{\"tool_calls\": [{\"id\": \"good\", \"type\": \"function\", \"function\": {\"name\": \"read_file\", \"arguments\": \"{}\"}}, {\"id\": \"bad\", \"type\": \"unknown\"}]}",
+    "expected_count": 1
+  },
+  {
+    "description": "Arguments as object instead of JSON string",
+    "input": "{\"tool_calls\": [{\"id\": \"obj_args\", \"type\": \"function\", \"function\": {\"name\": \"read_file\", \"arguments\": {\"path\": \"test.rb\"}}}]}",
+    "expected_count": 1
+  },
+  {
+    "description": "Deduplication by ID",
+    "input": "[{\"id\": \"dup1\", \"name\": \"read_file\", \"arguments\": \"{}\"}, {\"id\": \"dup1\", \"name\": \"read_file\", \"arguments\": \"{}\"}]",
+    "expected_count": 1
+  },
+  {
+    "description": "Deduplication by name+arguments",
+    "input": "[{\"name\": \"read_file\", \"arguments\": \"{\\\"path\\\": \\\"same.rb\\\"}\"}, {\"name\": \"read_file\", \"arguments\": \"{\\\"path\\\": \\\"same.rb\\\"}\"}]",
+    "expected_count": 1
+  }
+]

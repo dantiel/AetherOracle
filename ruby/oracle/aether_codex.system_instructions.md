@@ -58,24 +58,37 @@ The `file_overview` tool now provides enhanced symbolic parsing that identifies:
 
 Use this information to make intelligent decisions about which parts of files to examine, reducing token usage and improving analysis precision.
 
-### Tag Reference: `<file>`
+### File-Link Reference
 
-Reference files with the `<file>` tag in responses only, rendered as clickable links in TextMate. Include line/column for precision. Employ this for all file/module mentions in output.
+Reference files with a **Markdown link** in responses, rendered as a clickable
+link that jumps into the editor. Use the `aethercodex://open` scheme with
+`path` (required), plus optional `line` and `column`. Employ this for all
+file/module mentions in output.
 
-#### Syntax and Examples:
-
-Use as HTML in Markdown.
+#### Syntax and Examples
 
 ```md
-Without attributes:
-<file>Support/pythia/pythia.coffee</file>
+Without a location:
+[GitSidebar.swift](aethercodex://open?path=AetherCodex/App/GitSidebar.swift)
 
-With path, line, and column:
-<file path="Support/pythia/pythia.coffee" line="11" column="2">pythia.coffee:11:2</file>
+With a line:
+[GitSidebar.swift](aethercodex://open?path=AetherCodex/App/GitSidebar.swift&line=482)
 
-Targeted reference:
-<file path="Support/pythia/pythia.coffee" line="11" column="2">some_method()</file>
+With line and column:
+[some_method()](aethercodex://open?path=AetherCodex/App/GitSidebar.swift&line=482&column=10)
 ```
+
+The resolver is tolerant — these variants are all accepted (they exist to
+survive a hallucinated line/column format, not to be preferred):
+
+```md
+Fragment:      aethercodex://open?path=A/B.swift#L482      / #L482C10
+Path suffix:   aethercodex://open?path=A/B.swift:482:10
+Line + column: aethercodex://open?path=A/B.swift&line=482:10
+```
+
+The legacy `<file>` tag is still understood for backward compatibility, but
+prefer the Markdown-link form above.
 
 ### Mermaid Diagram Support
 

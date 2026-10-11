@@ -1,0 +1,17 @@
+[
+  {
+    "description": "Deeply nested JSON with tool_calls",
+    "input": "Response: {\"data\": {\"nested\": {\"tool_calls\": [{\"id\": \"deep\", \"type\": \"function\", \"function\": {\"name\": \"read_file\", \"arguments\": \"{}\"}}]}}}",
+    "expected_count": 1
+  },
+  {
+    "description": "Array inside object inside array",
+    "input": "[{\"tool_calls\": [{\"id\": \"nested_arr\", \"type\": \"function\", \"function\": {\"name\": \"run_command\", \"arguments\": \"{}\"}}]}]",
+    "expected_count": 1
+  },
+  {
+    "description": "JSON with nested braces in arguments string",
+    "input": "{\"tool_calls\": [{\"id\": \"complex\", \"type\": \"function\", \"function\": {\"name\": \"patch_file\", \"arguments\": \"{\\\"path\\\": \\\"app.rb\\\", \\\"content\\\": \\\"def foo\\\\n  {a: 1}\\\\nend\\\"}\"}}]}",
+    "expected_count": 1
+  }
+]

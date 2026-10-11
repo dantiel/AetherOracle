@@ -1,0 +1,22 @@
+[
+  {
+    "description": "Standard JSON in markdown fence",
+    "input": "Let me read that file:\n```json\n{\"tool_calls\": [{\"id\": \"call_123\", \"type\": \"function\", \"function\": {\"name\": \"read_file\", \"arguments\": \"{\\\"path\\\": \\\"test.rb\\\"}\"}}]}\n```\nDone.",
+    "expected_count": 1,
+    "expected_tools": [
+      {
+        "id": "call_123",
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "arguments": "{\"path\": \"test.rb\"}"
+        }
+      }
+    ]
+  },
+  {
+    "description": "Multiple tools in single JSON block",
+    "input": "```json\n{\"tool_calls\": [{\"id\": \"t1\", \"type\": \"function\", \"function\": {\"name\": \"read_file\", \"arguments\": \"{}\"}}, {\"id\": \"t2\", \"type\": \"function\", \"function\": {\"name\": \"run_command\", \"arguments\": \"{\\\"cmd\\\": \\\"ls\\\"}\"}}]}\n```",
+    "expected_count": 2
+  }
+]
