@@ -24,6 +24,7 @@ module ÆtherWinConsole
   extern 'int GetNumberOfConsoleInputEvents(void*, int*)'
   extern 'int GetConsoleMode(void*, int*)'
   extern 'int SetConsoleMode(void*, int)'
+  extern 'int GetConsoleScreenBufferInfo(void*, void*)'
   extern 'int SetConsoleCP(int)'
   extern 'int SetConsoleOutputCP(int)'
   extern 'int WaitForSingleObject(void*, int)'
@@ -42,6 +43,11 @@ module ÆtherWinConsole
   ENABLE_LINE_INPUT      = 0x0002
   ENABLE_ECHO_INPUT      = 0x0004
   INPUT_MASK = ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT
+
+  # Console input-mode bits for mouse support.
+  ENABLE_MOUSE_INPUT     = 0x0010
+  ENABLE_QUICK_EDIT_MODE = 0x0040
+  ENABLE_EXTENDED_FLAGS  = 0x0080
 
   # Virtual-key codes we interpret
   VK_BACK    = 0x08
@@ -95,6 +101,7 @@ module ÆtherWinConsole
   }.freeze
 
   KEY_EVENT         = 0x0001
+  MOUSE_EVENT       = 0x0002
   INPUT_RECORD_SIZE = 20
   # EventType (WORD) + padding (WORD), bKeyDown (BOOL), wRepeatCount (WORD),
   # wVirtualKeyCode (WORD), wVirtualScanCode (WORD), UnicodeChar (WORD),
@@ -102,6 +109,19 @@ module ÆtherWinConsole
   # consumed as a WORD (always 0) rather than skipped, so `unpack` yields one
   # value per field — skipping with `x2` would shift every downstream field.
   PACK = 'S<S<L<S<S<S<S<L<'
+
+  # MOUSE_EVENT_RECORD occupies the same 16-byte union as the key record:
+  # EventType, padding, dwMousePosition (x,y COORD), dwButtonState (DWORD),
+  # dwControlKeyState (DWORD), dwEventFlags (DWORD) — 20 bytes little-endian.
+  MOUSE_PACK = 'S<S<S<S<L<L<L<'
+
+  FROM_LEFT_1ST_BUTTON_PRESSED = 0x0001
+  FROM_LEFT_2ND_BUTTON_PRESSED = 0x0002
+  RIGHTMOST_BUTTON_PRESSED     = 0x0004
+
+  MOUSE_MOVED   = 0x0001
+  DOUBLE_CLICK  = 0x0002
+  MOUSE_WHEELED = 0x0004
 
   PASTE_MAX_EVENTS = 8192
 
@@ -212,6 +232,17 @@ module ÆtherWinConsole
       SetConsoleMode(handle, mode)
     end
 
+    # Absolute console cursor position [x, y] in 0-based character cells.
+    # dwCursorPosition sits at offset 4 in CONSOLE_SCREEN_BUFFER_INFO (right
+    # after dwSize), so the buffer is read whole and the COORD sliced out.
+    def cursor_position
+      buf = "\0" * 22
+      ok = GetConsoleScreenBufferInfo(console_handle, buf)
+      return nil if ok.nil? || ok.zero?
+
+      buf[4, 4].unpack('S<S<')
+    end
+
     # Switch the console out of line/echo/processed mode for the duration of
     # the prompt editor, so ReadConsoleInputW sees raw key events (and Ctrl+C
     # arrives as a key event instead of a signal). Restores on end_raw_input.
@@ -222,7 +253,13 @@ module ÆtherWinConsole
       raw_mutex.synchronize do
         if @raw_depth.to_i.zero?
           mode = get_mode(console_handle)
-          ok = set_mode(console_handle, mode & ~INPUT_MASK)
+          # Raw key events plus mouse input (clicks, wheel). QuickEdit — the
+          # console's built-in drag-select/right-click-paste mode — is cleared:
+          # it would swallow clicks as text selection before we ever see a
+          # MOUSE_EVENT record. The original mode is restored on end_raw_input.
+          new_mode = (mode & ~INPUT_MASK) | ENABLE_MOUSE_INPUT | ENABLE_EXTENDED_FLAGS
+          new_mode &= ~ENABLE_QUICK_EDIT_MODE
+          ok = set_mode(console_handle, new_mode)
           if ok.nil? || ok.zero?
             err = Fiddle.win32_last_error
             raise ConsoleInputError.new("SetConsoleMode failed: #{describe_error(err)}", err)
@@ -250,7 +287,9 @@ module ÆtherWinConsole
       @raw_mutex ||= Mutex.new
     end
 
-    # One raw INPUT_RECORD as { type:, down:, vk:, unichar:, ctrl:, alt:, shift: }.
+    # One raw INPUT_RECORD, discriminated by type. Key records carry the same
+    # fields as before; mouse records carry absolute x/y (0-based character
+    # cells), the button-state DWORD and the event-flags DWORD.
     def read_record
       buf = "\0" * INPUT_RECORD_SIZE
       nread = "\0" * 8
@@ -260,17 +299,28 @@ module ÆtherWinConsole
         raise ConsoleInputError.new("ReadConsoleInputW failed: #{describe_error(err)}", err)
       end
 
-      type, _pad, down, _rep, vk, _scan, unichar, state = buf.unpack(PACK)
+      type = buf.unpack1('S<')
+      if type == MOUSE_EVENT
+        _type, _pad, x, y, buttons, state, flags = buf.unpack(MOUSE_PACK)
+        return { type: type, x: x, y: y, buttons: buttons, flags: flags,
+                 ctrl: (state & CTRL_MASK) != 0,
+                 alt:  (state & ALT_MASK) != 0,
+                 shift: (state & SHIFT_PRESSED) != 0 }
+      end
+
+      _, _pad, down, _rep, vk, _scan, unichar, state = buf.unpack(PACK)
       { type: type, down: down == 1, vk: vk, unichar: unichar,
         ctrl: (state & CTRL_MASK) != 0,
         alt:  (state & ALT_MASK) != 0,
         shift: (state & SHIFT_PRESSED) != 0 }
     end
 
-    # The next KEY_DOWN record, skipping key-up and non-key records.
+    # The next usable record: a mouse event is surfaced as-is; key-up and pure
+    # modifier records are skipped until a real key-down arrives.
     def read_event
       loop do
         e = read_record
+        return e if e[:type] == MOUSE_EVENT
         return e if e[:type] == KEY_EVENT && e[:down] && !MODIFIER_VKS.include?(e[:vk])
       end
     end
@@ -286,18 +336,31 @@ module ÆtherWinConsole
     #   { kind: :literal, text: String }               a batch of typed chars
     #   { kind: :paste, text: String }                 a multi-line paste
     def next_input
+      if @mouse_stash
+        e = @mouse_stash
+        @mouse_stash = nil
+        return mouse_input(e)
+      end
+
       first = read_event
+      return mouse_input(first) if first[:type] == MOUSE_EVENT
+
       events = [first]
 
       # Pastes arrive as a burst of queued records; a single keystroke arrives
       # alone. Drain every record already queued (key-down records only) so a
       # paste is captured whole rather than char-by-char. Reads are guarded by
       # pending_count, so a trailing key-up record never triggers a blocking
-      # read (ReadConsoleInputW blocks on an empty buffer).
+      # read (ReadConsoleInputW blocks on an empty buffer). A click interleaved
+      # with a paste burst is stashed and surfaced on the next call.
       drained = 0
       while pending_count.positive? && drained < PASTE_MAX_EVENTS
         e = read_record
         drained += 1
+        if e[:type] == MOUSE_EVENT
+          @mouse_stash = e
+          break
+        end
         events << e if e[:type] == KEY_EVENT && e[:down]
       end
 
@@ -309,6 +372,37 @@ module ÆtherWinConsole
       end
 
       classify_key(first)
+    end
+
+    # A MOUSE_EVENT record → the unified mouse input the prompt editor consumes:
+    #   { kind: :mouse, action: :click|:release|:scroll_up|:scroll_down|:motion,
+    #     button: :left|:right|:middle|nil, x:, y: }
+    # x/y are 0-based character-cell coordinates (matching the console buffer).
+    def mouse_input(e)
+      if (e[:flags] & MOUSE_WHEELED) != 0
+        # Wheel delta lives in the high word of dwButtonState (signed 16-bit).
+        delta = (e[:buttons] >> 16) & 0xFFFF
+        delta -= 0x10000 if delta >= 0x8000
+        return { kind: :mouse, action: delta >= 0 ? :scroll_up : :scroll_down,
+                 button: nil, x: e[:x], y: e[:y] }
+      end
+
+      return { kind: :mouse, action: :motion, button: button_for(e[:buttons]),
+               x: e[:x], y: e[:y] } if (e[:flags] & MOUSE_MOVED) != 0
+
+      return { kind: :mouse, action: :release, button: nil,
+               x: e[:x], y: e[:y] } if e[:buttons].zero?
+
+      { kind: :mouse, action: :click, button: button_for(e[:buttons]),
+        x: e[:x], y: e[:y] }
+    end
+
+    def button_for(bits)
+      return :left   if (bits & FROM_LEFT_1ST_BUTTON_PRESSED) != 0
+      return :right  if (bits & RIGHTMOST_BUTTON_PRESSED) != 0
+      return :middle if (bits & FROM_LEFT_2ND_BUTTON_PRESSED) != 0
+
+      nil
     end
 
     # The printable character a key event represents (empty when none).

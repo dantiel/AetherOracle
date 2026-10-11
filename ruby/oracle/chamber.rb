@@ -656,20 +656,29 @@ class ÆtherChamber
   # Tab/Shift-Tab scrolls through.
   def focus_list_rows(selection, width)
     positions = tab_positions
-    return [] if positions.empty?
+    return [] if selection.nil? || positions.empty?
 
-    total = positions.size
-    half = FOCUS_LIST_WINDOW / 2
-    start = [selection - half, 0].max
-    stop = [start + FOCUS_LIST_WINDOW - 1, total - 1].min
-    start = [stop - FOCUS_LIST_WINDOW + 1, 0].max
-
-    rows = ["\e[2m- Fokus #{selection + 1}/#{total} -\e[0m"]
+    start, stop = focus_window(selection)
+    rows = ["\e[2m- Fokus #{selection + 1}/#{positions.size} -\e[0m"]
     (start..stop).each do |i|
       label = truncate_visible(tab_label_for(positions[i]), width)
       rows << truncate_visible(i == selection ? "\e[1;35m> #{label}\e[0m" : "  #{label}", width)
     end
     rows
+  end
+
+  # The [start, stop] index window (inclusive) focus_list_rows renders around
+  # `selection`. Shared by the click resolver so it can map a clicked row back
+  # to the focusable index it represents.
+  def focus_window(selection)
+    total = tab_positions.size
+    return [nil, nil] if selection.nil? || total.zero?
+
+    half = FOCUS_LIST_WINDOW / 2
+    start = [selection - half, 0].max
+    stop = [start + FOCUS_LIST_WINDOW - 1, total - 1].min
+    start = [stop - FOCUS_LIST_WINDOW + 1, 0].max
+    [start, stop]
   end
 
   # The focused instrumentum's body, capped so the prompt and the AI content
@@ -1095,6 +1104,7 @@ class ÆtherChamber
     cursor = 0
     selection = nil
     hist = nil
+    draft = nil
     mention = nil
 
     use_win = win_console_available?
@@ -1110,15 +1120,35 @@ class ÆtherChamber
 
     @editor_win = use_win
     bracketed = false
-    unless use_win
+    @anchor_row = nil
+    @click_regions = []
+    if use_win
+      @anchor_row = anchor_cursor_row
+    else
       enable_bracketed_paste
       bracketed = true
+      # Anchor before mouse tracking is on so a stray motion event cannot
+      # interleave with the DSR response read.
+      @anchor_row = anchor_cursor_row
+      enable_mouse
     end
     begin
       loop do
         redraw_inline(buffer, cursor, selection, mention)
         input = next_editor_input
         return nil if input.nil?
+
+        if input[:kind] == :mouse
+          mention = nil if mention
+          result = apply_mouse_input(input, buffer, cursor, selection)
+          if result[0] == :activate
+            clear_inline_preview
+            print "\n"
+            return result[1]
+          end
+          selection, cursor = result
+          next
+        end
 
         if mention
           mention, buffer, cursor = mention_step(mention, input, buffer, cursor)
@@ -1253,7 +1283,7 @@ class ÆtherChamber
               @expanded_focus[selection] = true
             else
               selection = nil
-              buffer, hist = recall_history(buffer, hist, -1)
+              buffer, hist, draft = recall_history(buffer, hist, -1, draft)
               cursor = buffer.length
             end
           when :down, :ctrl_down
@@ -1261,7 +1291,7 @@ class ÆtherChamber
               @expanded_focus[selection] = false
             else
               selection = nil
-              buffer, hist = recall_history(buffer, hist, +1)
+              buffer, hist, draft = recall_history(buffer, hist, +1, draft)
               cursor = buffer.length
             end
           when :page_up, :page_down, :ignore
@@ -1280,9 +1310,12 @@ class ÆtherChamber
       $stderr.puts "!! native console reader unavailable (#{e.message}) -- falling back to line input" if $DEBUG
       return read_prompt_plain
     ensure
+      disable_mouse if bracketed
       disable_bracketed_paste if bracketed
       ÆtherWinConsole.end_raw_input if use_win
       @editor_win = nil
+      @anchor_row = nil
+      @click_regions = []
     end
   end
 
@@ -1301,6 +1334,11 @@ class ÆtherChamber
     return nil if char.nil?
 
     char = complete_extended_key(char)
+    char = coalesce_utf8(char)
+    if char.start_with?("\e[<")
+      parsed = parse_sgr_mouse(char)
+      return parsed if parsed
+    end
     return tty_read_paste if char.start_with?("\e[200~")
 
     # Shift+Enter (and a raw LF, e.g. a paste that arrived without bracketed
@@ -1309,6 +1347,9 @@ class ÆtherChamber
     return { kind: :key, action: :newline } if char == "\n" || char == "\e[13;2u" || char == "\e[13;2~"
 
     action = @tty_keymap[char]
+    # tty-reader's win_keys lists the Delete key's extended sequence ([224,83])
+    # twice; the later :clear entry wins, so the chamber never sees :delete.
+    action = :delete if action == :clear && char == [224, 83].pack('U*')
     action = tty_decode_action(char) if action.nil?
     action = :back_tab if action == :shift_tab
 
@@ -1335,13 +1376,50 @@ class ÆtherChamber
   # trailing scan code — but `_kbhit` is already 0 after `_getch` consumed the
   # KEY_EVENT, so `read_keypress` returns a lone "\xE0" / "\x00". A blocking
   # `_getch` still yields the cached scan code, so we complete the pair here.
+  # tty-reader surfaces those bytes as codepoints (U+00E0 / U+0000), not raw
+  # bytes, so the match must compare ordinals — the raw-byte comparison this
+  # used to make never fired and the scan code was silently lost.
   def complete_extended_key(char)
-    return char unless WINDOWS && HAVE_WIN_CONSOLE && (char == "\xE0" || char == "\x00")
+    return char unless WINDOWS && HAVE_WIN_CONSOLE
+
+    cp = char && char.length == 1 ? char.ord : nil
+    return char unless cp == 0xE0 || cp == 0x00
 
     second = ÆtherWinConsole.crt_getch
     return char if second.nil?
 
-    char + [second].pack('C')
+    char + [second].pack('U')
+  end
+
+  # Reassemble a multi-byte UTF-8 character that msvcrt `_getch` delivered one
+  # byte per read_keypress — each byte surfaces as its own Latin-1 codepoint
+  # (0x80..0xFF). A lead byte starts a sequence; the continuation bytes are
+  # consumed here so the prompt editor receives one correct character instead
+  # of a mojibake run like "Ã¤". 0xE0 is skipped: it doubles as the Windows
+  # extended-key prefix, so its follower is a scan code, not a UTF-8 byte.
+  def coalesce_utf8(ch)
+    return ch if ch.nil? || ch.length != 1
+
+    lead = ch.ord
+    return ch if lead < 0x80
+
+    nbytes =
+      if lead >= 0xF0 then 4
+      elsif lead >= 0xE0 then 3
+      elsif lead >= 0xC2 then 2
+      else return ch
+      end
+    return ch if lead == 0xE0
+
+    bytes = [lead]
+    while bytes.size < nbytes
+      nxt = @tty_reader.read_keypress
+      break if nxt.nil? || nxt.length != 1
+      bytes << nxt.ord
+    end
+
+    out = bytes.pack('C*').force_encoding(Encoding::UTF_8)
+    out.valid_encoding? ? out : ch
   end
 
   def tty_read_paste
@@ -1376,13 +1454,15 @@ class ÆtherChamber
 
   def redraw_inline(buffer, cursor, selection, mention = nil)
     width = terminal_width
+    focus_rows = []
+    preview_rows = []
     overlay_rows = if mention
                      mention_overlay_rows(mention, width)
                    elsif selection
                      el = tab_positions[selection]
-                     rows = focus_list_rows(selection, width)
-                     rows.concat(instrumentum_preview_rows(el, selection, width)) if el[:type] == :instrumentum
-                     rows
+                     focus_rows = focus_list_rows(selection, width)
+                     preview_rows = instrumentum_preview_rows(el, selection, width) if el[:type] == :instrumentum
+                     focus_rows + preview_rows
                    else
                      []
                    end
@@ -1400,6 +1480,17 @@ class ÆtherChamber
     end
 
     redraw_block(overlay_rows + prompt_rows, block_row, block_col)
+
+    @click_overlay_rows = overlay_rows.size
+    @click_regions = mention ? [] : build_click_regions(focus_rows, preview_rows, prompt_rows, selection)
+
+    # On Windows the cursor position is a cheap synchronous call, so re-anchor
+    # every frame — a growing multi-line block that scrolls the buffer keeps the
+    # click map accurate. Unix anchors once at prompt start instead.
+    if @editor_win && (pos = ÆtherWinConsole.cursor_position)
+      @anchor_row = pos[1] - block_row
+    end
+
     $stdout.flush
   end
 
@@ -1557,6 +1648,205 @@ class ÆtherChamber
     @rendered_lines = cur
   end
 
+  # --------------------------------------------------------------- mouse --
+  # Terminal mouse tracking. The prompt editor resolves clicks against the
+  # screen regions it just drew, so the practitioner may click a focusable to
+  # select it, click an instrumentum to expand it, click the prompt to move the
+  # cursor, or scroll to cycle the Fokus-Ring. Windows drives this natively
+  # (ENABLE_MOUSE_INPUT + MOUSE_EVENT records); Unix uses xterm SGR mode.
+
+  def enable_mouse
+    print "\e[?1000h\e[?1006h"
+    $stdout.flush
+  end
+
+  def disable_mouse
+    print "\e[?1006l\e[?1000l"
+    $stdout.flush
+  end
+
+  # Absolute screen row (0-based) of the top of the prompt block. Windows reads
+  # it straight from the console buffer; Unix asks the terminal where its cursor
+  # sits (DSR \e[6n) while the cursor is still on the block's first line.
+  def anchor_cursor_row
+    if @editor_win
+      pos = ÆtherWinConsole.cursor_position
+      pos && pos[1]
+    else
+      pos = query_cursor_position
+      pos && pos[0] - 1
+    end
+  end
+
+  def query_cursor_position
+    require 'io/console'
+    return nil unless $stdin.tty?
+
+    print "\e[6n"
+    $stdout.flush
+    resp = +''
+    $stdin.raw do
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.25
+      loop do
+        break if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        next unless IO.select([$stdin], nil, nil, 0.1)
+        ch = $stdin.read(1)
+        break if ch.nil?
+        resp << ch
+        break if ch == 'R'
+      end
+    end
+    m = resp.match(/\e\[(\d+);(\d+)R/)
+    m ? [m[1].to_i, m[2].to_i] : nil
+  rescue StandardError
+    nil
+  end
+
+  # Decode an xterm SGR mouse sequence (e.g. "\e[<0;12;34M") into the unified
+  # { kind: :mouse, ... } shape, with x/y normalised to 0-based cells.
+  def parse_sgr_mouse(char)
+    m = char.match(/\A\e\[<(\d+);(\d+);(\d+)([Mm])\z/)
+    return nil unless m
+
+    code = m[1].to_i
+    x = m[2].to_i - 1
+    y = m[3].to_i - 1
+
+    case
+    when code == 64 then { kind: :mouse, action: :scroll_up, button: nil, x: x, y: y }
+    when code == 65 then { kind: :mouse, action: :scroll_down, button: nil, x: x, y: y }
+    when (code & 32) != 0 then { kind: :mouse, action: :motion, button: sgr_button(code), x: x, y: y }
+    when m[4] == 'm' then { kind: :mouse, action: :release, button: nil, x: x, y: y }
+    else { kind: :mouse, action: :click, button: sgr_button(code), x: x, y: y }
+    end
+  end
+
+  def sgr_button(code)
+    case code & 0x3
+    when 0 then :left
+    when 1 then :middle
+    when 2 then :right
+    end
+  end
+
+  # Map each rendered block line to what it is: a focus-list row, an
+  # instrumentum preview row, or a prompt-text row. The block-local row equals
+  # the region's index in the returned array.
+  def build_click_regions(focus_rows, preview_rows, prompt_rows, selection)
+    regions = []
+    start, = focus_window(selection)
+    focus_rows.each_with_index do |_, i|
+      regions << { type: :focus, index: (i.zero? || start.nil?) ? nil : start + i - 1 }
+    end
+    preview_rows.each { regions << { type: :instrumentum, index: selection } }
+    prompt_rows.each do
+      regions << (selection ? { type: :activate, index: selection } : { type: :prompt, index: nil })
+    end
+    regions
+  end
+
+  # Fold a unified mouse input into a new [selection, cursor] pair (unchanged
+  # where the input is irrelevant). Side effects (expand/collapse) happen here.
+  def apply_mouse_input(input, buffer, cursor, selection)
+    case input[:action]
+    when :scroll_up then [next_tab(selection, 1), cursor]
+    when :scroll_down then [next_tab(selection, -1), cursor]
+    when :click then resolve_mouse_click(input, buffer, cursor, selection) || [selection, cursor]
+    else [selection, cursor]
+    end
+  end
+
+  def resolve_mouse_click(input, buffer, cursor, selection)
+    return nil unless @click_regions && !@click_regions.empty? && @anchor_row
+
+    block_row = input[:y] - @anchor_row
+    return nil if block_row.negative? || block_row >= @click_regions.size
+
+    region = @click_regions[block_row]
+    return nil unless region
+
+    case region[:type]
+    when :focus
+      return [nil, cursor] if input[:button] == :right
+      return [region[:index], cursor] if region[:index]
+    when :instrumentum
+      if input[:button] == :left && region[:index]
+        @expanded_focus[region[:index]] = !@expanded_focus[region[:index]]
+      end
+    when :activate
+      return [:activate, tab_positions[region[:index]]] if input[:button] == :left && region[:index]
+    when :prompt
+      if input[:button] == :left
+        offset = prompt_offset_at(buffer, terminal_width, block_row - @click_overlay_rows, input[:x])
+        return [nil, offset] if offset
+      end
+    end
+    nil
+  end
+
+  # Inverse of render_prompt_geometry: given a prompt-relative row and screen
+  # column, return the raw buffer offset the cursor should move to.
+  def prompt_offset_at(buffer, width, row, col)
+    mw = display_width(prompt_marker)
+    content_width = [width - mw, 1].max
+    content_col = col - mw
+    content_col = 0 if content_col.negative?
+
+    global_row = 0
+    raw_offset = 0
+
+    buffer.split("\n", -1).each do |raw_line|
+      line_start = raw_offset
+      tokens = tokenize_inline(raw_line)
+
+      sub_rows = []
+      cur = { raw_end: line_start, tokens: [] }
+      col_pos = 0
+      tok_raw = 0
+      tokens.each do |t|
+        pw = display_width(t[:plain])
+        if col_pos + pw > content_width && col_pos.positive?
+          sub_rows << cur
+          cur = { raw_end: line_start + tok_raw + t[:prefix], tokens: [] }
+          col_pos = 0
+        end
+        cur[:tokens] << [t, tok_raw, col_pos]
+        cur[:raw_end] = line_start + tok_raw + t[:raw].length
+        col_pos += pw
+        tok_raw += t[:raw].length
+      end
+      sub_rows << cur
+
+      if (global_row...global_row + sub_rows.size).cover?(row)
+        sr = sub_rows[row - global_row]
+        sr[:tokens].each do |t, tok_raw, tok_col|
+          pw = display_width(t[:plain])
+          next unless content_col < tok_col + pw
+          local = content_col - tok_col
+          return line_start + tok_raw + t[:prefix] + plain_index_at(t[:plain], [local, 0].max)
+        end
+        return sr[:raw_end]
+      end
+
+      global_row += sub_rows.size
+      raw_offset = line_start + raw_line.length + 1
+      break if global_row > row
+    end
+
+    nil
+  end
+
+  def plain_index_at(plain, col)
+    idx = 0
+    seen = 0
+    plain.each_char do |ch|
+      return idx if seen >= col
+      seen += char_width(ch)
+      idx += 1
+    end
+    idx
+  end
+
   # Move the cursor to the fresh line just below the prompt block and leave it
   # clean, so the answer stream starts there. The entered text stays on screen.
   def commit_prompt
@@ -1611,8 +1901,8 @@ class ÆtherChamber
 
   # Step through the line history. Multi-line entries are recalled verbatim --
   # the prompt editor now supports literal newlines, so no re-folding is needed.
-  def recall_history(buffer, hist, delta)
-    history_step(buffer, hist, delta)
+  def recall_history(buffer, hist, delta, draft = nil)
+    history_step(buffer, hist, delta, draft)
   end
 
   # Expand `[PASTED_CONTENT_n]` back into the text it stood in for. Unknown
@@ -1767,16 +2057,26 @@ class ÆtherChamber
     [text, companions.uniq]
   end
 
-  def history_step(buffer, hist, delta)
+  def history_step(buffer, hist, delta, draft = nil)
     items = @line_history
-    return [buffer, hist] if items.empty?
+    return [buffer, hist, draft] if items.empty?
 
-    idx = hist.nil? ? (delta.negative? ? items.size - 1 : nil) : hist + delta
-    return [buffer, hist] if idx.nil?
-    return [+'', nil] if idx >= items.size
-    return [items[0].dup, 0] if idx.negative?
+    if hist.nil?
+      return [buffer, hist, draft] unless delta.negative?
 
-    [items[idx].dup, idx]
+      # First upward navigation: save the in-progress text so it can be
+      # restored when the user steps back down past the newest entry.
+      draft = buffer.dup
+      idx = items.size - 1
+    else
+      idx = hist + delta
+    end
+
+    # Stepped past the newest entry -- bring back the draft (empty if none).
+    return [(draft || +'').dup, nil, draft] if idx >= items.size
+    return [items[0].dup, 0, draft] if idx.negative?
+
+    [items[idx].dup, idx, draft]
   end
 
   # ------------------------------------------------------------ prompt edit --
