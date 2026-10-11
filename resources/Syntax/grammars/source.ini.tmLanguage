@@ -1,0 +1,16 @@
+{
+  "name": "INI",
+  "scopeName": "source.ini",
+  "fileTypes": ["ini", "cfg", "conf", "properties", "desktop", "editorconfig"],
+  "patterns": [
+    { "match": "^\\s*([;#!]).*$", "name": "comment.line.ini" },
+    { "match": "^\\s*\\[[^\\]]+\\]", "name": "entity.name.section.ini" },
+    { "match": "^\\s*([^=;\\[\\]#!]+)\\s*(=)\\s*(.*)$",
+      "captures": {
+        "1": { "name": "keyword.other.definition.ini" },
+        "2": { "name": "punctuation.separator.key-value.ini" },
+        "3": { "name": "string.unquoted.ini" }
+      } },
+    { "match": "=", "name": "punctuation.separator.key-value.ini" }
+  ]
+}

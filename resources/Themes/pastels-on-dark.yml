@@ -1,0 +1,261 @@
+# Converted from TextMate theme: Pastels on Dark
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Themes.tmbundle/Themes/Pastels on Dark.tmTheme
+name: pastels-on-dark
+kind: dark
+sourceEditorBackground: "0x211E1E"
+class: theme.dark.pastels
+tags: [dark, pastels]
+
+# Global editor colors
+editor:
+  background: "0x211E1E"
+  foreground: "0xDADADA"
+  caret: "0xFFFFFF"
+  selection: "0x73597E80"
+  lineHighlight: "0x353030"
+  invisibles: "0x4F4D4D"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.3
+editorBackgroundOpacity: 0.77
+sidebarBackgroundOpacity: 0.88
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x1B1818"
+rulerForeground: "0xDADADA"
+sourceRulerBackground: "0x1B1818"
+rulerSeparator: "0x4946467F"
+sidebarAccent: "0xA1A1FF"
+sidebarForeground: "0xDADADA"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x43414C"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x211E1E"
+  foreground: "0xDADADA"
+  baseText: "0xFFFEA1"
+  accent: "0xA1A1FF"
+  complementary: "0xFFFEA1"
+  codeBackground: "0x181616"
+  codeForeground: "0xDADADA"
+  shine: "0xC5C5FF"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xDADADA"
+  tag: "0xDADADA"
+  entity: "0xDADADA"
+  markup: "0xDADADA"
+  string: "0xAD9361"
+  comment:
+    color: "0x555555"
+    bold: false
+    italic: false
+    underline: false
+  invalid:
+    color: "0xFFF9F9"
+    background: "0xFF0000"
+    bold: true
+  keyword:
+    color: "0xA1A1FF"
+    bold: false
+    italic: false
+    underline: false
+  storage: "0xDADADA"
+  support: "0xDADADA"
+  constant: "0x6782D3"
+  embedded:
+    underline: true
+  variable: "0xC1C144"
+  attribute: "0xDADADA"
+  punctuation: "0xDADADA"
+  preprocessor: "0xDADADA"
+  meta.tag: "0x858EF4"
+  comment.block:
+    color: "0x555555"
+    bold: false
+    italic: false
+    underline: false
+  string.regexp:
+    color: "0x666666"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control:
+    color: "0x6969FA"
+    bold: true
+  constant.numeric:
+    color: "0xCCCCCC"
+    bold: false
+    italic: false
+    underline: false
+  keyword.operator:
+    color: "0x47B8D6"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    color: "0xA1A1FF"
+    bold: false
+    italic: false
+    underline: false
+  constant.language:
+    color: "0xDE8E30"
+    bold: true
+  keyword.exception:
+    color: "0xC82255"
+    bold: true
+  meta.preprocessor:
+    color: "0x2F006E"
+    bold: false
+    italic: false
+    underline: false
+  constant.character:
+    color: "0xAFA472"
+    bold: false
+    italic: false
+    underline: false
+  string.interpolation: "0xC10006"
+  meta.attribute-with-value:
+    color: "0x9B456F"
+    bold: false
+    italic: false
+    underline: false
+  declaration.class class-name:
+    underline: true
+  declaration.section section-name:
+    italic: true
+  declaration.function argument-name:
+    bold: true
+  declaration.function function-name:
+    bold: true
+  declaration.class class-inheritance:
+    italic: true
+    underline: true
+  declaration.function function-result: "0x0000FF"
+  declaration.function function-arg-type: "0x0000FF"
+  declaration.function function-argument:
+    italic: true
+  entity.name.tag: "0x858EF4"
+  keyword.storage.php: "0x6969FA"
+  invalid.bad-comma.css:
+    color: "0xFFFFFF"
+    background: "0xFF0000"
+  keyword.control.import:
+    bold: true
+  keyword.markup.element-name:
+    color: "0x858EF4"
+    bold: false
+    italic: false
+    underline: false
+  keyword.markup.attribute-name:
+    color: "0x9B456F"
+    bold: false
+    italic: false
+    underline: false
+  support.constant.tm-language-def: "0x7171F3"
+  invalid.deprecated.trailing-whitespace:
+    background: "0xFFD0D0"
+  entity.name.tag.css:
+    color: "0xB8CD06"
+    bold: true
+  keyword.other.unit.css: "0x6969FA"
+  keyword.other.phpdoc.php: "0x777777"
+  string.quoted.double.php: "0xAD9361"
+  string.quoted.single.php: "0xBFA36D"
+  support.constant.std.php:
+    color: "0xDE8E10"
+    bold: true
+  keyword.other.include.php: "0xC82255"
+  meta.tag.metadata.doctype: "0x888888"
+  support.constant.core.php:
+    color: "0xDE8E20"
+    bold: true
+  variable.other.global.php: "0xB72E1D"
+  constant.other.rgb-value.css: "0x666633"
+  support.constant.font-name.css: "0x666633"
+  support.type.property-name.css: "0xE1C96B"
+  support.constant.property-value.css: "0x9B2E4D"
+  support.constant.name.tm-language-def: "0x7171F3"
+  comment.other.server-side-include.html: "0x909090"
+  comment.other.server-side-include.xhtml: "0x909090"
+  variable.other.global.safer.php: "0x00FF00"
+  meta.tag.metadata.processing.xml: "0x68685B"
+  entity.other.attribute-name.id.css: "0xEC9E00"
+  entity.other.attribute-name.class.css: "0xEDCA06"
+  meta.tag.metadata.doctype string.quoted:
+    italic: true
+  entity.other.attribute-name.pseudo-class.css: "0x2E759C"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xDADADA"
+  markup.heading:
+    color: "0xA1A1FF"
+    bold: true
+  markup.heading.1:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xA1A1FF"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xDADADA"
+    bold: true
+  markup.italic:
+    color: "0xDADADA"
+    italic: true
+  markup.link:
+    color: "0xAD9361"
+    underline: true
+  markup.link.url:
+    color: "0xAD9361"
+    underline: true
+  markup.code.block:
+    color: "0x555555"
+    background: "0x191616"
+  markup.code.inline:
+    color: "0x555555"
+    background: "0x191616"
+  markup.quote:
+    color: "0x555555"
+    italic: true
+    background: "0x262323"
+  markup.rule:
+    color: "0x555555"
+    bold: true
+  markup.strikethrough:
+    color: "0x555555"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xDADADA"
+    bold: true
+

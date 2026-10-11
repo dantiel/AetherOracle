@@ -1,0 +1,211 @@
+# Converted from TextMate theme: LAZY
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Themes.tmbundle/Themes/LAZY.tmTheme
+name: lazy
+kind: light
+sourceEditorBackground: "0xFFFFFF"
+class: theme.light.lazy
+tags: [light, lazy]
+
+# Global editor colors
+editor:
+  background: "0xFFFFFF"
+  foreground: "0x000000"
+  caret: "0x7C7C7C"
+  selection: "0xE3FC8D"
+  lineHighlight: "0xEFFCA68F"
+  invisibles: "0xB6B6B6"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0xE8E3D8"
+glassTint: 0.55
+glassBlurStrength: 0.40
+glassStyle: regular
+textShadowStrength: 0.2
+lineSpacing: 4.0
+editorBackgroundOpacity: 0.40
+sidebarBackgroundOpacity: 0.70
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0xF1F1F1"
+rulerForeground: "0x000000"
+sourceRulerBackground: "0xF1F1F1"
+rulerSeparator: "0xD7D7D766"
+sidebarAccent: "0x808D52"
+sidebarForeground: "0x000000"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0xF3F6E9"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0xFFFFFF"
+  foreground: "0x000000"
+  baseText: "0x000000"
+  accent: "0xFF7800"
+  complementary: "0x0087FF"
+  codeBackground: "0xFFFFFF"
+  codeForeground: "0x000000"
+  shine: "0x9E4A00"
+  glassTint: 0.55
+  glassMaterial: menu
+
+scopes:
+  plain: "0x000000"
+  tag: "0x000000"
+  entity:
+    color: "0x3B5BB5"
+    bold: false
+    italic: false
+    underline: false
+  markup: "0x000000"
+  string:
+    color: "0x409B1C"
+    bold: false
+    italic: false
+    underline: false
+  comment:
+    color: "0x8C868F"
+    bold: false
+    italic: false
+    underline: false
+  keyword:
+    color: "0xFF7800"
+    bold: false
+    italic: false
+    underline: false
+  storage:
+    color: "0xFF7800"
+    bold: false
+    italic: false
+    underline: false
+  support:
+    color: "0x3B5BB5"
+    bold: false
+    italic: false
+    underline: false
+  constant:
+    color: "0x3B5BB5"
+    bold: false
+    italic: false
+    underline: false
+  variable:
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0x000000"
+  punctuation: "0x000000"
+  preprocessor: "0x000000"
+  meta.tag: "0x3A4A64"
+  meta.verbatim:
+    color: "0x409B1C"
+    bold: false
+    italic: false
+    underline: false
+  invalid.illegal:
+    color: "0xF8F8F8"
+    background: "0x9D1E15"
+  meta.tag entity: "0x3A4A64"
+  invalid.deprecated:
+    color: "0x990000"
+    italic: true
+  keyword.type.variant:
+    color: "0x7F90AA"
+    bold: false
+    italic: false
+    underline: false
+  meta.function-call.py:
+    color: "0x3E4558"
+    bold: false
+    italic: false
+    underline: false
+  text.tex.latex entity:
+    color: "0xD62A28"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    color: "0x3B5BB5"
+    italic: true
+  source.ocaml keyword.operator: "0x000000"
+  string constant.other.placeholder:
+    color: "0x671EBB"
+    bold: false
+    italic: false
+    underline: false
+  source.ocaml constant.numeric.floating-point:
+    underline: true
+  source.ocaml keyword.operator.symbol.infix:
+    color: "0x3B5BB5"
+    bold: false
+    italic: false
+    underline: false
+  source.ocaml keyword.operator.symbol.prefix: "0x3B5BB5"
+  source.ocaml keyword.operator.symbol.infix.floating-point:
+    underline: true
+  source.ocaml keyword.operator.symbol.prefix.floating-point:
+    underline: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0x000000"
+  markup.heading:
+    color: "0xFF7800"
+    bold: true
+  markup.heading.1:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xFF7800"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0x000000"
+    bold: true
+  markup.italic:
+    color: "0x000000"
+    italic: true
+  markup.link:
+    color: "0x409B1C"
+    underline: true
+  markup.link.url:
+    color: "0x409B1C"
+    underline: true
+  markup.code.block:
+    color: "0x8C868F"
+    background: "0xEBEBEB"
+  markup.code.inline:
+    color: "0x8C868F"
+    background: "0xEBEBEB"
+  markup.quote:
+    color: "0x8C868F"
+    italic: true
+    background: "0xF7F7F7"
+  markup.rule:
+    color: "0x8C868F"
+    bold: true
+  markup.strikethrough:
+    color: "0x8C868F"
+    strikethrough: true
+  markup.list.checked:
+    color: "0x3B5BB5"
+    bold: true
+

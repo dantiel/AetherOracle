@@ -1,0 +1,240 @@
+# Converted from TextMate theme: Dawn
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Themes.tmbundle/Themes/Dawn.tmTheme
+name: dawn
+kind: light
+sourceEditorBackground: "0xF9F9F9"
+class: theme.light.dawn
+tags: [light, dawn]
+
+# Global editor colors
+editor:
+  background: "0xF9F9F9"
+  foreground: "0x080808"
+  caret: "0x000000"
+  selection: "0x275FFF4D"
+  lineHighlight: "0x2463B41F"
+  invisibles: "0x4B4B7E80"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0xE8E3D8"
+glassTint: 0.55
+glassBlurStrength: 0.40
+glassStyle: regular
+textShadowStrength: 0.2
+lineSpacing: 4.0
+editorBackgroundOpacity: 0.40
+sidebarBackgroundOpacity: 0.70
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0xEBEBEB"
+rulerForeground: "0x080808"
+sourceRulerBackground: "0xEBEBEB"
+rulerSeparator: "0xD1D1D166"
+sidebarAccent: "0x275FFF"
+sidebarForeground: "0x080808"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0xD8DFF2"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0xF9F9F9"
+  foreground: "0x080808"
+  baseText: "0x080808"
+  accent: "0x275FFF"
+  complementary: "0xFFC726"
+  codeBackground: "0xFAFAFA"
+  codeForeground: "0x080808"
+  shine: "0x183B9E"
+  glassTint: 0.55
+  glassMaterial: menu
+
+scopes:
+  plain: "0x080808"
+  tag: "0x080808"
+  entity:
+    color: "0xBF4F24"
+    bold: false
+    italic: false
+    underline: false
+  markup: "0x080808"
+  comment:
+    color: "0x5A525F"
+    italic: true
+  keyword:
+    color: "0x794938"
+    bold: false
+    italic: false
+    underline: false
+  storage:
+    color: "0xA71D5D"
+    italic: true
+  support:
+    color: "0x691C97"
+    bold: false
+    italic: false
+    underline: false
+  constant:
+    color: "0x811F24"
+    bold: true
+  variable:
+    color: "0x234A97"
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0x080808"
+  punctuation: "0x080808"
+  text source:
+    background: "0x6F8BBA26"
+  preprocessor: "0x080808"
+  string source:
+    color: "0x080808"
+    background: "0x6F8BBA26"
+    bold: false
+    italic: false
+    underline: false
+  string constant:
+    color: "0x696969"
+    bold: true
+  string variable:
+    color: "0x234A97"
+    bold: false
+    italic: false
+    underline: false
+  markup.raw:
+    color: "0x234A97"
+    background: "0xBBBBBB30"
+    bold: false
+    italic: false
+    underline: false
+  markup.bold:
+    color: "0x080808"
+    bold: true
+  markup.link:
+    color: "0x234A97"
+    italic: true
+    underline: true
+  markup.list: "0x693A17"
+  markup.quote:
+    color: "0x0B6125"
+    background: "0xBBBBBB30"
+    italic: true
+  markup.italic:
+    color: "0x080808"
+    italic: true
+  meta.embedded:
+    background: "0x6F8BBA26"
+  string.regexp:
+    color: "0xCF5628"
+    bold: false
+    italic: false
+    underline: false
+  markup.deleted: "0x59140E"
+  meta.separator:
+    color: "0x19356D"
+    background: "0xDCDCDC"
+    bold: true
+  invalid.illegal:
+    color: "0xF8F8F8"
+    background: "0xB52A1D"
+    italic: true
+    underline: true
+  markup.underline:
+    color: "0x080808"
+    underline: true
+  support.constant:
+    color: "0xB4371F"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    color: "0x693A17"
+    bold: false
+    italic: false
+    underline: false
+  support.variable: "0x234A97"
+  invalid.deprecated:
+    color: "0xB52A1D"
+    bold: true
+    italic: true
+    underline: true
+  punctuation.separator: "0x794938"
+  string.regexp.character-class:
+    color: "0xCF5628"
+    bold: true
+    italic: true
+  string | punctuation.definition.string:
+    color: "0x0B6125"
+    bold: false
+    italic: false
+    underline: false
+  string.regexp source.ruby.embedded:
+    color: "0xCF5628"
+    bold: true
+    italic: true
+  string.regexp constant.character.escape:
+    color: "0x811F24"
+    bold: true
+  string.regexp constant.character.escaped:
+    color: "0xCF5628"
+    bold: true
+    italic: true
+  markup.heading | markup.heading entity.name:
+    color: "0x19356D"
+    bold: true
+  string.regexp string.regexp.arbitrary-repitition:
+    color: "0xCF5628"
+    bold: true
+    italic: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0x080808"
+  markup.heading:
+    color: "0x794938"
+    bold: true
+  markup.heading.1:
+    color: "0x794938"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x794938"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x794938"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x794938"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x794938"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x794938"
+    bold: true
+    fontSize: 1.0
+  markup.link.url:
+    color: "0xCF5628"
+    underline: true
+  markup.code.block:
+    color: "0x5A525F"
+    background: "0xE5E5E5"
+  markup.code.inline:
+    color: "0x5A525F"
+    background: "0xE5E5E5"
+  markup.rule:
+    color: "0x5A525F"
+    bold: true
+  markup.strikethrough:
+    color: "0x5A525F"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xBF4F24"
+    bold: true
+

@@ -1,0 +1,203 @@
+# Converted from TextMate theme: Anathomy Of Grey Light 2
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Antonio’s Bundle.tmbundle/Themes/Anatomy of Grey Light 2.tmTheme
+name: anathomy-of-grey-light-2
+kind: light
+sourceEditorBackground: "0xFFFFFF"
+tags: [light, anathomy]
+
+# Global editor colors
+editor:
+  background: "0xFFFFFF"
+  foreground: "0x333333"
+  caret: "0x333333"
+  selection: "0xE6E6E6"
+  lineHighlight: "0xE6E6E6"
+  invisibles: "0x3B3A32"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0xE8E3D8"
+glassTint: 0.55
+glassBlurStrength: 0.4
+glassStyle: regular
+textShadowStrength: 0.2
+lineSpacing: 4.0
+editorBackgroundOpacity: 0.4
+sidebarBackgroundOpacity: 0.7
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0xF1F1F1"
+rulerForeground: "0x333333"
+sourceRulerBackground: "0xF1F1F1"
+rulerSeparator: "0xD7D7D766"
+sidebarAccent: "0xDD2366"
+sidebarForeground: "0x333333"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0xF5DCE5"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0xFFFFFF"
+  foreground: "0x333333"
+  baseText: "0x333333"
+  accent: "0xF92672"
+  complementary: "0x25F9AC"
+  codeBackground: "0xFFFFFF"
+  codeForeground: "0x333333"
+  shine: "0x9A1847"
+  glassTint: 0.55
+  glassMaterial: menu
+
+scopes:
+  plain: "0x333333"
+  tag: "0x333333"
+  entity: "0x333333"
+  markup: "0x333333"
+  string: "0x000000"
+  comment: "0xEBEBEB"
+  invalid:
+    color: "0xF8F8F0"
+    background: "0xF92672"
+    bold: false
+    italic: false
+    underline: false
+  keyword: "0xCFCFC2"
+  storage:
+    color: "0xF92672"
+    bold: false
+    italic: false
+    underline: false
+  support: "0x333333"
+  variable:
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0x333333"
+  punctuation: "0x555555"
+  preprocessor: "0x333333"
+  meta.diff: "0x75715E"
+  storage.type:
+    color: "0x666666"
+    italic: true
+  support.type:
+    color: "0xCCCCCC"
+    italic: true
+  support.class:
+    color: "0xCCCCCC"
+    italic: true
+  constant.other: "0x555555"
+  markup.changed: "0xE6DB74"
+  markup.deleted: "0xF92672"
+  markup.inserted: "0xA6E22E"
+  constant.numeric: "0x555555"
+  support.constant:
+    color: "0x666666"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    color: "0x888888"
+    bold: false
+    italic: false
+    underline: false
+  constant.language: "0xAE81FF"
+  constant.character: "0x555555"
+  invalid.deprecated:
+    color: "0xF8F8F0"
+    background: "0xAE81FF"
+  variable.parameter:
+    color: "0xFD971F"
+    italic: true
+  entity.name.tag:
+    color: "0xAAAAAA"
+    bold: false
+    italic: false
+    underline: false
+  meta.diff.header: "0x75715E"
+  entity.name.class:
+    color: "0xA6E22E"
+    underline: true
+  entity.name.function:
+    color: "0x888888"
+    bold: false
+    italic: false
+    underline: false
+  support.other.variable:
+    bold: false
+    italic: false
+    underline: false
+  entity.other.attribute-name:
+    color: "0x555555"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    color: "0xA6E22E"
+    italic: true
+    underline: true
+  meta.structure.dictionary.json string.quoted.double.json: "0x666666"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0x333333"
+  markup.heading:
+    color: "0xCFCFC2"
+    bold: true
+  markup.heading.1:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xCFCFC2"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0x333333"
+    bold: true
+  markup.italic:
+    color: "0x333333"
+    italic: true
+  markup.link:
+    color: "0x000000"
+    underline: true
+  markup.link.url:
+    color: "0x000000"
+    underline: true
+  markup.code.block:
+    color: "0xEBEBEB"
+    background: "0xEBEBEB"
+  markup.code.inline:
+    color: "0xEBEBEB"
+    background: "0xEBEBEB"
+  markup.quote:
+    color: "0xEBEBEB"
+    italic: true
+    background: "0xF7F7F7"
+  markup.rule:
+    color: "0xEBEBEB"
+    bold: true
+  markup.strikethrough:
+    color: "0xEBEBEB"
+    strikethrough: true
+  markup.list.checked:
+    color: "0x888888"
+    bold: true
+

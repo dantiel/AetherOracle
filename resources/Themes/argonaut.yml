@@ -1,0 +1,553 @@
+# Converted from TextMate theme: [ Argonaut ]
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Themes.tmbundle/Themes/[ Argonaut ].tmTheme
+name: argonaut
+kind: dark
+sourceEditorBackground: "0x151515"
+class: theme.dark.argonaut
+tags: [dark, argonaut]
+
+# Global editor colors
+editor:
+  background: "0x151515"
+  foreground: "0xB2B2B2"
+  caret: "0xFF2200"
+  selection: "0x002F53"
+  lineHighlight: "0x000C16"
+  invisibles: "0x000000"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.73
+glassBlurStrength: 0.63
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.3
+editorBackgroundOpacity: 0.78
+sidebarBackgroundOpacity: 0.88
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x0F0F0F"
+rulerForeground: "0xB2B2B2"
+sourceRulerBackground: "0x0F0F0F"
+rulerSeparator: "0x3D3D3D7F"
+sidebarAccent: "0x678298"
+sidebarForeground: "0xB2B2B2"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x272C31"
+
+# ── Pythia Oracle Chamber (first-class curated) ──
+# The chamber is the Argonaut palette itself — void background, azure accent,
+# golden-amber complementary, a deepened code-preview surface, and a lifted
+# "shine" tone so tool-call results read as glass, not chrome.
+pythia:
+  background: "0x151515"
+  foreground: "0xB2B2B2"
+  baseText: "0xFFCE00"
+  fontFamily: Syne
+  accent: "0x00A6FF"
+  complementary: "0xFFCE00"
+  codeBackground: "0x000C16"
+  codeForeground: "0xB2B2B2"
+  shine: "0xA0A3F9"
+  glassTint: 0.63
+  glassMaterial: menu
+
+scopes:
+  plain: "0xB2B2B2"
+  tag: "0xB2B2B2"
+  entity: "0xB2B2B2"
+  markup: "0xB2B2B2"
+  string: "0x6497C5"
+  comment:
+    color: "0x00A6FF"
+    italic: true
+  invalid:
+    color: "0xFFFFFF"
+    background: "0x990000"
+  keyword:
+    color: "0xFFFFFF"
+    bold: true
+  storage:
+    color: "0xFFFFFF"
+    bold: true
+  support: "0xB2B2B2"
+  constant:
+    color: "0xA4ED2D"
+    bold: true
+  attribute: "0xB2B2B2"
+  punctuation: "0xB2B2B2"
+  text source:
+    background: "0x00020559"
+  preprocessor: "0xB2B2B2"
+  string source: "0xA0A3F9"
+  text.tasks: "0xFFFFFF"
+  markup.bold:
+    bold: true
+  markup.quote:
+    italic: true
+  markup.table: "0xB2C3D1"
+  support.type:
+    color: "0xFFFFFF"
+    bold: true
+  markup.italic:
+    italic: true
+  support.class:
+    color: "0x7A88F6"
+    bold: true
+  variable.other: "0x0068C5"
+  declaration.tag: "0x888888"
+  markup.footnote:
+    color: "0xA0A3F9"
+    italic: true
+  string.unquoted:
+    background: "0x00020559"
+  constant.numeric: "0xD70000"
+  support.constant: "0x06960E"
+  support.function: "0x815DB3"
+  variable.language: "0x0068C5"
+  other.preprocessor: "0x7B9A00"
+  declaration.doctype: "0x888888"
+  declaration.xml-processing: "0x888888"
+  invalid.trailing-whitespace:
+    color: "0x333333"
+    background: "0xFFD0D0"
+  entity.name.tag: "0x0065D3"
+  markup.table.td: "0xB2C3D1"
+  markup.table.th:
+    color: "0xFFCA00"
+    bold: true
+  markup.heading.1: "0xFFFFFF"
+  markup.heading.2: "0xFFFFFF"
+  markup.heading.3: "0xFFFFFF"
+  markup.heading.4: "0xFFFFFF"
+  markup.heading.5: "0xFFFFFF"
+  markup.heading.6: "0xFFFFFF"
+  entity.name.class:
+    color: "0xDB001C"
+    background: "0x000000"
+    underline: true
+  markup.block.math:
+    color: "0xA0A3F9"
+    background: "0x0A101826"
+  markup.raw.inline:
+    color: "0xFFD24A"
+    background: "0x001C3380"
+    bold: true
+  meta.header.tasks: "0xFFFFFF"
+  markup.bold.italic:
+    color: "0xFFCA00"
+    bold: true
+    italic: true
+  markup.inline.math:
+    color: "0xA0A3F9"
+    background: "0x0A101826"
+    italic: true
+  markup.italic.bold:
+    color: "0xFFCA00"
+    bold: true
+    italic: true
+  keyword.operator.js: "0x606E7E"
+  markup.table.header:
+    color: "0xFFCA00"
+    bold: true
+  storage.type.method: "0x70727E"
+  string.unquoted.yaml: "0xB2C3D1"
+  constant.numeric.yaml: "0xB2C3D1"
+  constant.other.symbol: "0xA4ED2D"
+  markup.underline.link:
+    color: "0x62A6FF"
+    underline: true
+  constant.language.ruby:
+    color: "0x0068C5"
+    bold: true
+  markup.definition.term:
+    color: "0x7A88F6"
+    italic: true
+  meta.header-line.tasks: "0xFFFFFF"
+  meta.metadata.markdown:
+    background: "0x00020526"
+  support.other.variable:
+    color: "0xF18F94"
+    bold: true
+  variable.language.ruby:
+    color: "0x0068C5"
+    bold: true
+  markup.checked.markdown: "0xFFD24A"
+  meta.separator.markdown: "0x606E7E"
+  entity.name.preprocessor:
+    color: "0xFFCE00"
+    bold: true
+  markup.unchecked.markdown: "0xFFD24A"
+  constant.character.escaped: "0xA0A3F9"
+  punctuation.definition.link: "0x4EA0D8"
+  punctuation.separator.table: "0x4EA0D8"
+  punctuation.definition.quote: "0x606E7E"
+  markup.definition.description: "0xB2C3D1"
+  meta.environment-variable.ruby: "0x7B9A00"
+  punctuation.definition.heading: "0x606E7E"
+  punctuation.separator.sequence: "0x606E7E"
+  punctuation.definition.checkbox: "0xFFD24A"
+  punctuation.terminator.statement: "0x606E7E"
+  variable.parameter - source.ruby:
+    italic: true
+  entity.name.tag.html: "0x62A6FF"
+  entity.name.tag.yaml: "0x7A88F6"
+  entity.name.tag.tasks: "0xFFFFFF"
+  meta.embedded.block.c:
+    background: "0x00020533"
+  meta.embedded.block.js:
+    background: "0x00020533"
+  markup.heading.setext.1:
+    color: "0x62A6FF"
+    bold: true
+  markup.heading.setext.2:
+    color: "0x4EA0D8"
+    bold: true
+  meta.embedded.block.css:
+    background: "0x00020533"
+  meta.embedded.block.sql:
+    background: "0x00020533"
+  meta.embedded.block.xml:
+    background: "0x00020533"
+  string.other.math.block:
+    color: "0xA0A3F9"
+    background: "0x0A101826"
+  keyword.control.def.ruby:
+    color: "0xFFFFFF"
+    bold: true
+  meta.embedded.block.html:
+    background: "0x00020533"
+  meta.embedded.block.ruby:
+    background: "0x00020533"
+  string.other.math.inline:
+    color: "0xA0A3F9"
+    background: "0x0A101826"
+    italic: true
+  entity.name.function.ruby:
+    color: "0xFFCA00"
+    bold: true
+  keyword.operator.pin.ruby:
+    color: "0xF18F94"
+    bold: true
+  markup.list.pending.tasks: "0xFFFFFF"
+  markup.raw.block.markdown:
+    background: "0x001C334D"
+  meta.embedded.block.shell:
+    background: "0x00020533"
+  meta.link.inline.markdown:
+    color: "0x62A6FF"
+    underline: true
+  meta.paragraph.list.tasks: "0xFFFFFF"
+  string.quoted.double.yaml: "0xB2C3D1"
+  string.quoted.single.yaml: "0xB2C3D1"
+  variable.other.block.ruby:
+    color: "0xF6A700"
+    italic: true
+  variable.other.local.ruby: "0xB2B2B2"
+  markup.underline.link.http: "0x7EC8FF"
+  keyword.operator.other.ruby: "0x606E7E"
+  keyword.operator.range.ruby: "0x7B9A00"
+  markup.list.completed.tasks:
+    bold: false
+    italic: false
+    underline: false
+  markup.underline.link.email: "0x7EC8FF"
+  markup.underline.link.https: "0x7EC8FF"
+  markup.underline.link.tasks: "0xFFFFFF"
+  meta.embedded.block.c\\+\\+:
+    background: "0x00020533"
+  constant.other.footnote.link:
+    color: "0xA0A3F9"
+    italic: true
+  keyword.control.pattern.ruby:
+    color: "0xFFFFFF"
+    bold: true
+  variable.other.function.ruby:
+    color: "0x0E7CD8"
+    bold: false
+    italic: false
+    underline: false
+  constant.other.reference.link: "0x7EC8FF"
+  keyword.operator.logical.ruby: "0x606E7E"
+  meta.separator.table.markdown: "0x4EA0D8"
+  constant.numeric.list.markdown: "0xA4ED2D"
+  keyword.other.regexp-flag.ruby: "0xA0A3F9"
+  meta.method-call.receiver.ruby: "0x46B2FF"
+  punctuation.section.braces.end: "0x7EC8FF"
+  punctuation.section.parens.end: "0x4EA0D8"
+  punctuation.definition.math.end: "0xFFCA00"
+  entity.other.attribute-name.html: "0x7A88F6"
+  entity.other.attribute-name.yaml: "0x7A88F6"
+  keyword.operator.arithmetic.ruby: "0x606E7E"
+  keyword.operator.comparison.ruby: "0x606E7E"
+  keyword.operator.quantifier.ruby: "0xA0A3F9"
+  punctuation.section.braces.begin: "0x7EC8FF"
+  punctuation.section.brackets.end: "0x62A6FF"
+  punctuation.section.parens.begin: "0x4EA0D8"
+  punctuation.separator.other.ruby: "0xA4ED2D"
+  variable.other.footnote.markdown:
+    color: "0xA0A3F9"
+    italic: true
+  meta.language.identifier.markdown:
+    color: "0x7A88F6"
+    italic: true
+  punctuation.definition.group.ruby: "0xA0A3F9"
+  punctuation.definition.math.begin: "0xFFCA00"
+  punctuation.section.function.ruby: "0x4EA0D8"
+  punctuation.separator.method.ruby: "0x7EC8FF"
+  punctuation.separator.object.ruby: "0x606E7E"
+  variable.language.fenced.markdown:
+    color: "0x7A88F6"
+    italic: true
+  constant.character.escape.markdown: "0xA4ED2D"
+  entity.name.function - source.ruby:
+    color: "0xFFCA00"
+    bold: true
+  keyword.operator.forward-args.ruby:
+    color: "0xA0A3F9"
+    bold: true
+    italic: true
+  punctuation.section.brackets.begin: "0x62A6FF"
+  meta.method-call.* constant.numeric: "0xD1EFFF"
+  punctuation.definition.footnote.end: "0x606E7E"
+  punctuation.definition.header.tasks: "0xFFFFFF"
+  punctuation.definition.raw.markdown: "0xFFCA00"
+  punctuation.definition.bold.markdown: "0xFFCA00"
+  punctuation.separator.arguments.ruby:
+    color: "0x7A88F6"
+    bold: true
+  punctuation.separator.key-value.ruby:
+    color: "0xFFD24A"
+    bold: true
+  punctuation.separator.namespace.ruby: "0x7EC8FF"
+  punctuation.separator.statement.ruby: "0x606E7E"
+  punctuation.definition.footnote.begin: "0x606E7E"
+  punctuation.definition.fenced.markdown: "0xFFCA00"
+  punctuation.definition.italic.markdown: "0xA0A3F9"
+  punctuation.definition.list_item.tasks:
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.heading.markdown: "0x606E7E"
+  punctuation.definition.metadata.markdown: "0x4EA0D8"
+  punctuation.definition.list_item.markdown: "0x7B9A00"
+  punctuation.definition.parameters.markdown: "0x4EA0D8"
+  punctuation.separator.key-value.definition: "0xA4ED2D"
+  punctuation.definition.strikethrough.markdown: "0xF18F94"
+  meta.tag.inline.any.html: "0x62A6FF"
+  entity.name.tag.fenced.markdown:
+    color: "0x7A88F6"
+    italic: true
+  markup.raw.block.fenced.markdown:
+    background: "0x001C334D"
+  comment.line.directive.emacs.ruby:
+    color: "0x00C2FF"
+    italic: true
+  comment.line.directive.magic.ruby:
+    color: "0x00C2FF"
+    italic: true
+  keyword.operator.pattern.pin.ruby:
+    color: "0xF18F94"
+    bold: true
+  markup.raw.inline.string.markdown:
+    color: "0xFFD24A"
+    background: "0x001C3380"
+    bold: true
+  meta.function.method.endless.ruby:
+    color: "0xFFCA00"
+    bold: true
+    underline: true
+  meta.method-call.bare.parens.ruby: "0x46B2FF"
+  meta.method-call.bare.no-args.ruby: "0x46B2FF"
+  punctuation.section.array.end.ruby: "0x4EA0D8"
+  punctuation.section.block.end.ruby:
+    color: "0x62A6FF"
+    bold: true
+  punctuation.section.scope.end.ruby: "0x7EC8FF"
+  variable.other.readwrite.class.ruby:
+    color: "0x7A88F6"
+    bold: true
+    italic: true
+  meta.method-call.bare.with-args.ruby: "0x46B2FF"
+  punctuation.section.array.begin.ruby: "0x4EA0D8"
+  punctuation.section.block.begin.ruby:
+    color: "0x62A6FF"
+    bold: true
+  punctuation.section.scope.begin.ruby: "0x7EC8FF"
+  variable.other.readwrite.global.ruby:
+    color: "0xF18F94"
+    bold: true
+  meta.method-call.* string.quoted.ruby:
+    color: "0x8ECFFF"
+    bold: true
+    italic: true
+  punctuation.section.embedded.end.ruby:
+    color: "0xA0A3F9"
+    bold: true
+  string.unquoted.heredoc.squiggly.ruby:
+    color: "0x6497C5"
+    background: "0x0A101820"
+  variable.language.global.special.ruby:
+    color: "0xFF5C8F"
+    bold: true
+    underline: true
+  keyword.operator.assignment.arrow.ruby:
+    color: "0xFFD24A"
+    bold: true
+  meta.method-call.* meta.arguments.call:
+    italic: true
+  meta.method-call.receiver.literal.ruby: "0x46B2FF"
+  punctuation.definition.math.end.inline: "0xFFCA00"
+  punctuation.definition.string.end.html: "0x606E7E"
+  punctuation.definition.string.end.ruby: "0x4EA0D8"
+  variable.other.readwrite.instance.ruby:
+    color: "0x62A6FF"
+    bold: true
+  variable.parameter.block.numbered.ruby:
+    color: "0xF6BF3E"
+    italic: true
+  constant.other.character-class.set.ruby: "0xA0A3F9"
+  punctuation.section.embedded.begin.ruby:
+    color: "0xA0A3F9"
+    bold: true
+  punctuation.definition.constant.end.ruby: "0x4EA0D8"
+  punctuation.definition.math.begin.inline: "0xFFCA00"
+  punctuation.definition.string.begin.html: "0x606E7E"
+  punctuation.definition.string.begin.ruby: "0x4EA0D8"
+  punctuation.section.embedded.end.markdown: "0xFFCA00"
+  punctuation.definition.constant.begin.ruby: "0x4EA0D8"
+  punctuation.definition.list.begin.markdown: "0x7B9A00"
+  punctuation.definition.image.begin.markdown: "0xF18F94"
+  punctuation.definition.quote.begin.markdown: "0x7B9A00"
+  punctuation.section.embedded.begin.markdown: "0xFFCA00"
+  punctuation.definition.character-class.end.ruby: "0xA0A3F9"
+  punctuation.definition.character-class.begin.ruby: "0xA0A3F9"
+  meta.method-call.* meta.brace.curly.ruby: "0x3BA3F5"
+  meta.method-call.* constant.other.symbol.ruby: "0xD1EFFF"
+  meta.method-call.* storage.type.variable.ruby:
+    color: "0x8ECFFF"
+    bold: true
+    italic: true
+  punctuation.definition.link.title.end.markdown: "0x4EA0D8"
+  meta.method-call.* variable.other.function.ruby:
+    color: "0x0E7CD8"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.definition.link.title.begin.markdown: "0x4EA0D8"
+  meta.method-call.* punctuation.separator.other.ruby:
+    color: "0xBFE7FF"
+    bold: true
+    italic: true
+  meta.method-call.* punctuation.separator.object.ruby: "0x6F7C8A"
+  punctuation.definition.link.description.end.markdown: "0x4EA0D8"
+  meta.image.inline.markdown punctuation.definition.link: "0xF18F94"
+  punctuation.definition.link.description.begin.markdown: "0x4EA0D8"
+  meta.method-call.* punctuation.definition.constant.ruby:
+    color: "0xA4ED2D"
+    bold: true
+    italic: true
+  meta.image.inline.markdown punctuation.definition.metadata: "0x7EC8FF"
+  entity.other.attribute-name.yaml punctuation.definition.block: "0xFFCA00"
+  markup.table.separator.markdown constant.other.character-class: "0xA4ED2D"
+  markup.table.separator.markdown punctuation.separator.key-value: "0xA4ED2D"
+  meta.method-call.* punctuation.section.array.*.*: "0xB0B0B0"
+  meta.method-call.* constant.other.symbol.hashkey.ruby:
+    color: "0xA4ED2D"
+    bold: true
+    italic: true
+  meta.method-call.* punctuation.section.braces.end.ruby: "0x3BA3F5"
+  meta.method-call.* meta.brace.curly.ruby variable.other: "0xBFE7FF"
+  meta.method-call.* punctuation.section.braces.begin.ruby: "0x3BA3F5"
+  string.regexp.classic.ruby keyword.operator.logical.ruby: "0x9AA0FF"
+  string.regexp.percent.ruby keyword.operator.logical.ruby: "0x9AA0FF"
+  meta.method-call.* meta.brace.curly.ruby constant.numeric: "0xBFE7FF"
+  meta.method-call.* punctuation.section.arguments.end.ruby: "0x6F7C8A"
+  meta.function.method.with-arguments.ruby string.quoted.ruby:
+    color: "0xFFC24A"
+    italic: true
+  meta.method-call.* punctuation.section.arguments.begin.ruby: "0x6F7C8A"
+  meta.method-call.* punctuation.definition.arguments.end.ruby: "0x6F7C8A"
+  meta.method-call.* punctuation.definition.arguments.begin.ruby: "0x6F7C8A"
+  markup.list.pending.tasks punctuation.definition.list_item.tasks: "0xFFFFFF"
+  meta.header-line.tasks punctuation.whitespace.list_item.leading.tasks: "0xFFFFFF"
+  meta.method-call.* meta.brace.curly.ruby string.quoted.ruby: "0xBFE7FF"
+  meta.method-call.* constant.other.symbol.hashkey.quoted.ruby:
+    color: "0x8ECFFF"
+    bold: true
+    italic: true
+  meta.function.method.with-arguments.ruby meta.brace.curly.ruby: "0x3BA3F5"
+  meta.function.method.with-arguments.ruby storage.type.variable.ruby:
+    color: "0xFFD24A"
+    bold: true
+    italic: true
+  string.unquoted.heredoc.ruby punctuation.definition.string.end.ruby:
+    color: "0x62A6FF"
+    bold: true
+  string.unquoted.heredoc.ruby punctuation.definition.string.begin.ruby:
+    color: "0x62A6FF"
+    bold: true
+  constant.other.symbol.hashkey.ruby punctuation.definition.constant.ruby: "0xA4ED2D"
+  meta.function.method.with-arguments.ruby keyword.operator.assignment.ruby: "0xD8B365"
+  meta.function.method.with-arguments.ruby variable.parameter.function.ruby:
+    color: "0xFFD24A"
+    italic: true
+  meta.function.method.with-arguments.ruby punctuation.separator.object.ruby: "0xD8B365"
+  meta.function.method.with-arguments.ruby punctuation.definition.constant.ruby:
+    color: "0xF6A700"
+    italic: true
+  meta.function.method.with-arguments.ruby punctuation.section.braces.end.ruby: "0x3BA3F5"
+  string.unquoted.heredoc.squiggly.ruby punctuation.definition.string.end.ruby:
+    color: "0x62A6FF"
+    bold: true
+  constant.other.symbol.hashkey.quoted.ruby punctuation.definition.constant.ruby: "0xA4ED2D"
+  meta.function.method.with-arguments.ruby punctuation.section.braces.begin.ruby: "0x3BA3F5"
+  string.unquoted.heredoc.squiggly.ruby punctuation.definition.string.begin.ruby:
+    color: "0x62A6FF"
+    bold: true
+  meta.function.method.with-arguments.ruby variable.other.readwrite.parameter.ruby:
+    color: "0xFFD24A"
+    italic: true
+  meta.method-call.* constant.other.symbol.hashkey.ruby punctuation.definition.constant.ruby:
+    color: "0xBFE7FF"
+    bold: true
+    italic: true
+  meta.function.method.with-arguments.ruby constant.other.symbol.hashkey.parameter.function.ruby:
+    color: "0xFFC24A"
+    italic: true
+  meta.method-call.* constant.other.symbol.hashkey.quoted.ruby punctuation.definition.constant.ruby:
+    color: "0xBFE7FF"
+    bold: true
+    italic: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xB2B2B2"
+  markup.heading:
+    color: "0xFFFFFF"
+    bold: true
+  markup.link:
+    color: "0x6497C5"
+    underline: true
+  markup.link.url:
+    color: "0x6497C5"
+    underline: true
+  markup.code.block:
+    color: "0x00A6FF"
+    background: "0x0D0D0D"
+  markup.code.inline:
+    color: "0x00A6FF"
+    background: "0x0D0D0D"
+  markup.rule:
+    color: "0x00A6FF"
+    bold: true
+  markup.strikethrough:
+    color: "0x00A6FF"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xFFCA00"
+    bold: true

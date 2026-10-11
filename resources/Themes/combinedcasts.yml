@@ -1,0 +1,203 @@
+# Converted from TextMate theme: CombinedCasts
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Avian.tmbundle/Themes/CombinedCasts.tmTheme
+name: combinedcasts
+kind: dark
+sourceEditorBackground: "0x232323"
+class: theme.combinedcasts
+tags: [dark, combinedcasts]
+
+# Global editor colors
+editor:
+  background: "0x232323"
+  foreground: "0xE6E1DC"
+  caret: "0x888888"
+  selection: "0x5A647EE0"
+  lineHighlight: "0x333435"
+  invisibles: "0x404040"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.72
+glassBlurStrength: 0.62
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.2
+editorBackgroundOpacity: 0.77
+sidebarBackgroundOpacity: 0.87
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x1D1D1D"
+rulerForeground: "0xE6E1DC"
+sourceRulerBackground: "0x1D1D1D"
+rulerSeparator: "0x4B4B4B7F"
+sidebarAccent: "0xCC7833"
+sidebarForeground: "0xE6E1DC"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x4A4037"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x232323"
+  foreground: "0xE6E1DC"
+  baseText: "0x38CADA"
+  accent: "0xDA4939"
+  complementary: "0x38CADA"
+  codeBackground: "0x191919"
+  codeForeground: "0xE6E1DC"
+  shine: "0xE88E84"
+  glassTint: 0.72
+  glassMaterial: menu
+
+scopes:
+  plain: "0xE6E1DC"
+  tag: "0xE6E1DC"
+  entity: "0xE6E1DC"
+  markup: "0xE6E1DC"
+  string: "0x9AB253"
+  comment:
+    color: "0xBC9458"
+    italic: true
+  invalid:
+    color: "0xFFFFFF"
+    background: "0x990000"
+  keyword: "0xCC7833"
+  storage: "0xCC7833"
+  support: "0xE6E1DC"
+  attribute: "0xE6E1DC"
+  punctuation: "0xE6E1DC"
+  preprocessor: "0xE6E1DC"
+  string source: "0x4FA84F"
+  meta.tag: "0xE8BF6A"
+  text.plain:
+    color: "0x3C3C3C"
+    background: "0xF2F2F2"
+  support.type: "0x6E9CBE"
+  support.class: "0x6E9CBE"
+  variable.scss: "0xD0D0FF"
+  constant.other: "0x6E9CBE"
+  variable.other: "0xD0D0FF"
+  declaration.tag: "0xE8BF6A"
+  constant.numeric: "0x9AB253"
+  support.constant: "0x9AB253"
+  support.function: "0xDA4939"
+  constant.language: "0x6E9CBE"
+  variable.language: "0xD0D0FF"
+  constant.character: "0x6E9CBE"
+  string source.ruby: "0x4FA84F"
+  variable.parameter: "0xD0D0FF"
+  entity.name.tag: "0xE8BF6A"
+  text.plain.tmcsv:
+    color: "0xE6E1DC"
+    background: "0x232323"
+  entity.name.class: "0xFFFFFF"
+  meta.set.variable: "0xD0D0FF"
+  text.html.markdown:
+    color: "0x3C3C3C"
+    background: "0xF2F2F2"
+  entity.name.function: "0xE8BF6A"
+  markup.bold.markdown:
+    bold: true
+  markup.italic.markdown:
+    italic: true
+  support.other.variable: "0x6E9CBE"
+  meta.separator.markdown:
+    color: "0xCC7833"
+    background: "0xF2F2F2"
+  variable.other.constant: "0xDA4939"
+  constant.character.escape: "0x4FA84F"
+  constant.character.escaped: "0x4FA84F"
+  entity.other.attribute-name: "0xE8BF6A"
+  entity.other.inherited-class: "0xE8BF6A"
+  markup.raw.block.markdown: "0x4D84AC"
+  meta.link.inline.markdown: "0x9F9F9F"
+  markup.raw.inline.markdown: "0x4D84AC"
+  text.html.markdown meta.tag: "0x6E9CBE"
+  markup.underline.link.markdown: "0x4D84AC"
+  text.html.markdown string.quoted: "0x6E9CBE"
+  punctuation.definition.bold.markdown: "0x9F9F9F"
+  punctuation.definition.link.markdown: "0xCC7833"
+  punctuation.definition.list.markdown: "0xCC7833"
+  punctuation.definition.quote.markdown: "0x9F9F9F"
+  punctuation.definition.italic.markdown: "0x9F9F9F"
+  punctuation.definition.heading.markdown: "0xCC7833"
+  punctuation.definition.metadata.markdown: "0xCC7833"
+  punctuation.definition.list_item.markdown: "0x9F9F9F"
+  punctuation.definition.blockquote.markdown: "0x9F9F9F"
+  string.other.link.title.markdown: "0xCC7833"
+  text.html.markdown entity.name.tag: "0x6E9CBE"
+  text.html.markdown entity.name.section:
+    color: "0x3C3C3C"
+    bold: true
+  punctuation.definition.string.end.markdown: "0xCC7833"
+  punctuation.definition.constant.end.markdown: "0xCC7833"
+  punctuation.definition.string.begin.markdown: "0xCC7833"
+  punctuation.definition.constant.begin.markdown: "0xCC7833"
+  text.html.markdown entity.other.attribute-name: "0x6E9CBE"
+  string.other.link.description.title.markdown: "0xCC7833"
+  meta.link.reference.markdown meta.link.reference.literal.markdown: "0x9F9F9F"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xE6E1DC"
+  markup.heading:
+    color: "0xCC7833"
+    bold: true
+  markup.heading.1:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xE6E1DC"
+    bold: true
+  markup.italic:
+    color: "0xE6E1DC"
+    italic: true
+  markup.link:
+    color: "0x9AB253"
+    underline: true
+  markup.link.url:
+    color: "0x9AB253"
+    underline: true
+  markup.code.block:
+    color: "0xBC9458"
+    background: "0x1B1B1B"
+  markup.code.inline:
+    color: "0xBC9458"
+    background: "0x1B1B1B"
+  markup.quote:
+    color: "0xBC9458"
+    italic: true
+    background: "0x282828"
+  markup.rule:
+    color: "0xBC9458"
+    bold: true
+  markup.strikethrough:
+    color: "0xBC9458"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xE8BF6A"
+    bold: true
+

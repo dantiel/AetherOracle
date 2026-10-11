@@ -1,0 +1,49 @@
+# Converted from TextMate theme: Vibrant Ink chopped'n'screwed
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Themes.tmbundle/Themes/Vibrant Ink chopped'n'screwed.tmTheme
+name: vibrant-ink-chopped
+kind: dark
+glassTint: 0.70
+editorBackgroundOpacity: 0.88
+
+# Global editor colors
+editor:
+  background: "0x000000"
+  foreground: "0xFFFFFF"
+  caret: "0xFFFFFF"
+  selection: "0x0A0074"
+  lineHighlight: "0x070C86"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x000000"
+  foreground: "0xFFFFFF"
+  baseText: "0x6A7400"
+  accent: "0x0A0074"
+  complementary: "0x6A7400"
+  codeBackground: "0x000000"
+  codeForeground: "0xFFFFFF"
+  shine: "0x6761A9"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  attribute: "0xFCE85F"
+  comment:
+    color: "0x363636"
+    italic: true
+  constant: "0xF2F2F2"
+  constant.numeric: "0xF2F2F2"
+  function: "0x4CB786"
+  keyword: "0xEE8329"
+  operator: "0xFF6600"
+  plain: "0xFFFFFF"
+  punctuation: "0xFFFFFF"
+  string:
+    color: "0xB2D9D0"
+    background: "0x61601D"
+  string.escape: "0xB2D9D0"
+  support.function: "0xE94526"
+  support.type: "0xFFFFFF"
+  tag: "0xFCE85F"
+  variable: "0x1AA6FC"
+  variable.language: "0x44BCF9"
+

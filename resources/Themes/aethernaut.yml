@@ -1,0 +1,315 @@
+# Aethernaut — the standard. Argonaut, metamorphosed.
+# Same lineage: cyan italic comments, lime constants, near-white keywords,
+# periwinkle classes, violet functions, steel selection — but deeper, cooler,
+# more liquid glass. Argonaut's soul, the Æther's skin.
+name: Aethernaut
+kind: dark
+class: theme.dark.aethernaut
+tags: [aether, signature, dark, standard, argonaut-lineage]
+
+# Global editor colors
+editor:
+  background: "0x12141A"
+  foreground: "0xB8BEC4"
+  caret: "0xFF2200"
+  selection: "0x0A3A5C"
+  lineHighlight: "0x0A0E15"
+  invisibles: "0x000000"
+
+# ── AetherCodex Chrome (liquid glass, more polished) ──
+glassTintColor: "0x1A1C24"
+glassTint: 0.70
+glassBlurStrength: 0.58
+glassStyle: regular
+textShadowStrength: 0.55
+lineSpacing: 4.4
+editorBackgroundOpacity: 0.74
+sidebarBackgroundOpacity: 0.84
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar ──
+rulerBackground: "0x0D0E12"
+rulerForeground: "0xB8BEC4"
+sourceRulerBackground: "0x0D0E12"
+rulerSeparator: "0x2E343C7F"
+sidebarAccent: "0x6E8CA2"
+sidebarForeground: "0xB8BEC4"
+gutterSelectionBackground: "0x0A3A5C"
+gutterSelectionForeground: "0xDFE3E8"
+gutterSelectionBorder: "0x0A8AD0"
+sidebarBackground: "0x242A31"
+
+# ── Pythia Oracle Chamber (first-class curated) ──
+# Evolved steel-blue accent + warmer amber complementary, deepened code-preview
+# surface, lifted shine — tool-call results read as glass, not chrome.
+pythia:
+  background: "0x12141A"
+  foreground: "0xB8BEC4"
+  baseText: "0xB8936E"
+  accent: "0x6E8CA2"
+  complementary: "0xB8936E"
+  codeBackground: "0x0E1116"
+  codeForeground: "0xB8BEC4"
+  shine: "0x9BBCCF"
+  glassTint: 0.58
+  glassMaterial: menu
+
+scopes:
+  plain: "0xB8BEC4"
+  tag: "0xB8BEC4"
+  entity: "0xB8BEC4"
+  markup: "0xB8BEC4"
+  string: "0x6FA8D1"
+  comment:
+    color: "0x00B4FF"
+    italic: true
+  invalid:
+    color: "0xFFFFFF"
+    background: "0x990000"
+  keyword:
+    color: "0xF2F4F8"
+    bold: true
+  storage:
+    color: "0xF2F4F8"
+    bold: true
+  support: "0xB8BEC4"
+  constant:
+    color: "0xB4F03A"
+    bold: true
+  attribute: "0xB8BEC4"
+  punctuation: "0xB8BEC4"
+  text source:
+    background: "0x00020559"
+  preprocessor: "0xB8BEC4"
+  string source: "0xADB0FB"
+  text.tasks: "0xF2F4F8"
+  markup.bold:
+    bold: true
+  markup.quote:
+    italic: true
+  markup.table: "0xBCC7D5"
+  support.type:
+    color: "0xF2F4F8"
+    bold: true
+  markup.italic:
+    italic: true
+  support.class:
+    color: "0x8494F8"
+    bold: true
+  variable.other: "0x0A76D4"
+  declaration.tag: "0x8C9094"
+  markup.footnote:
+    color: "0xADB0FB"
+    italic: true
+  string.unquoted:
+    background: "0x00020559"
+  constant.numeric: "0xE00000"
+  support.constant: "0x0EA418"
+  support.function: "0x8A66BE"
+  variable.language: "0x0A76D4"
+  other.preprocessor: "0x86A500"
+  declaration.doctype: "0x8C9094"
+  declaration.xml-processing: "0x8C9094"
+  invalid.trailing-whitespace:
+    color: "0x333333"
+    background: "0xFFD0D0"
+  entity.name.tag: "0x0A72DC"
+  markup.table.td: "0xBCC7D5"
+  markup.table.th:
+    color: "0xFFD24E"
+    bold: true
+  markup.heading.1: "0xF2F4F8"
+  markup.heading.2: "0xF2F4F8"
+  markup.heading.3: "0xF2F4F8"
+  markup.heading.4: "0xF2F4F8"
+  markup.heading.5: "0xF2F4F8"
+  markup.heading.6: "0xF2F4F8"
+  entity.name.class:
+    color: "0xE0001E"
+    background: "0x000000"
+    underline: true
+  markup.block.math:
+    color: "0xADB0FB"
+    background: "0x0A101826"
+  markup.raw.inline:
+    color: "0xFFD84E"
+    background: "0x001C3380"
+    bold: true
+  meta.header.tasks: "0xF2F4F8"
+  markup.bold.italic:
+    color: "0xFFD24E"
+    bold: true
+    italic: true
+  markup.inline.math:
+    color: "0xADB0FB"
+    background: "0x0A101826"
+    italic: true
+  markup.italic.bold:
+    color: "0xFFD24E"
+    bold: true
+    italic: true
+  keyword.operator.js: "0x64707E"
+  markup.table.header:
+    color: "0xFFD24E"
+    bold: true
+  storage.type.method: "0x747884"
+  string.unquoted.yaml: "0xBCC7D5"
+  constant.numeric.yaml: "0xBCC7D5"
+  constant.other.symbol: "0xB4F03A"
+  markup.underline.link:
+    color: "0x6CB0FF"
+    underline: true
+  meta.metadata.markdown:
+    background: "0x00020526"
+  support.other.variable:
+    color: "0xF5989D"
+    bold: true
+  variable.language.ruby:
+    color: "0x0A76D4"
+    bold: true
+  markup.checked.markdown: "0xFFD84E"
+  meta.separator.markdown: "0x64707E"
+  entity.name.preprocessor:
+    color: "0xFFD24E"
+    bold: true
+  markup.unchecked.markdown: "0xFFD84E"
+  constant.character.escaped: "0xADB0FB"
+  punctuation.definition.link: "0x56A8DC"
+  punctuation.separator.table: "0x56A8DC"
+  punctuation.definition.quote: "0x64707E"
+  markup.definition.description: "0xBCC7D5"
+  meta.environment-variable.ruby: "0x86A500"
+  punctuation.definition.heading: "0x64707E"
+  punctuation.separator.sequence: "0x64707E"
+  punctuation.definition.checkbox: "0xFFD84E"
+  punctuation.terminator.statement: "0x64707E"
+  variable.parameter - source.ruby:
+    italic: true
+  entity.name.tag.html: "0x6CB0FF"
+  entity.name.tag.yaml: "0x8494F8"
+  entity.name.tag.tasks: "0xF2F4F8"
+  meta.embedded.block.c:
+    background: "0x00020533"
+  meta.embedded.block.js:
+    background: "0x00020533"
+  markup.heading.setext.1:
+    color: "0x6CB0FF"
+    bold: true
+  markup.heading.setext.2:
+    color: "0x56A8DC"
+    bold: true
+  meta.embedded.block.css:
+    background: "0x00020533"
+  meta.embedded.block.sql:
+    background: "0x00020533"
+  meta.embedded.block.xml:
+    background: "0x00020533"
+  string.other.math.block:
+    color: "0xADB0FB"
+    background: "0x0A101826"
+  keyword.control.def.ruby:
+    color: "0xF2F4F8"
+    bold: true
+  meta.embedded.block.html:
+    background: "0x00020533"
+  meta.embedded.block.ruby:
+    background: "0x00020533"
+  string.other.math.inline:
+    color: "0xADB0FB"
+    background: "0x0A101826"
+    italic: true
+  entity.name.function.ruby:
+    color: "0xFFD24E"
+    bold: true
+  keyword.operator.pin.ruby:
+    color: "0xF5989D"
+    bold: true
+  markup.list.pending.tasks: "0xF2F4F8"
+  markup.raw.block.markdown:
+    background: "0x001C334D"
+  meta.embedded.block.shell:
+    background: "0x00020533"
+  meta.link.inline.markdown:
+    color: "0x6CB0FF"
+    underline: true
+  meta.paragraph.list.tasks: "0xF2F4F8"
+  string.quoted.double.yaml: "0xBCC7D5"
+  string.quoted.single.yaml: "0xBCC7D5"
+  variable.other.block.ruby:
+    color: "0xF6A700"
+    italic: true
+  variable.other.local.ruby: "0xB8BEC4"
+  markup.underline.link.http: "0x86CEFF"
+  keyword.operator.other.ruby: "0x64707E"
+  keyword.operator.range.ruby: "0x86A500"
+  markup.list.completed.tasks:
+    bold: false
+    italic: false
+    underline: false
+  markup.underline.link.email: "0x86CEFF"
+  markup.underline.link.https: "0x86CEFF"
+  markup.underline.link.tasks: "0xF2F4F8"
+  meta.embedded.block.c\+\+:
+    background: "0x00020533"
+  constant.other.footnote.link:
+    color: "0xADB0FB"
+    italic: true
+  keyword.control.pattern.ruby:
+    color: "0xF2F4F8"
+    bold: true
+  variable.other.function.ruby:
+    color: "0x0E84DC"
+    bold: false
+    italic: false
+    underline: false
+  constant.other.reference.link: "0x86CEFF"
+  keyword.operator.logical.ruby: "0x64707E"
+  meta.separator.table.markdown: "0x56A8DC"
+  constant.numeric.list.markdown: "0xB4F03A"
+  keyword.other.regexp-flag.ruby: "0xADB0FB"
+  meta.method-call.receiver.ruby: "0x4EBAFF"
+  punctuation.section.braces.end: "0x86CEFF"
+  punctuation.section.parens.end: "0x56A8DC"
+  punctuation.definition.math.end: "0xFFD24E"
+  entity.other.attribute-name.html: "0x8494F8"
+  entity.other.attribute-name.yaml: "0x8494F8"
+  keyword.operator.arithmetic.ruby: "0x64707E"
+  keyword.operator.comparison.ruby: "0x64707E"
+  keyword.operator.quantifier.ruby: "0xADB0FB"
+  punctuation.section.braces.begin: "0x86CEFF"
+  punctuation.section.brackets.end: "0x6CB0FF"
+  punctuation.section.parens.begin: "0x56A8DC"
+  punctuation.separator.other.ruby: "0xB4F03A"
+  variable.other.footnote.markdown:
+    color: "0xADB0FB"
+    italic: true
+  meta.language.identifier.markdown:
+    color: "0x8494F8"
+    italic: true
+  punctuation.definition.group.ruby: "0xADB0FB"
+  punctuation.definition.math.begin: "0xFFD24E"
+  punctuation.section.function.ruby: "0x56A8DC"
+  punctuation.separator.method.ruby: "0x86CEFF"
+  punctuation.separator.object.ruby: "0x64707E"
+  variable.language.fenced.markdown:
+    color: "0x8494F8"
+    italic: true
+  constant.character.escape.markdown: "0xB4F03A"
+  entity.name.function - source.ruby:
+    color: "0xFFD24E"
+    bold: true
+  keyword.operator.forward-args.ruby:
+    color: "0xADB0FB"
+    bold: true
+    italic: true
+  punctuation.section.brackets.begin: "0x6CB0FF"
+  meta.method-call.* constant.numeric: "0xD1EFFF"
+  punctuation.definition.footnote.end: "0x64707E"
+  punctuation.definition.header.tasks: "0xF2F4F8"
+  punctuation.definition.raw.markdown: "0xFFD24E"
+  punctuation.definition.bold.markdown: "0xFFD24E"
+  punctuation.separator.arguments.ruby:
+    color: "0x8494F8"
+    bold: true

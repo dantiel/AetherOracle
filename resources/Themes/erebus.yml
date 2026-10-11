@@ -1,0 +1,218 @@
+# Converted from TextMate theme: Erebus
+# Source: /Users/d/Library/Application Support/TextMate/Bundles/Avian.tmbundle/Themes/Erebus.tmTheme
+name: erebus
+kind: dark
+sourceEditorBackground: "0x140A0A"
+tags: [dark, erebus]
+
+# Global editor colors
+editor:
+  background: "0x140A0A"
+  foreground: "0xF8F8F2"
+  caret: "0xF8F8F0"
+  selection: "0xA63A3A"
+  lineHighlight: "0x3D2E2E77"
+  invisibles: "0x3B3A32"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.74
+glassBlurStrength: 0.64
+glassStyle: regular
+textShadowStrength: 0.7
+lineSpacing: 4.4
+editorBackgroundOpacity: 0.79
+sidebarBackgroundOpacity: 0.89
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x0E0404"
+rulerForeground: "0xF8F8F2"
+sourceRulerBackground: "0x0E0404"
+rulerSeparator: "0x3C32327F"
+sidebarAccent: "0xBA6767"
+sidebarForeground: "0xF8F8F2"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x3A2525"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x140A0A"
+  foreground: "0xF8F8F2"
+  baseText: "0x65B2FF"
+  accent: "0xFFB266"
+  complementary: "0x65B2FF"
+  codeBackground: "0x0E0707"
+  codeForeground: "0xF8F8F2"
+  shine: "0xFFCFA0"
+  glassTint: 0.74
+  glassMaterial: menu
+
+scopes:
+  plain: "0xF8F8F2"
+  tag: "0xF8F8F2"
+  entity: "0xF8F8F2"
+  markup: "0xF8F8F2"
+  string: "0xFFB2B2"
+  comment: "0x8C6969"
+  invalid:
+    color: "0xF8F8F0"
+    background: "0xD95757"
+    bold: false
+    italic: false
+    underline: false
+  keyword: "0xD95757"
+  storage:
+    color: "0xD95757"
+    bold: false
+    italic: false
+    underline: false
+  support: "0xF8F8F2"
+  variable:
+    color: "0xD0A3F8"
+    bold: false
+    italic: false
+    underline: false
+  attribute: "0xF8F8F2"
+  punctuation: "0xF8F8F2"
+  preprocessor: "0xF8F8F2"
+  storage.type:
+    color: "0xFFB266"
+    italic: true
+  support.type:
+    color: "0xFFB266"
+    italic: true
+  support.class:
+    color: "0xFFB266"
+    italic: true
+  constant.other: "0xE57EDD"
+  constant.numeric: "0xE57EDD"
+  support.constant:
+    color: "0xFFB266"
+    bold: false
+    italic: false
+    underline: false
+  support.function:
+    color: "0xFFB266"
+    bold: false
+    italic: false
+    underline: false
+  constant.language: "0xE57EDD"
+  constant.character: "0xE57EDD"
+  invalid.deprecated:
+    color: "0xF8F8F0"
+    background: "0xE57EDD"
+  variable.parameter:
+    color: "0xFFD2A6"
+    italic: true
+  entity.name.tag:
+    color: "0xD95757"
+    bold: false
+    italic: false
+    underline: false
+  entity.name.class:
+    color: "0xF2AAEC"
+    underline: true
+  variable.other.twig: "0xFFCCFB"
+  constant.numeric.css: "0xF2AAEC"
+  entity.name.function:
+    color: "0xF2AAEC"
+    bold: false
+    italic: false
+    underline: false
+  keyword.control.twig: "0xFFB266"
+  support.other.variable:
+    bold: false
+    italic: false
+    underline: false
+  support.other.namespace: "0xFFD2A6"
+  entity.other.attribute-name:
+    color: "0xFFB266"
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    color: "0xF2AAEC"
+    italic: true
+    underline: true
+  entity.name.function.twig: "0xD95757"
+  support.function.misc.css: "0xFFD2A6"
+  entity.name.type.namespace: "0xFFD2A6"
+  entity.other.argument.twig: "0xFFB2B2"
+  entity.other.tagbraces.twig: "0xE57EDD"
+  variable.parameter.misc.css: "0xF2AAEC"
+  support.function.filter.twig: "0xD95757"
+  support.constant.font-name.css: "0xFFD2A6"
+  variable.language.namespace.php: "0xD17B7B"
+  support.constant.property-value.css: "0xFFD2A6"
+  punctuation.separator.inheritance.php: "0xE57EDD"
+  entity.other.attribute-name.id.css: "0xF2AAEC"
+  support.other.namespace.use-as.php: "0xFFB266"
+  entity.other.attribute-name.class.css: "0xF2AAEC"
+  support.function.filter.variable.twig: "0xE57EDD"
+  entity.other.attribute-name.pseudo-class.css: "0xE57EDD"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xF8F8F2"
+  markup.heading:
+    color: "0xD95757"
+    bold: true
+  markup.heading.1:
+    color: "0xD95757"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xD95757"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xD95757"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xD95757"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xD95757"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xD95757"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xF8F8F2"
+    bold: true
+  markup.italic:
+    color: "0xF8F8F2"
+    italic: true
+  markup.link:
+    color: "0xFFB2B2"
+    underline: true
+  markup.link.url:
+    color: "0xFFB2B2"
+    underline: true
+  markup.code.block:
+    color: "0x8C6969"
+    background: "0x0C0202"
+  markup.code.inline:
+    color: "0x8C6969"
+    background: "0x0C0202"
+  markup.quote:
+    color: "0x8C6969"
+    italic: true
+    background: "0x190F0F"
+  markup.rule:
+    color: "0x8C6969"
+    bold: true
+  markup.strikethrough:
+    color: "0x8C6969"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xF2AAEC"
+    bold: true
+

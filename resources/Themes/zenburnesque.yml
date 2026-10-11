@@ -1,0 +1,171 @@
+# Converted from TextMate theme: Zenburnesque
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Themes.tmbundle/Themes/Zenburnesque.tmTheme
+name: zenburnesque
+kind: dark
+sourceEditorBackground: "0x404040"
+class: theme.dark.zenburnesque
+tags: [dark, zenburnesque]
+
+# Global editor colors
+editor:
+  background: "0x404040"
+  foreground: "0xDEDEDE"
+  caret: "0xFFFF66"
+  selection: "0xA0A0C0"
+  lineHighlight: "0xA0804026"
+  invisibles: "0xA8A8A8"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x2B2B3A"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.5
+lineSpacing: 4.0
+editorBackgroundOpacity: 0.74
+sidebarBackgroundOpacity: 0.85
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x3A3A3A"
+rulerForeground: "0xDEDEDE"
+sourceRulerBackground: "0x3A3A3A"
+rulerSeparator: "0x6868687F"
+sidebarAccent: "0xABABC8"
+sidebarForeground: "0xDEDEDE"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x5B5B5F"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x404040"
+  foreground: "0xDEDEDE"
+  baseText: "0x20FEFF"
+  accent: "0xFF2020"
+  complementary: "0x20FEFF"
+  codeBackground: "0x2E2E2E"
+  codeForeground: "0xDEDEDE"
+  shine: "0xFF7575"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xDEDEDE"
+  tag: "0xDEDEDE"
+  entity: "0xDEDEDE"
+  markup: "0xDEDEDE"
+  string: "0xFF2020"
+  comment:
+    color: "0x709070"
+    italic: true
+  invalid: "0xFFFFFF"
+  keyword: "0xFFFFA0"
+  storage: "0xFFFFFF"
+  support: "0xDEDEDE"
+  attribute: "0xDEDEDE"
+  punctuation: "0xDEDEDE"
+  preprocessor: "0xDEDEDE"
+  storage.type: "0x6080FF"
+  support.type: "0xFFFFFF"
+  support.class: "0xFFFFFF"
+  constant.other: "0xFFFFFF"
+  variable.other: "0xFFFFFF"
+  constant.numeric: "0x22C0FF"
+  keyword.operator: "0xFFFFA0"
+  support.constant: "0xFFFFFF"
+  support.function: "0xFFFFFF"
+  support.variable: "0xFFFFFF"
+  constant.language: "0xFFFFFF"
+  constant.character: "0xFF8080"
+  variable.parameter: "0xFFFFFF"
+  entity.name.tag: "0xFFFFFF"
+  entity.name.type: "0xF09040"
+  entity.name.module:
+    color: "0xFF8000"
+    bold: true
+  entity.name.function:
+    color: "0xFFCC66"
+    bold: true
+  support.other.module:
+    color: "0xFF8000"
+    bold: true
+  keyword.other.directive:
+    bold: true
+  storage.type.user-defined: "0xFFE000"
+  entity.other.attribute-name: "0xFFFFFF"
+  entity.other.inherited-class: "0xFFFFFF"
+  constant.numeric.floating-point:
+    underline: true
+  entity.name.class.variant: "0x4080A0"
+  keyword.other.directive.line-number:
+    underline: true
+  entity.name.type.class.type: "0xF4A020"
+  source.ocaml keyword.operator.symbol.infix.floating-point:
+    underline: true
+  source.ocaml keyword.operator.symbol.prefix.floating-point:
+    underline: true
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xDEDEDE"
+  markup.heading:
+    color: "0xFFFFA0"
+    bold: true
+  markup.heading.1:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xFFFFA0"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xDEDEDE"
+    bold: true
+  markup.italic:
+    color: "0xDEDEDE"
+    italic: true
+  markup.link:
+    color: "0xFF2020"
+    underline: true
+  markup.link.url:
+    color: "0xFF2020"
+    underline: true
+  markup.code.block:
+    color: "0x709070"
+    background: "0x383838"
+  markup.code.inline:
+    color: "0x709070"
+    background: "0x383838"
+  markup.quote:
+    color: "0x709070"
+    italic: true
+    background: "0x454545"
+  markup.rule:
+    color: "0x709070"
+    bold: true
+  markup.strikethrough:
+    color: "0x709070"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xFFCC66"
+    bold: true
+

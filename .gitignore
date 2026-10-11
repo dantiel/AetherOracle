@@ -3,7 +3,10 @@
 # Local memory / logs — never shipped.
 .aethercodex
 .tm-ai/
+.aether/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 *.log

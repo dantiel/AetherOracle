@@ -1,0 +1,1036 @@
+# Converted from TextMate theme: Brilliance White
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/SubtleGradient Themes.tmbundle/Themes/Brilliance White.tmTheme
+name: brilliance-white
+kind: light
+sourceEditorBackground: "0xFCFCFC"
+tags: [light, brilliance]
+
+# Global editor colors
+editor:
+  background: "0xFCFCFC"
+  foreground: "0x111111"
+  caret: "0x555AC7"
+  selection: "0xFFFA00BF"
+  lineHighlight: "0xFFF8001A"
+  invisibles: "0x3333331A"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0xE8E3D8"
+glassTint: 0.55
+glassBlurStrength: 0.4
+glassStyle: regular
+textShadowStrength: 0.2
+lineSpacing: 4.0
+editorBackgroundOpacity: 0.4
+sidebarBackgroundOpacity: 0.7
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0xEEEEEE"
+rulerForeground: "0x111111"
+sourceRulerBackground: "0xEEEEEE"
+rulerSeparator: "0xD4D4D466"
+sidebarAccent: "0x8F8B08"
+sidebarForeground: "0x111111"
+gutterSelectionBackground: "0xD0D0D0"
+gutterSelectionForeground: "0x333333"
+gutterSelectionBorder: "0xAAAAAA"
+sidebarBackground: "0xF4F3D5"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0xFCFCFC"
+  foreground: "0x111111"
+  baseText: "0x111111"
+  accent: "0xFFFA00"
+  complementary: "0x0004FF"
+  codeBackground: "0xFCFCFC"
+  codeForeground: "0x111111"
+  shine: "0x9E9B00"
+  glassTint: 0.55
+  glassMaterial: menu
+
+scopes:
+  plain: "0x111111"
+  tag: "0x111111"
+  entity: "0x111111"
+  markup: "0x111111"
+  source:
+    bold: false
+    italic: false
+    underline: false
+  keyword: "0xFFFFFF"
+  storage: "0x111111"
+  support: "0x111111"
+  attribute: "0x111111"
+  punctuation: "0x111111"
+  text source:
+    color: "0x333333"
+    background: "0xFFFFFF"
+  preprocessor: "0x111111"
+  source source:
+    background: "0xCCCCCC1A"
+  text string source: "0x666666"
+  comment punctuation:
+    color: "0xBFBFBF"
+    bold: false
+    italic: false
+    underline: false
+  source string source:
+    color: "0x000000"
+    background: "0xCCCCCC80"
+  text string source string:
+    color: "0x696422"
+    background: "0xDEB79833"
+  text string source string source: "0xFFFFFF"
+  meta.tag: "0xCCCCCC"
+  markup.hr:
+    color: "0xFFFFFF"
+    background: "0x000000"
+  text.blog:
+    color: "0xCCCCCC"
+    background: "0x232323"
+  text.mail:
+    color: "0xCCCCCC"
+    background: "0x232323"
+  source.css: "0xFFFFFF"
+  text.latex: "0xFFFFFF"
+  markup.bold:
+    color: "0x1C405680"
+    bold: true
+  meta.syntax: "0xCCCCCC"
+  variable.js: "0x3579A6"
+  comment.line:
+    color: "0xB3B3B3"
+    bold: false
+    italic: false
+    underline: false
+  markup.quote:
+    background: "0x0000001A"
+  meta.doctype:
+    color: "0x333333"
+    background: "0xCCCCCC"
+  meta.section:
+    background: "0xFAFAFA"
+  support.type:
+    color: "0xAA1C21"
+    background: "0xD2878933"
+  constant.name: "0x53E1D8"
+  keyword.other: "0x7B3FC9"
+  markup.italic:
+    italic: true
+  meta.footnote:
+    color: "0x2B37BA4D"
+    background: "0x9497DC33"
+  meta.function: "0xFFFFFF"
+  meta.selector: "0x999999"
+  string.regexp:
+    color: "0xD3C844"
+    background: "0xC1DF9A33"
+  support.class:
+    color: "0xAA1C21"
+    background: "0xD2878933"
+  variable.scss: "0x3579A6"
+  constant.block: "0x3EC87C"
+  constant.other: "0x3EC87C"
+  markup.changed:
+    color: "0x8D882E"
+    background: "0xDEB798"
+  markup.deleted:
+    color: "0x8F2860"
+    background: "0xEFCCE0"
+  markup.heading:
+    color: "0x000000"
+    bold: false
+    italic: false
+    underline: false
+  meta.assertion: "0x408ECC"
+  meta.bracketed:
+    background: "0xFAFAFA"
+  meta.delimiter:
+    color: "0x808080"
+    background: "0x00000003"
+    bold: true
+  meta.reference:
+    color: "0x408ECC"
+    bold: false
+    italic: false
+    underline: false
+  text.blog text:
+    color: "0x333333"
+    background: "0xFFFFFF"
+  text.mail text:
+    color: "0x333333"
+    background: "0xFFFFFF"
+  variable.other: "0x3579A6"
+  keyword.control: "0xCF4DD9"
+  markup.inserted:
+    color: "0x2E965C"
+    background: "0xCEF1DD"
+  constant.numeric: "0xAEC73E"
+  keyword.operator: "0x5359C6"
+  markup.underline:
+    underline: true
+  meta.paren-group:
+    background: "0xFAFAFA"
+  storage.modifier: "0xDEB798"
+  support.constant: "0x53E1D8"
+  support.function:
+    background: "0xDECEF180"
+  support.variable:
+    color: "0x34A59B"
+    background: "0xA9F0EB33"
+  constant.language: "0x2FB125"
+  invalid.SOMETHING:
+    color: "0xB34128"
+    underline: true
+  variable.language:
+    color: "0x3EC87C"
+    background: "0xA9F0EB33"
+  constant.character: "0x83BF35"
+  meta.property-name:
+    color: "0x666666"
+    bold: false
+    italic: false
+    underline: false
+  meta.thomas_aylott:
+    color: "0xFFFFFF"
+    background: "0x000000"
+    bold: true
+  other.preprocessor:
+    background: "0xDEB79833"
+  meta.property-value:
+    color: "0x666666"
+    background: "0xE6E6E680"
+    bold: false
+    italic: false
+    underline: false
+  meta.subtlegradient:
+    color: "0xAAAAAA"
+    background: "0x000000"
+    underline: true
+  string.interpolated:
+    color: "0x696422"
+    background: "0xE5E5E5"
+  text meta.paragraph: "0x666666"
+  declaration.function: "0xFFFFFF"
+  meta.function markup: "0x323232"
+  string.regexp string:
+    color: "0x696422"
+    background: "0xDEB79833"
+  meta.tag source string:
+    color: "0x696422"
+    background: "0xDEB79833"
+  punctuation.terminator:
+    color: "0x808080"
+    background: "0x00000003"
+    bold: true
+  string.unquoted string:
+    color: "0x696422"
+    background: "0xDEB79833"
+  text.subversion-commit:
+    color: "0xFFFFFF"
+    background: "0x000000"
+  storage -storage.modifier: "0xE8A5EC"
+  invalid -invalid.SOMETHING:
+    color: "0xEED2D5"
+    background: "0xAB1D26"
+    bold: true
+  string.interpolated string:
+    color: "0x696422"
+    background: "0xDEB79833"
+  text comment.block -source:
+    bold: false
+    italic: false
+    underline: false
+  support.function - variable: "0xB590E0"
+  source string.interpolated source:
+    color: "0x666666"
+    background: "0xFFFFFF99"
+  meta.tag string -source -punctuation: "0x00000066"
+  text source text meta.tag string -punctuation: "0x00000066"
+  meta.tag.key:
+    color: "0xB3B3B3"
+    background: "0xB3B3B333"
+  meta.tag.xml:
+    color: "0xB3B3B3"
+    background: "0xB3B3B333"
+  meta.tag.form:
+    color: "0x408ECC"
+    background: "0x9FC6E533"
+  meta.brace.erb:
+    background: "0xFFFFFF"
+  meta.tag.block:
+    color: "0xB3B3B3"
+    background: "0xB3B3B333"
+  meta.tag.other:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  entity.name.tag: "0x0000004D"
+  meta.brace.pipe:
+    color: "0xB3B3B3"
+    background: "0xCCCCCC33"
+    bold: false
+    italic: false
+    underline: false
+  meta.tag.inline:
+    color: "0xBE7032"
+    background: "0xDEB79833"
+  markup.raw.block:
+    background: "0x7F7F7F40"
+  meta.block.slate: "0x999999"
+  meta.brace.round:
+    bold: false
+    italic: false
+    underline: false
+  meta.tag.segment:
+    color: "0x999999"
+    background: "0xCCCCCCBF"
+  entity.name.class: "0xAA1C21"
+  meta.brace.square:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  meta.group.braces:
+    background: "0xFAFAFA"
+  entity.name.module:
+    color: "0xC03682"
+    background: "0xD58E9233"
+  keyword.other.unit: "0x2FB125"
+  meta.scope.heredoc: "0x5E3719"
+  meta.tag.structure:
+    color: "0x999999"
+    background: "0xCCCCCCBF"
+  source.js.embedded:
+    background: "0xF2F2F2"
+  constant.other.java: "0x2FB125"
+  constant.other.unit: "0x2FB125"
+  meta.odd-tab.group1:
+    background: "0xFAFAFA"
+  meta.odd-tab.group3:
+    background: "0xEEEEEE"
+  meta.odd-tab.group5:
+    background: "0xE6E6E6"
+  meta.odd-tab.group7:
+    background: "0xE0E0E0"
+  meta.odd-tab.group9:
+    background: "0xDBDBDB"
+  string.regexp.group:
+    background: "0xC1DF9A33"
+  entity.name.instance: "0x82161E"
+  meta.even-tab.group2:
+    background: "0xF5F5F5"
+  meta.even-tab.group4:
+    background: "0xEAEAEA"
+  meta.even-tab.group6:
+    background: "0xE3E3E3"
+  meta.even-tab.group8:
+    background: "0xDEDEDE"
+  meta.odd-tab.group11:
+    background: "0xEAEAEA"
+  meta.source.embedded:
+    color: "0x999999"
+    background: "0xFFFFFF80"
+  source.java.embedded:
+    background: "0xCCCCCC1A"
+  entity.name.reference:
+    color: "0x53E1D8"
+    background: "0x9FC6E533"
+  markup.underline.link:
+    color: "0x408ECC"
+    bold: false
+    italic: false
+    underline: false
+  meta.even-tab.group10:
+    background: "0xE0E0E0"
+  string.quoted.literal:
+    color: "0xD3C844"
+    background: "0xC1DF9A33"
+  text -text.xml.strict: "0x000000"
+  text.latex markup.raw:
+    background: "0xFFFFFF"
+  meta.definition.method: "0xC03682"
+  meta.function-call.php: "0xB590E0"
+  meta.property.function: "0xFFFFFF"
+  meta.tag.inline source:
+    background: "0xDEB79833"
+  variable.other.bracket:
+    background: "0x2B37BA1A"
+  variable.other.constant: "0x2C8980"
+  variable.parameter.cite:
+    color: "0x300D21"
+    background: "0xEFCCE0"
+  entity.name.preprocessor:
+    background: "0xDEB79833"
+  keyword.operator.logical:
+    color: "0x273E96"
+    background: "0x7E82D433"
+  meta.scope.property-list:
+    color: "0xCCCCCC"
+    bold: true
+  meta.tag string.unquoted: "0x00000066"
+  meta.section meta.section:
+    background: "0xF5F5F5"
+  punctuation.section.array:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  punctuation.section.scope:
+    color: "0x666666"
+    bold: true
+  source.ruby meta.even-tab:
+    background: "0xFFFFFF80"
+  markup.list meta.paragraph:
+    color: "0x000000"
+    bold: false
+    italic: false
+    underline: false
+  meta.set.variable variable: "0x3579A6"
+  support.type.property-name:
+    color: "0x000000"
+    background: "0xF2F2F2"
+    bold: false
+    italic: false
+    underline: false
+  comment.block.documentation:
+    color: "0x666666"
+    bold: false
+    italic: false
+    underline: false
+  disabled text.html.markdown:
+    color: "0xFFFFFF"
+    background: "0x000000"
+  entity.other.attribute-name: "0x00000033"
+  keyword.operator.arithmetic: "0x7282D2"
+  keyword.operator.assignment:
+    color: "0x5359C6"
+    background: "0x7E82D433"
+  keyword.operator.comparison: "0x172160"
+  keyword.operator.relational: "0x172160"
+  punctuation.separator.array:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  variable.parameter.function: "0x11154B"
+  entity.other.inherited-class:
+    color: "0xC03682"
+    background: "0xD58E9233"
+  keyword.other.special-method: "0xB590E0"
+  punctuation.definition.array:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  punctuation.section.function:
+    color: "0x3D1F64"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.separator.method:
+    color: "0x808080"
+    background: "0x00000003"
+    bold: true
+  punctuation.separator.object:
+    color: "0x999999"
+    bold: true
+  text.latex meta.end-document:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  declaration.function.operator: "0x5359C6"
+  meta.bracketed meta.bracketed:
+    background: "0xF5F5F5"
+  punctuation.separator.objects: "0xFFFFFF"
+  string.regexp.character-class:
+    color: "0x83BF35"
+    background: "0xC1DF9A33"
+  punctuation.section.dictionary:
+    color: "0x999999"
+    bold: true
+  punctuation.separator.operator: "0x5359C6"
+  punctuation.separator.variable: "0x3579A6"
+  source.regexp keyword.operator: "0xFFFFFF"
+  text.latex meta.begin-document:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  punctuation.definition.function: "0xDF9AC0"
+  punctuation.separator.arguments: "0xDF9AC0"
+  punctuation.separator.statement:
+    color: "0x999999"
+    bold: true
+  punctuation.definition -meta.tag: "0xFFFFFF"
+  punctuation.definition.arguments: "0xDF9AC0"
+  punctuation.separator.parameters:
+    color: "0x000000"
+    bold: true
+  punctuation.terminator.statement:
+    background: "0xFFFFFF80"
+  constant.language.pseudo-variable:
+    color: "0x2FB125"
+    background: "0x97D89133"
+  meta.paren-group meta.paren-group:
+    background: "0xF5F5F5"
+  punctuation.definition.parameters: "0xD58E92"
+  punctuation.terminator.dictionary:
+    color: "0x999999"
+    bold: true
+  disabled text.html.markdown string: "0xE4C4AA"
+  string.regexp.arbitrary-repitition:
+    color: "0x53E1D8"
+    background: "0xC1DF9A33"
+  punctuation.separator.function-return: "0xDF9AC0"
+  punctuation.separator.function-definition: "0xDF9AC0"
+  text source text meta.tag string.unquoted: "0x00000066"
+  markup markup -(markup meta.paragraph.list):
+    color: "0xD3C844"
+    background: "0xCCCCCC33"
+  meta.function-call support.function - variable:
+    color: "0x5F3098"
+    bold: false
+    italic: false
+    underline: false
+  source string source punctuation.section.embedded: "0xCFE2F2"
+  meta.brace.erb.html:
+    color: "0x53E1D8"
+    background: "0x53E1D81A"
+  meta.tag.block.form:
+    color: "0x408ECC"
+    background: "0x9FC6E533"
+  meta.tag.inline.form:
+    color: "0x408ECC"
+    background: "0x9FC6E533"
+  entity.name.tag.style:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  meta.tag.block.script:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  meta.tag.sgml.doctype:
+    color: "0x333333"
+    background: "0xCCCCCC"
+  entity.name.tag.script:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  entity.name.type.class: "0xAA1C21"
+  meta.section.html.form:
+    background: "0x9FC6E51A"
+  meta.section.html.head:
+    background: "0xEDEDED"
+  entity.name.type.module: "0xAA1C21"
+  entity.name.tag.wildcard:
+    color: "0xBE7032"
+    bold: true
+  entity.name.type.variant: "0x53E1D8"
+  meta.block.content.slate: "0x333333"
+  meta.delimiter.object.js:
+    background: "0xFFFFFF40"
+  meta.property.value.html: "0x000000BF"
+  text.xml.strict meta.tag:
+    background: "0xFAFAFA"
+  entity.name.type.instance: "0x82161E"
+  meta.brace.curly.function:
+    color: "0x3D1F64"
+    bold: false
+    italic: false
+    underline: false
+  variable.language.this.js: "0x999999"
+  meta.scope.django.template:
+    color: "0x333333"
+    background: "0xFFFFFF"
+  string.quoted.double.brace:
+    color: "0xDEB798"
+    bold: true
+  string.quoted.single.brace:
+    color: "0xDEB798"
+    bold: true
+  meta.brace.erb.return-value:
+    color: "0x46D2A0"
+    background: "0xA2E8CF33"
+  meta.delimiter.statement.js:
+    background: "0xFFFFFF80"
+  meta.group.assertion.regexp:
+    background: "0x408ECC33"
+  meta.preprocessor.c.include: "0x5359C6"
+  variable.parameter.misc.css:
+    color: "0x696422"
+    background: "0xDEB79833"
+  source.ocaml entity.name.tag: "0x3EC87C"
+  text.latex meta.group.braces: "0xCCCCCC33"
+  entity.other.django.tagbraces:
+    color: "0x999999"
+    background: "0xFFFFFF80"
+  meta.function-call.object.php: "0xB590E0"
+  meta.selector entity.name.tag:
+    color: "0xAB1D26"
+    bold: false
+    italic: false
+    underline: false
+  meta.header.blog keyword.other:
+    color: "0xD8F8F6"
+    background: "0x53E1D81A"
+    bold: false
+    italic: false
+    underline: false
+  meta.header.mail keyword.other:
+    color: "0xD8F8F6"
+    background: "0x53E1D81A"
+    bold: false
+    italic: false
+    underline: false
+  string.quoted.double.multiline: "0x5E3719"
+  text.latex keyword.control.ref:
+    color: "0xAB1D26"
+    background: "0xF2DDDE"
+  variable.other.readwrite.class:
+    color: "0x408ECC"
+    background: "0x2B37BA33"
+  meta.class.instance.constructor:
+    background: "0xE5AFCC33"
+  punctuation.section.scope.curly:
+    color: "0x666666"
+    bold: true
+  text.latex keyword.control.cite:
+    color: "0xC03682"
+    background: "0xF5E1EC"
+  text.latex meta.label.reference:
+    background: "0x0000000D"
+    bold: false
+    italic: false
+    underline: false
+  variable.other.readwrite.global:
+    color: "0x7DC2BC"
+    background: "0x9FC6E533"
+  meta.header.mail string.unquoted:
+    color: "0xDEB798"
+    background: "0x8D882E1A"
+  source.ruby meta.even-tab.group2:
+    background: "0xFFFFFF80"
+  source.ruby meta.even-tab.group4:
+    background: "0xFFFFFF80"
+  source.ruby meta.even-tab.group6:
+    background: "0xFFFFFF80"
+  source.ruby meta.even-tab.group8:
+    background: "0xFFFFFF80"
+  text.latex meta.environment.list:
+    color: "0xCCCCCC33"
+    background: "0xFFFFFF80"
+    bold: false
+    italic: false
+    underline: false
+  meta.function meta.odd-tab.group1: "0xFFFFFF"
+  meta.tag.sgml-declaration.doctype:
+    color: "0x333333"
+    background: "0xCCCCCC"
+  source.ocaml support.other.module:
+    color: "0xAA1C21"
+    background: "0xD38A8C33"
+  source.ruby meta.even-tab.group10:
+    background: "0xFFFFFF80"
+  source.ruby meta.even-tab.group12:
+    background: "0xFFFFFF80"
+  variable.other.readwrite.instance: "0x7B868F"
+  text.latex keyword.operator.braces:
+    color: "0x999999"
+    bold: false
+    italic: false
+    underline: false
+  punctuation.separator.key-value.css:
+    color: "0x999999"
+    bold: true
+  source.ocaml meta.record.definition: "0x3EC87C"
+  text.latex support.function.section: "0x000000BF"
+  text.latex variable.parameter.label: "0x00000080"
+  text.latex constant.language.general: "0xFFFFFF"
+  text.latex keyword.operator.brackets: "0x666666"
+  entity.other.attribute-name.universal:
+    color: "0xBE7032"
+    bold: true
+  punctuation.definition.constant.range:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  text.latex keyword.operator.delimiter:
+    background: "0xFFFFFF80"
+  meta.section meta.section meta.section:
+    background: "0xEEEEEE"
+  meta.tag punctuation.definition.string: "0x00000033"
+  punctuation.definition.string -meta.tag: "0xDEB798"
+  entity.name.function -meta.function-call:
+    color: "0xC03682"
+    bold: true
+  entity.other.attribute-name.pseudo-class: "0x7B3FC9"
+  meta.end-document.latex support.function:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  punctuation.separator.key-value -meta.tag: "0xFFFFFF"
+  disabled text.html.markdown markup.heading:
+    color: "0xFFFFFF"
+    bold: true
+  disabled text.html.markdown meta.paragraph: "0xFFFFFF"
+  entity.other.attribute-name.pseudo-element: "0x5F3AC3"
+  meta.begin-document.latex support.function:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  meta.end-document.latex variable.parameter:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  meta.function-call.method.without-arguments: "0x180C26"
+  string.regexp punctuation.definition.string: "0xD3C84433"
+  meta.begin-document.latex variable.parameter:
+    color: "0xFFFFFF"
+    background: "0x333333"
+  meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xEEEEEE"
+  meta.function-call punctuation.separator.object:
+    color: "0x3D1F64"
+    bold: false
+    italic: false
+    underline: false
+  text.subversion-commit meta.scope.changed-files:
+    color: "0x000000"
+    background: "0xFFFFFF"
+  comment -comment.line -comment.block.documentation:
+    color: "0xB3B3B3"
+    background: "0xCCCCCC33"
+  meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xEEEEEE"
+  source.ocaml punctuation.separator.match-definition: "0xFFFFFF"
+  meta.tag.block.*.fb:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  meta.tag.block.*.fbt:
+    color: "0xBE7032"
+    background: "0xDEB79833"
+  meta.tag.block.*.input:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.tag.block.*.label:
+    color: "0x408ECC"
+    background: "0x9FC6E533"
+  meta.tag.form.any.void:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.tag.inline.any.void:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  string.quoted.double.ruby.mod:
+    color: "0xD3C844"
+    background: "0xC1DF9A33"
+  meta.brace.curly meta.group.css:
+    background: "0xFFFFFF80"
+    bold: false
+    italic: false
+    underline: false
+  meta.block.slate meta.block.slate:
+    background: "0xF5F5F5"
+  source.js meta.group.braces.round: "0xFFFFFF"
+  source.ruby.embedded.source.brace:
+    color: "0x999999"
+    bold: true
+  text.xml.strict meta.tag meta.tag:
+    background: "0xF5F5F5"
+  meta.group.braces meta.group.braces:
+    background: "0xF5F5F5"
+  source.ruby.rails.embedded.one-line:
+    background: "0x53E1D81A"
+  source.ocaml entity.name.type.module: "0xAA1C21"
+  meta.header.blog string.unquoted.blog:
+    color: "0xDEB798"
+    background: "0x8D882E1A"
+  meta.invalid.vendor.microsoft.trident:
+    background: "0xAA1C2140"
+    underline: true
+  string.regexp.group string.regexp.group:
+    color: "0x00000066"
+    background: "0xC1DF9A33"
+  text.html.textile markup.underline.link:
+    color: "0x53E1D8"
+    underline: true
+  meta.reference.list markup.underline.link:
+    color: "0x53E1D8"
+    underline: true
+  variable.other.readwrite.global.pre-defined:
+    color: "0x3EC87C"
+    background: "0xA9F0EB33"
+  entity.other.attribute-name.tag.pseudo-class: "0x7B3FC9"
+  meta.selector entity.other.attribute-name.id: "0xC03682"
+  punctuation.separator.parameters.function.js: "0xDF9AC0"
+  text.latex variable.parameter.label.reference:
+    color: "0x5E3719"
+    background: "0xEAC6C8"
+  meta.selector entity.other.attribute-name.class: "0xCF4DD9"
+  variable.parameter -variable.parameter.misc.css: "0x11154B"
+  source.css entity.other.attribute-name.attribute: "0xFFFFFF"
+  meta.function-call punctuation.section.scope.ruby:
+    color: "0x3D1F64"
+    bold: false
+    italic: false
+    underline: false
+  meta.group.assertion punctuation.definition.group: "0x408ECC"
+  meta.definition.method  meta.definition.param-list: "0x11154B"
+  meta.structure.array -punctuation.definition.array:
+    background: "0xDEB7981A"
+  meta.section meta.section meta.section meta.section:
+    background: "0xEAEAEA"
+  string.quoted.literal punctuation.definition.string: "0xD3C84433"
+  disabled text.html.markdown markup.list meta.paragraph: "0xAAAAAA"
+  variable.parameter.function punctuation.separator.object: "0xD58E92"
+  string.regexp punctuation.definition.string keyword.other:
+    color: "0xDEB798"
+    bold: false
+    italic: false
+    underline: false
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xEAEAEA"
+  string.unquoted -string.unquoted.embedded -(meta.tag string): "0x5E3719"
+  source.css meta.attribute-selector keyword.operator.comparison: "0xE4C4AC"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xEAEAEA"
+  punctuation.section.embedded -(source string source punctuation.section.embedded):
+    color: "0x53E1D8"
+    background: "0x53E1D81A"
+  meta.tag.block.*.ui.tx:
+    color: "0xBE7032"
+    background: "0xDEB79833"
+  meta.tag.block.*.ui.form:
+    color: "0x408ECC"
+    background: "0x9FC6E533"
+  meta.tag.block.*.ui.button:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.tag.block.*.ui.textarea:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.tag.block.*.ui.icon-text:
+    color: "0xBE7032"
+    background: "0xDEB79833"
+  meta.tag.block.*.ui.hidden-input:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.tag.block.*.ui.mentions-input:
+    color: "0xCF4DD9"
+    background: "0xBC9EE333"
+  meta.property.vendor.microsoft.trident.4:
+    bold: false
+    italic: false
+    underline: false
+  meta.property.vendor.microsoft.trident.5:
+    bold: false
+    italic: false
+    underline: false
+  text.xml.strict meta.tag meta.tag meta.tag:
+    background: "0xEEEEEE"
+  source.ruby.rails.embedded.return-value.one-line:
+    background: "0x7F7F7F1A"
+  meta.group.assertion keyword.control.group.regexp: "0x408ECC"
+  meta.group.braces.round punctuation.section.scope:
+    bold: false
+    italic: false
+    underline: false
+  meta.group.braces.square punctuation.section.scope:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  source.js.embedded punctuation.definition.tag.html:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  source.css.embedded punctuation.definition.tag.html:
+    color: "0xAB1D26"
+    background: "0xD58E9233"
+  meta.class.instance.constructor keyword.operator.new: "0xDF9AC0"
+  meta.function-call.php -meta.function-call.object.php:
+    bold: true
+  text.latex meta.environment.list meta.environment.list:
+    color: "0xCCCCCC33"
+    background: "0xFFFFFF80"
+  meta.definition.range -punctuation.definition.constant.range:
+    background: "0xDEB7981A"
+  meta.function.method.with-arguments variable.parameter.function: "0x11154B"
+  meta.function-call.method.without-arguments entity.name.function: "0x180C26"
+  meta.section meta.section meta.section meta.section meta.section:
+    background: "0xE6E6E6"
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xE6E6E6"
+  meta.function-call entity.name.function -(meta.function-call meta.function): "0xB590E0"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xE6E6E6"
+  meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xEEEEEE"
+  meta.group.braces.curly meta.delimiter.object.comma: "0xFFFFFF"
+  meta.group.braces.round meta.delimiter.object.comma:
+    bold: false
+    italic: false
+    underline: false
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag:
+    background: "0xEAEAEA"
+  meta.group.braces.square meta.delimiter.object.comma:
+    color: "0xEFDBCC80"
+    background: "0xDEB7981A"
+    bold: true
+  meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xEEEEEE"
+  string.quoted.double.ruby.mod punctuation.definition.string: "0xD3C84433"
+  string.regexp.group string.regexp.group string.regexp.group:
+    color: "0x00000066"
+    background: "0xC1DF9A33"
+  text.latex entity.name.section -meta.group -keyword.operator.braces:
+    color: "0xFFFFFF"
+    background: "0x000000"
+    bold: false
+    italic: false
+    underline: false
+  text.subversion-commit meta.scope.changed-files.svn meta.diff.separator:
+    color: "0x000000"
+    background: "0xFFFFFF"
+  text.latex support.function -support.function.textit -support.function.emph: "0x3D1F64"
+  meta.section meta.section meta.section meta.section meta.section meta.section:
+    background: "0xE3E3E3"
+  source.css meta.scope.property-list meta.property-value punctuation.separator.arguments:
+    bold: false
+    italic: false
+    underline: false
+  source.css meta.scope.property-list meta.property-value punctuation.definition.arguments:
+    bold: false
+    italic: false
+    underline: false
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xE3E3E3"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xE3E3E3"
+  meta.group.braces.curly.function meta.delimiter.object.comma:
+    bold: false
+    italic: false
+    underline: false
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag meta.tag:
+    background: "0xE6E6E6"
+  meta.property.vendor.microsoft.trident.4 support.type.property-name:
+    bold: false
+    italic: false
+    underline: false
+  meta.property.vendor.microsoft.trident.5 support.type.property-name:
+    bold: false
+    italic: false
+    underline: false
+  meta.property.vendor.microsoft.trident.4 punctuation.terminator.rule:
+    bold: false
+    italic: false
+    underline: false
+  meta.property.vendor.microsoft.trident.5 punctuation.terminator.rule:
+    bold: false
+    italic: false
+    underline: false
+  meta.function meta.group.braces.curly.function -(meta.group meta.group): "0xFFFFFF"
+  meta.property.vendor.microsoft.trident.5 punctuation.separator.key-value:
+    bold: false
+    italic: false
+    underline: false
+  text.latex meta.environment.list meta.environment.list meta.environment.list:
+    color: "0xCCCCCC33"
+    background: "0xFFFFFF"
+  meta.section meta.section meta.section meta.section meta.section meta.section meta.section:
+    background: "0xE0E0E0"
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xE0E0E0"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xE0E0E0"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xEAEAEA"
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag:
+    background: "0xE3E3E3"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xEAEAEA"
+  string.regexp.group string.regexp.group string.regexp.group string.regexp.group:
+    color: "0x00000066"
+    background: "0xC1DF9A33"
+  meta.section meta.section meta.section meta.section meta.section meta.section meta.section meta.section:
+    background: "0xDEDEDE"
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xDEDEDE"
+  string -meta.tag -meta.doctype -string.regexp -string.literal -string.interpolated -string.quoted.literal -string.unquoted:
+    color: "0x696422"
+    background: "0xDEB79833"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xDEDEDE"
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag:
+    background: "0xE0E0E0"
+  text.latex meta.environment.list meta.environment.list meta.environment.list meta.environment.list: "0xCCCCCC33"
+  meta.section meta.section meta.section meta.section meta.section meta.section meta.section meta.section meta.section:
+    background: "0xDBDBDB"
+  meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed meta.bracketed:
+    background: "0xDBDBDB"
+  meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group meta.paren-group:
+    background: "0xDBDBDB"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xE6E6E6"
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag:
+    background: "0xDEDEDE"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xE6E6E6"
+  text.xml.strict meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag meta.tag:
+    background: "0xDBDBDB"
+  text.latex meta.environment.list meta.environment.list meta.environment.list meta.environment.list meta.environment.list: "0xCCCCCC33"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xE3E3E3"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xE3E3E3"
+  text.latex meta.environment.list meta.environment.list meta.environment.list meta.environment.list meta.environment.list meta.environment.list: "0xCCCCCC33"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xE0E0E0"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xE0E0E0"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xDEDEDE"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xDEDEDE"
+  meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate meta.block.slate:
+    background: "0xDBDBDB"
+  meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces meta.group.braces:
+    background: "0xDBDBDB"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0x111111"
+  markup.heading.1:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xFFFFFF"
+    bold: true
+    fontSize: 1.0
+  markup.link:
+    color: "0x696422"
+    underline: true
+  markup.link.url:
+    color: "0x696422"
+    underline: true
+  markup.code.block:
+    color: "0xB3B3B3"
+    background: "0xE8E8E8"
+  markup.code.inline:
+    color: "0xB3B3B3"
+    background: "0xE8E8E8"
+  markup.rule:
+    color: "0xB3B3B3"
+    bold: true
+  markup.strikethrough:
+    color: "0xB3B3B3"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xC03682"
+    bold: true
+

@@ -1,0 +1,195 @@
+# Converted from TextMate theme: Oceanic - Eighties
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/Oceanic.tmbundle/Themes/Oceanic - Eighties.tmTheme
+name: oceanic-eighties
+kind: dark
+sourceEditorBackground: "0x11232D"
+class: theme.dark.oceanic_eighties
+tags: [dark, oceanic_eighties]
+
+# Global editor colors
+editor:
+  background: "0x11232D"
+  foreground: "0xCCCCCC"
+  caret: "0xE19938"
+  selection: "0x1B5E786E"
+  lineHighlight: "0x1B3541"
+  invisibles: "0x6A6A6A"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x1A1A23"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.3
+editorBackgroundOpacity: 0.77
+sidebarBackgroundOpacity: 0.88
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x11232D"
+rulerForeground: "0xCCCCCC"
+sourceRulerBackground: "0x11232D"
+rulerSeparator: "0x394B557F"
+sidebarAccent: "0xFFCC66"
+sidebarForeground: "0xCCCCCC"
+gutterSelectionBackground: "0xFFCC66"
+gutterSelectionForeground: "0x11232D"
+gutterSelectionBorder: "0xE19938"
+sidebarBackground: "0x474E4A"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x11232D"
+  foreground: "0xCCCCCC"
+  baseText: "0x6598FF"
+  accent: "0xFFCC66"
+  complementary: "0x6598FF"
+  codeBackground: "0x0C1920"
+  codeForeground: "0xCCCCCC"
+  shine: "0xFFDFA0"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xCCCCCC"
+  tag: "0xCCCCCC"
+  *uri*:
+    underline: true
+  *url*:
+    underline: true
+  *link*:
+    underline: true
+  entity: "0xCCCCCC"
+  markup: "0xCCCCCC"
+  string: "0x99CC99"
+  comment: "0x999999"
+  invalid:
+    background: "0xF2777A59"
+  keyword: "0xCC99CC"
+  storage: "0xCC99CC"
+  support: "0xCCCCCC"
+  variable: "0xF2777A"
+  attribute: "0xCCCCCC"
+  punctuation: "0x66CCCC"
+  preprocessor: "0xCCCCCC"
+  meta.tag: "0x66CCCC"
+  text.html: "0xCCCCCC"
+  markup.bold:
+    color: "0xFFF4DF"
+    bold: true
+  storage.type: "0xCC99CC"
+  support.type: "0xFFCC66"
+  markup.italic:
+    color: "0xFFF4DF"
+    italic: true
+  support.class: "0xFFCC66"
+  constant.other: "0xCCCCCC"
+  markup.heading: "0x99CC99"
+  meta.separator:
+    background: "0x99CCCC59"
+  constant.numeric: "0xF99157"
+  keyword.operator: "0x66CCCC"
+  meta.block-level: "0x6699CC"
+  support.constant: "0xF99157"
+  support.function: "0x6699CC"
+  constant.language: "0xF99157"
+  constant.character: "0xF99157"
+  invalid.deprecated:
+    background: "0xCC99CC59"
+  meta.function-call: "0x6699CC"
+  variable.parameter: "0xF99157"
+  meta.use.php: "0xFFCC66"
+  meta.tag.sgml: "0xFC6C76"
+  entity.name.tag: "0xFC6C76"
+  entity.name.class: "0xFFCC66"
+  source.*.embedded:
+    background: "0x37515617"
+  string.other.link: "0xF2777A"
+  constant.other.php: "0xCC99CC"
+  keyword.other.unit: "0xF99157"
+  source.js.embedded:
+    background: "0x37515617"
+  source.css.embedded:
+    background: "0x37515617"
+  source.php.embedded:
+    background: "0x37515617"
+  constant.other.color: "0x66CCCC"
+  entity.name.function: "0x6699CC"
+  constant.other.symbol: "0x99CC99"
+  keyword.operator.class: "0xCCCCCC"
+  support.other.variable: "0xF2777A"
+  markup.changed.git_gutter: "0xFFCC66"
+  markup.deleted.git_gutter: "0xFC6C76"
+  markup.inserted.git_gutter: "0x99CC99"
+  punctuation.definition.tag: "0x66CCCC"
+  entity.other.attribute-name: "0xBB80B3"
+  entity.other.inherited-class: "0x99CC99"
+  keyword.other.special-method: "0x6699CC"
+  punctuation.section.embedded: "0xF99157"
+  entity.name.tag.css: "0xCC99CC"
+  entity.name.type.class: "0xFFCC66"
+  source.php.embedded.line: "0xCCCCCC"
+  support.other.namespace.php: "0xFFCC66"
+  punctuation.definition.tag.html: "0x66CCCC"
+  punctuation.definition.bold.markdown: "0x66CCCC"
+  punctuation.separator.inheritance.php: "0x66CCCC"
+  punctuation.definition.italic.markdown: "0x66CCCC"
+  punctuation.definition.tag.*.*: "0x66CCCC"
+  support.orther.namespace.use.php: "0xFFCC66"
+  punctuation.definition.tag.end.html: "0x66CCCC"
+  punctuation.definition.tag.begin.html: "0x66CCCC"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xCCCCCC"
+  markup.heading.1:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xCC99CC"
+    bold: true
+    fontSize: 1.0
+  markup.link:
+    color: "0x99CC99"
+    underline: true
+  markup.link.url:
+    color: "0x99CC99"
+    underline: true
+  markup.code.block:
+    color: "0x999999"
+    background: "0x091B25"
+  markup.code.inline:
+    color: "0x999999"
+    background: "0x091B25"
+  markup.quote:
+    color: "0x999999"
+    italic: true
+    background: "0x162832"
+  markup.rule:
+    color: "0x999999"
+    bold: true
+  markup.strikethrough:
+    color: "0x999999"
+    strikethrough: true
+  markup.list.checked:
+    color: "0x6699CC"
+    bold: true
+

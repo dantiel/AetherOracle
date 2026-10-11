@@ -1,0 +1,204 @@
+# Converted from TextMate theme: idleFingers
+# Source: /Users/d/Library/Application Support/TextMate/Managed/Bundles/idleFingers.tmbundle/Themes/idleFingers.tmTheme
+name: idlefingers
+kind: dark
+sourceEditorBackground: "0x323232"
+class: theme.dark.idlefingers
+tags: [dark, idlefingers]
+
+# Global editor colors
+editor:
+  background: "0x323232"
+  foreground: "0xFFFFFF"
+  caret: "0x91FF00"
+  selection: "0x5A647EE0"
+  lineHighlight: "0x343536"
+  invisibles: "0x686868"
+
+# ── AetherCodex Chrome (auto-decorated) ──
+glassTintColor: "0x22222D"
+glassTint: 0.70
+glassBlurStrength: 0.50
+glassStyle: regular
+textShadowStrength: 0.6
+lineSpacing: 4.1
+editorBackgroundOpacity: 0.75
+sidebarBackgroundOpacity: 0.86
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+
+# ── Gutter & Sidebar (auto-decorated) ──
+rulerBackground: "0x2C2C2C"
+rulerForeground: "0xFFFFFF"
+sourceRulerBackground: "0x2C2C2C"
+rulerSeparator: "0x5A5A5A7F"
+sidebarAccent: "0xFFC66D"
+sidebarForeground: "0xFFFFFF"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+sidebarBackground: "0x5B544A"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x323232"
+  foreground: "0xFFFFFF"
+  baseText: "0x6DA5FF"
+  accent: "0xFFC66D"
+  complementary: "0x6DA5FF"
+  codeBackground: "0x242424"
+  codeForeground: "0xFFFFFF"
+  shine: "0xFFDCA4"
+  glassTint: 0.70
+  glassMaterial: menu
+
+scopes:
+  plain: "0xFFFFFF"
+  tag: "0xFFFFFF"
+  text: "0xFFFFFF"
+  entity: "0xFFFFFF"
+  markup: "0xFFFFFF"
+  source:
+    color: "0xCDCDCD"
+    background: "0x282828"
+  string: "0xA5C261"
+  comment:
+    color: "0xBC9458"
+    italic: true
+  invalid:
+    color: "0xFFFFFF"
+    background: "0xFF0000"
+    bold: false
+    italic: false
+    underline: false
+  keyword:
+    color: "0xCC7833"
+    bold: false
+    italic: false
+    underline: false
+  storage: "0xFFFFFF"
+  support: "0xFFFFFF"
+  constant: "0x6C99BB"
+  attribute: "0xFFFFFF"
+  punctuation: "0xFFFFFF"
+  preprocessor: "0xFFFFFF"
+  meta.tag: "0xFFE5BB"
+  entity.name: "0xFFC66D"
+  meta.doctype: "0xFFE5BB"
+  string.regexp: "0xCCCC33"
+  string.literal: "0xCCCC33"
+  variable.other: "0xB7DFF8"
+  declaration.tag: "0xFFE5BB"
+  support.constant: "0x6C99BB"
+  support.function:
+    color: "0xB83426"
+    bold: false
+    italic: false
+    underline: false
+  variable.parameter:
+    italic: true
+  string.interpolated:
+    color: "0xAAAAAA"
+    background: "0x202020"
+  source comment.block:
+    color: "0xFFFFFF"
+    background: "0x575757"
+  entity.name.tag:
+    bold: false
+    italic: false
+    underline: false
+  entity.name.class:
+    underline: true
+  support.class.ruby: "0xCCCC33"
+  markup.bold.textile:
+    color: "0xC2C2C2"
+    bold: true
+  entity.name.function:
+    bold: false
+    italic: false
+    underline: false
+  other.preprocessor.c:
+    color: "0xD0D0FF"
+    bold: false
+    italic: false
+    underline: false
+  source.ruby entity.name: "0xFFF980"
+  entity.name.preprocessor:
+    bold: false
+    italic: false
+    underline: false
+  entity.other.attribute-name:
+    bold: false
+    italic: false
+    underline: false
+  entity.other.inherited-class:
+    italic: true
+    underline: true
+  string constant.character.escape: "0xAAAAAA"
+  markup.list.numbered.textile: "0x6EA533"
+  markup.list.unnumbered.textile: "0x6EA533"
+  string.interpolated constant.character.escape:
+    color: "0x787878"
+    background: "0x212121"
+
+  # ── Markdown (auto-decorated) ──
+  markup: "0xFFFFFF"
+  markup.heading:
+    color: "0xCC7833"
+    bold: true
+  markup.heading.1:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0xCC7833"
+    bold: true
+    fontSize: 1.0
+  markup.bold:
+    color: "0xFFFFFF"
+    bold: true
+  markup.italic:
+    color: "0xFFFFFF"
+    italic: true
+  markup.link:
+    color: "0xA5C261"
+    underline: true
+  markup.link.url:
+    color: "0xA5C261"
+    underline: true
+  markup.code.block:
+    color: "0xBC9458"
+    background: "0x2A2A2A"
+  markup.code.inline:
+    color: "0xBC9458"
+    background: "0x2A2A2A"
+  markup.quote:
+    color: "0xBC9458"
+    italic: true
+    background: "0x373737"
+  markup.rule:
+    color: "0xBC9458"
+    bold: true
+  markup.strikethrough:
+    color: "0xBC9458"
+    strikethrough: true
+  markup.list.checked:
+    color: "0xFFC66D"
+    bold: true
+

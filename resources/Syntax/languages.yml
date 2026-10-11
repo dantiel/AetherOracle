@@ -1,0 +1,182 @@
+# Language registry — maps file extensions to tree-sitter grammars
+# Each entry: grammar name + scope mapping file + highlight queries
+
+swift:
+  grammar: swift
+  scopeMap: tree-sitter-swift.yml
+  query: swift
+
+py:
+  grammar: python
+  query: python
+
+js:
+  grammar: javascript
+  query: javascript
+
+rb:
+  grammar: ruby
+  query: ruby
+
+rs:
+  grammar: rust
+  query: rust
+
+go:
+  grammar: go
+  query: go
+
+html:
+  grammar: html
+  query: html
+
+htm:
+  grammar: html
+  query: html
+
+css:
+  grammar: css
+  query: css
+
+scss:
+  grammar: css
+  query: css
+
+json:
+  grammar: json
+  query: json
+
+sh:
+  grammar: bash
+  query: bash
+
+bash:
+  grammar: bash
+  query: bash
+
+c:
+  grammar: c
+  query: c
+
+h:
+  grammar: c
+  query: c
+
+cpp:
+  grammar: c
+  query: c
+
+cc:
+  grammar: c
+  query: c
+
+cxx:
+  grammar: c
+  query: c
+
+hpp:
+  grammar: c
+  query: c
+
+php:
+  grammar: php
+  query: php
+
+md:
+  grammar: markdown
+  query:
+    - markdown
+    - markdown_inline
+
+markdown:
+  grammar: markdown
+  query:
+    - markdown
+    - markdown_inline
+
+mkdn:
+  grammar: markdown
+  query:
+    - markdown
+    - markdown_inline
+
+mdown:
+  grammar: markdown
+  query:
+    - markdown
+    - markdown_inline
+
+# ── TypeScript / TSX (JavaScript grammar) ──
+ts:
+  grammar: javascript
+  query: typescript
+
+tsx:
+  grammar: javascript
+  query: tsx
+
+# ── XML (HTML grammar) ──
+xml:
+  grammar: html
+  query: xml
+
+# ── C# / C++ (C grammar) ──
+cs:
+  grammar: c
+  query: csharp
+
+# ── Kotlin (C grammar placeholder) ──
+kt:
+  grammar: c
+  query: kotlin
+
+kts:
+  grammar: c
+  query: kotlin
+
+# ── Scala (C grammar placeholder) ──
+scala:
+  grammar: c
+  query: scala
+
+# ── Haskell (C grammar placeholder) ──
+hs:
+  grammar: c
+  query: haskell
+
+# ── Lua (C grammar placeholder) ──
+lua:
+  grammar: c
+  query: lua
+
+# ── YAML (heuristic only — no grammar) ──
+yaml:
+  grammar: c
+  query: yaml
+
+yml:
+  grammar: c
+  query: yaml
+
+# ── TOML (heuristic only — no grammar) ──
+toml:
+  grammar: c
+  query: toml
+
+# ── CoffeeHaml (HTML grammar + heuristic) ──
+chaml:
+  grammar: html
+  query: coffeehaml
+
+coffeehaml:
+  grammar: html
+  query: coffeehaml
+
+# ── Makefile (heuristic only — no grammar) ──
+makefile:
+  grammar: c
+  query: makefile
+
+mk:
+  grammar: c
+  query: makefile

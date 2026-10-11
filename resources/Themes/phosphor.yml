@@ -1,0 +1,163 @@
+# Phosphor — electric cyan + neon pink, terminal 2099
+name: Phosphor
+kind: dark
+tags: [classic, terminal, green, dark]
+rulerBackground: "0x1E2127"
+rulerSeparator: "0x373A407F"
+gutterSelectionBackground: "0x002E54"
+gutterSelectionForeground: "0xD9D9D9"
+gutterSelectionBorder: "0x0070B8"
+# ── Pythia Oracle Chamber (derived; refine per theme) ──
+pythia:
+  background: "0x0D0D0D"
+  foreground: "0xEEEEEE"
+  baseText: "0x4C73E6"
+  accent: "0xE6BF4D"
+  complementary: "0x4C73E6"
+  codeBackground: "0x090909"
+  codeForeground: "0xEEEEEE"
+  shine: "0xF0D791"
+  glassTint: 0.7
+  glassMaterial: menu
+
+scopes:
+  keyword:
+    color: "0x4DD9CC"
+    bold: true
+  keyword.type:
+    color: "0x3DB8AD"
+  operator: "0xE666B3"
+  string:
+    color: "0xE6BF4D"
+  string.escape:
+    color: "0xE699CC"
+  number:
+    color: "0x99D98C"
+  comment:
+    color: "0x4D5966"
+  type:
+    color: "0xD9598C"
+  support.type:
+    color: "0xC060A0"
+    bold: true
+  function:
+    color: "0x66CCE6"
+  support.function: "0x8C6AD4"
+  variable: "0xCCCCD9"
+  variable.language: "0x4DB3CC"
+  variable.instance: "0x59C2E6"
+  variable.class:
+    color: "0x6BA6E6"
+  variable.global: "0xF280A0"
+  constant:
+    color: "0x80D94D"
+  constant.symbol: "0x80D94D"
+  support.constant: "0x06960E"
+  property: "0x80BFD9"
+  entity.name.class: "0xD9598C"
+  entity.name.function: "0x66CCE6"
+  entity.name.tag: "0xE65980"
+  entity.name.type.namespace: "0xC3507E"
+  entity.other.attribute-name: "0xD980C0"
+  entity.other.inherited-class:
+    color: "0xD9598C"
+    italic: true
+  variable.other: "0xCCCCD9"
+  variable.parameter:
+    color: "0xCCCCD9"
+    italic: true
+  variable.function: "0x66CCE6"
+  constant.other: "0x80D94D"
+  constant.language: "0x4DB3CC"
+  constant.character: "0xE6BF4D"
+  storage: "0x3DB8AD"
+  storage.type: "0x3DB8AD"
+  punctuation: "0x73808C"
+  tag: "0xE65980"
+  attribute: "0xD980C0"
+  preprocessor:
+    color: "0x7B9A00"
+  invalid:
+    color: "0xF24060"
+    background: "0x660010"
+  plain: "0xBFC2CC"
+  markup.heading:
+    color: "0x55EEDD"
+    bold: true
+    fontSize: 1.5
+  markup.heading.1:
+    color: "0x66FFEE"
+    bold: true
+    fontSize: 2.0
+  markup.heading.2:
+    color: "0x5DF7E6"
+    bold: true
+    fontSize: 1.75
+  markup.heading.3:
+    color: "0x55EEDD"
+    bold: true
+    fontSize: 1.55
+  markup.heading.4:
+    color: "0x4CE0D0"
+    bold: true
+    fontSize: 1.35
+  markup.heading.5:
+    color: "0x42D4C4"
+    bold: true
+    fontSize: 1.15
+  markup.heading.6:
+    color: "0x38C8B8"
+    bold: true
+    fontSize: 1.0
+  markup:
+    color: "0xE6BF4D"
+  markup.link:
+    color: "0x55CCDD"
+    underline: true
+  markup.link.url:
+    color: "0x66DDEE"
+    underline: true
+  markup.italic:
+    color: "0xB0E0C0"
+    italic: true
+  markup.bold:
+    color: "0xF0E8A0"
+    bold: true
+  markup.strikethrough:
+    color: "0x996666"
+    markup.strikethrough: true
+  markup.quote:
+    color: "0x9999B3"
+    italic: true
+    background: "0x141420"
+  markup.rule:
+    color: "0x665580"
+    bold: true
+  markup.code.block:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.code.inline:
+    color: "0x8CB3BF"
+    background: "0x0E1418"
+  markup.list.checked:
+    color: "0x73BF73"
+    bold: true
+
+editorBackground: "0x0F1218"
+sidebarBackground: "0x1F1D27"
+sidebarBackgroundOpacity: 0.15
+editorForeground: "0xBFC2CC"
+caretColor: "0x00FFCC"
+selectionColor: "0x1A2840"
+lineHighlight: "0x141820"
+editorBackgroundOpacity: 0.10
+textShadowStrength: 0.0
+lineSpacing: 4.0
+
+rootBlurMaterial: fullScreenUI
+rootBlendingMode: behindWindow
+pythiaGlassMaterial: menu
+glassTintColor: "0x33FF33"
+glassStyle: regular
+glassTint: 0.85
+class: theme.Vibrant Dark
