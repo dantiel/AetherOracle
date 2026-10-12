@@ -641,7 +641,11 @@ class Oracle
     rescue StandardError => e
       error_msg = "Failed to handle fallback tool calls: #{e.message.truncate 100}"
       sink.system_error error_msg
-      [messages, tool_results]
+      # Return the same 3-tuple as the success path — the caller destructures
+      # [new_messages, new_tool_results, divine_interrupt]. A 2-element return
+      # silently dropped the tool result and let the loop re-issue the same
+      # failing call with no forward progress (or spin to max_depth).
+      [messages, tool_results, nil]
     end
 
 

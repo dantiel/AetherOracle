@@ -51,7 +51,11 @@ def aether_data_dir(root = $project_root)
 end
 
 def apply_project_root(root)
-  $project_root = File.expand_path(root)
+  root = File.expand_path(root)
+  # A file path (the host passes the active document) cannot be a cwd;
+  # resolve it to its containing directory before `Dir.chdir` (Errno::EINVAL).
+  root = File.dirname(root) unless File.directory?(root)
+  $project_root = root
   Dir.chdir($project_root)
   ENV['AETHER_PROJECT_ROOT'] = $project_root
   ENV['AETHER_TM_AI'] = aether_data_dir + '/'
@@ -163,6 +167,14 @@ class StandaloneDaemon
     task_detail
   ].freeze
 
+  # A long model call (extended thinking / reasoning) or a slow tool can block
+  # the single worker for many minutes without producing a single byte. The
+  # client's inactivity watchdog would then declare the daemon dead even though
+  # it is merely waiting. So we breathe a lightweight `heartbeat` status every
+  # HEARTBEAT_INTERVAL seconds while a request is in flight — the client resets
+  # its watchdog on any frame, so silence now only ever means a dead process.
+  HEARTBEAT_INTERVAL = 30
+
   def initialize
     @stream = PipeStream.new
     HorologiumAeternum.set_websocket(@stream)
@@ -234,7 +246,9 @@ class StandaloneDaemon
         turn_shell = @shell.branch
         $aether_shell = turn_shell
 
+        heartbeat = nil
         begin
+          heartbeat = start_heartbeat
           result = dispatch(request['command'], request['arguments'] || {})
           emit(type: 'result', request_id: request_id, success: true, result: result)
         rescue Exception => e
@@ -263,6 +277,7 @@ class StandaloneDaemon
             nil
           end
         ensure
+          heartbeat&.kill
           # Merge the turn's branch back into the trunk unless a context switch
           # replaced it mid-flight (activate_context re-points @shell to the new
           # project's cwd; the stale branch must not clobber it).
@@ -533,6 +548,34 @@ class StandaloneDaemon
   def pause_worker
     t = @worker_thread
     t[:paused] = true if t && t.alive?
+  end
+
+  # Spawns a daemon-thread heartbeat: every HEARTBEAT_INTERVAL seconds it emits a
+  # `heartbeat` status frame so a long model/tool turn never looks like a dead
+  # daemon to the client's inactivity watchdog. The worker kills it in `ensure`
+  # the moment the request finishes.
+  def start_heartbeat
+    # Capture the worker's frame context before spawning: the heartbeat thread
+    # won't inherit Thread.current locals, so carry request_id + sink explicitly.
+    request_id = Thread.current[:aether_request_id]
+    sink = Thread.current[:aether_sink]
+    Thread.new do
+      Thread.current[:aether_request_id] = request_id
+      Thread.current[:aether_sink] = sink
+      loop do
+        sleep HEARTBEAT_INTERVAL
+        begin
+          emit(type: 'stream', method: 'status', payload: {
+                 type: 'heartbeat',
+                 data: { message: 'the oracle is still channeling…' },
+                 timestamp: Time.now.to_f,
+                 uuid: nil
+               })
+        rescue StandardError => e
+          warn "[AETHER-DAEMON] heartbeat failed: #{e.message}"
+        end
+      end
+    end
   end
 
   # Walk up from `path` (file or directory) to the nearest config file
