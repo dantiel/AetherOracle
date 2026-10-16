@@ -358,7 +358,7 @@ class CONFIG
     intent:     false,  # pre-turn intent digest (adds pre-turn latency)
     sediment:   true,   # post-turn Aegis weave
     synthesize: true,   # Ouroboros note synthesis
-    map:        true    # Arsara cartography: one-line area descriptions
+    map:        true    # Atlas cartography: one-line area descriptions
   }.freeze
 
   def self.flash
@@ -390,7 +390,7 @@ class CONFIG
     false
   end
 
-# Cartography (Arsara) defaults: complete project mapping + the weaving
+# Cartography (Atlas) defaults: complete project mapping + the weaving
 # of change into the transient cascade. auto_map (re-)mints the compact
 # `map` notes after every sounding/sync; delta_fragments mints transient
 # TTL fragments for touched files (Stufe-2 glow, decays into the

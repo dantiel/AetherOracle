@@ -11,25 +11,39 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
+    <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html" class="active">Architecture</a>
-</div>
-
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html" class="active">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -45,7 +59,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>The Mnemosyne cascade</h2>
+      <h2><span class="hsig">✶</span> The Mnemosyne cascade</h2>
       <p class="sub">Four strata, one memory. Each stratum feeds the token substrate; each recall
       blends them by resonance — content, tags, paths, scope distance and freshness.</p>
       <pre class="mermaid">
@@ -56,11 +70,11 @@ flowchart TD
   end
   subgraph S1[Stufe 1 — Notes]
     NOTES["project_notes (context-scoped, durable)"]
-    MAPS["map notes (Arsara)"]
+    MAPS["map notes (Atlas)"]
   end
   subgraph S2[Stufe 2 — Fragments]
     FRAGS["fragments (TTL + decay)"]
-    DELTA["corpus-delta + sync-marker (Arsara)"]
+    DELTA["corpus-delta + sync-marker (Atlas)"]
   end
   subgraph S3[Stufe 3 — Token Substrate]
     TOK["memory_tokens (content / tag / path channels)"]
@@ -75,25 +89,25 @@ flowchart TD
       </pre>
       <div class="grid grid-2" style="margin-top: 24px;">
         <div class="card">
-          <h3>Stufe 0 — Corpus graph</h3>
+          <h3><span class="hsig">⋈</span> Stufe 0 — Corpus graph</h3>
           <p>An Argonaut sounding scans every source file into <code>corpus_nodes</code> (files +
           symbols) and <code>corpus_edges</code> (imports / nesting / references). The graph is the
           project's skeleton; every node is indexed into the token substrate.</p>
         </div>
         <div class="card">
-          <h3>Stufe 1 — Notes</h3>
+          <h3><span class="hsig">▚</span> Stufe 1 — Notes</h3>
           <p>Durable, context-scoped knowledge (<code>project_notes</code>). Notes carry content,
           tags, links and a scope path; recall applies cascade resonance — the local scope
           outranks ancestors, siblings whisper nothing upward.</p>
         </div>
         <div class="card">
-          <h3>Stufe 2 — Fragments</h3>
+          <h3><span class="hsig">⋄</span> Stufe 2 — Fragments</h3>
           <p>Transient cognition with a TTL. Fresh fragments <em>glow</em> in recall (freshness
           weighting); expired ones decay and are purged lazily. The project's living change lives
           here: every touched file mints a <code>corpus-delta</code> fragment.</p>
         </div>
         <div class="card">
-          <h3>Stufe 3 — Token substrate</h3>
+          <h3><span class="hsig">▚</span> Stufe 3 — Token substrate</h3>
           <p><code>memory_tokens</code> is the polymorphic vector base under notes, fragments and
           corpus nodes. Three channels — content (tf), tags (semantic anchors), paths (structure)
           — plus cosine similarity over the shared space.</p>
@@ -104,7 +118,7 @@ flowchart TD
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Cartography — Arsara</h2>
+      <h2><span class="hsig">⬡</span> Cartography — Atlas</h2>
       <p class="sub">
         Complete project mapping, woven into the cascade. The cartographer sounds the repo,
         remembers every file's fingerprint, and re-sounds only what actually changed. Changes
@@ -112,27 +126,27 @@ flowchart TD
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>corpus_sound</h3>
+          <h3><span class="hsig">⋈</span> corpus_sound</h3>
           <p>Full idempotent rescan: rebuilds the graph, re-seeds the delta memory
           (<code>corpus_sightings</code> — mtime + size per file) and mints the map notes.
           Happens automatically on first contact.</p>
         </div>
         <div class="card">
-          <h3>project_sync</h3>
+          <h3><span class="hsig">⇄</span> project_sync</h3>
           <p>Incremental rite: compares the repo against the fingerprints <strong>and</strong>
           <code>git status</code>. Only added/changed files are re-sounded, deleted ones excised,
           imports re-wired. Catches edits invisible to fingerprints — same-size same-second
           edits, external tools, concurrent workers.</p>
         </div>
         <div class="card">
-          <h3>Auto-observe</h3>
+          <h3><span class="hsig">⎇</span> Auto-observe</h3>
           <p>Every <code>create_file</code> / <code>patch_file</code> / <code>rename_file</code>
           re-sights the touched path automatically (<code>cartography.observe_edits</code>) — the
           agent's own edits become memory the moment they happen. <code>mnemosyne_observe</code>
           covers edits made outside the tool loop.</p>
         </div>
         <div class="card">
-          <h3>Map notes</h3>
+          <h3><span class="hsig">⬡</span> Map notes</h3>
           <p>One compact overview note plus one note per project area (files, symbols, sample
           files, one-line description — written by the fast model when a distinct one exists,
           else heuristically). Tagged <code>map</code>, re-minted idempotently.</p>
@@ -143,7 +157,7 @@ flowchart TD
 
   <section class="section">
     <div class="wrap">
-      <h2>The flash rites — one gate, three rites</h2>
+      <h2><span class="hsig">↯</span> The flash rites — one gate, three rites</h2>
       <p class="sub">
         A flash turn is only worth spending when a <em>distinct</em> fast model exists
         (<code>fast-model != model</code>) — otherwise every rite falls back silently to the old
@@ -152,20 +166,20 @@ flowchart TD
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>FlashAegis</h3>
+          <h3><span class="hsig">◇</span> FlashAegis</h3>
           <p>Keeps the Aegis orientation alive. <code>post_turn_sediment</code> (on) lets the fast
           model distill each turn into a summary + tags and weave them into the current Aegis —
           the oracle re-orients itself after every prompt without the deep mind lifting a finger.
           <code>pre_turn_intent</code> (off) would read intent before the turn.</p>
         </div>
         <div class="card">
-          <h3>Ouroboros</h3>
+          <h3><span class="hsig">⌁</span> Ouroboros</h3>
           <p>Intelligent recall (<code>ouroboros_recall</code>): the fast model digests the
           top recall hits into one current-state digest, so the deep mind navigates a distilled
           map instead of raw notes.</p>
         </div>
         <div class="card">
-          <h3>The kopist</h3>
+          <h3><span class="hsig">✦</span> The kopist</h3>
           <p>Writes the map notes' one-line area descriptions
           (<code>cartography.map-flash</code>). Pure kartierung — never touches recall.</p>
         </div>
@@ -175,7 +189,7 @@ flowchart TD
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Concurrent workers — one shared æther</h2>
+      <h2><span class="hsig">⇄</span> Concurrent workers — one shared æther</h2>
       <p class="sub">
         Multiple AetherOracle instances may share one project and one memory db. The cartography
         layer is built for this: every rite is idempotent, the db waits politely on contention,
@@ -183,25 +197,25 @@ flowchart TD
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>Shared delta memory</h3>
+          <h3><span class="hsig">✶</span> Shared delta memory</h3>
           <p>Fingerprints (<code>corpus_sightings</code>) live in the shared db — a worker that
           synced after another worker's edits sees a clean tree, never re-sounds blindly.</p>
         </div>
         <div class="card">
-          <h3>sync-marker fragments</h3>
+          <h3><span class="hsig">⇄</span> sync-marker fragments</h3>
           <p>Every sync with a delta mints a transient marker
           (<code>worker@time: +added/changed/-removed</code>). A sibling instance's recall
           surfaces <em>"something changed over there"</em> through normal fragment glow — no
           polling, no re-scanning.</p>
         </div>
         <div class="card">
-          <h3>Git union</h3>
+          <h3><span class="hsig">⎇</span> Git union</h3>
           <p><code>git status --porcelain</code> is unioned with the fingerprints, so content
           changes that mtime+size cannot see (same-size same-second edits, external tools) are
           still captured.</p>
         </div>
         <div class="card">
-          <h3>busy_timeout</h3>
+          <h3><span class="hsig">◈</span> busy_timeout</h3>
           <p>The memory db waits politely (<code>busy_timeout = 5000</code>) instead of dying on
           <code>SQLITE_BUSY</code> when two workers write at the same moment.</p>
         </div>
@@ -211,7 +225,7 @@ flowchart TD
 
   <section class="section">
     <div class="wrap">
-      <h2>Memory tool inventory</h2>
+      <h2><span class="hsig">✶</span> Memory tool inventory</h2>
       <p class="sub">The cartography and recall instruments — the full set lives in
       <code>instrumenta.rb</code>.</p>
       <table>

@@ -58,7 +58,7 @@ class Mnemosyne
       # (pass 1: files + symbols), then wire imports (pass 2: needs the
       # complete file map to resolve cross-references). Afterwards the
       # delta memory (corpus_sightings) is re-seeded and the cartographer
-      # weaves the fresh map into Mnemosyne (Arsara, config-gated).
+      # weaves the fresh map into Mnemosyne (Atlas, config-gated).
       def sound!(root = project_root)
         files = source_files(root)
         Mnemosyne.db.transaction do
@@ -77,7 +77,7 @@ class Mnemosyne
           end
         end
         files.each { |rel| record_sighting(rel, fingerprint(rel, root)) }
-        woven = defined?(Arsara) ? Mnemosyne.arsara_weave!(kind: :sound) : nil
+        woven = defined?(Atlas) ? Mnemosyne.atlas_weave!(kind: :sound) : nil
         { files: files.size, nodes: count_nodes, edges: count_edges, maps: woven }
       end
 
@@ -253,7 +253,7 @@ class Mnemosyne
         report[:added] = describe.call(report[:added])
         report[:changed] = describe.call(report[:changed])
         report[:removed].map! { |rel| { rel: rel } }
-        woven = defined?(Arsara) ? Mnemosyne.arsara_weave!(kind: :sync, report: report) : nil
+        woven = defined?(Atlas) ? Mnemosyne.atlas_weave!(kind: :sync, report: report) : nil
         meta_set('last_sync_at', started_at.utc.iso8601(3))
         report.merge(fragments: woven, git: git_paths.size, synced_at: meta_get('last_sync_at'))
       end

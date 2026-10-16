@@ -11,26 +11,41 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
-  <div class="nav-inner">
-    <div class="brand"><span class="sigil"></span> AetherOracle</div>
-    <div class="nav-links">
-      <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html" class="active">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
+    <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label on">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html" class="active">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</nav>
+  </nav>
 
     <header class="hero wrap">
     <div class="eyebrow">The eternal serpent · digestion and ascent</div>
@@ -43,14 +58,14 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>The digest — intelligent recall</h2>
+      <h2><span class="hsig">◈</span> The digest — intelligent recall</h2>
       <p class="sub"><code>ouroboros_recall</code> runs the normal Mnemosyne recall, then flash-synthesizes
       the matches into <em>one</em> compact current-state digest: duplicates merged, historical and transient
       matter dropped. The deep mind reads one living summary instead of N raw fragments — the kopist writes,
       the master interprets.</p>
       <pre><code># returns { digest:, notes: }
 digest: "Concurrent-Worker-Modell: shared memory_db, sync-marker whispers,
-         busy_timeout 5000. Files: corpus.rb, arsara.rb."
+         busy_timeout 5000. Files: corpus.rb, atlas.rb."
 notes:  [ the raw matches, for when the deep mind wants the source ]</code></pre>
       <p class="sub">Without a distinct fast model the digest is simply <code>nil</code> and the raw notes
       remain — no cost, no surprise.</p>
@@ -59,17 +74,17 @@ notes:  [ the raw matches, for when the deep mind wants the source ]</code></pre
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>The ladder — promotion made live</h2>
+      <h2><span class="hsig">⌁</span> The ladder — promotion made live</h2>
       <p class="sub">The first rung of the documented cascade <code>fragment → note</code> is now real:</p>
       <div class="grid grid-3">
-        <div class="card"><h3>1 · observe</h3>
+        <div class="card"><h3><span class="hsig">⎇</span> 1 · observe</h3>
           <p>After every sync with a delta, the ladder counts active sync-markers per path. A file that keeps
           changing keeps glowing.</p></div>
-        <div class="card"><h3>2 · threshold</h3>
+        <div class="card"><h3><span class="hsig">◈</span> 2 · threshold</h3>
           <p>Three glows (configurable) and the path is lifted: one durable structure note —
           <code>Repeatedly active: ruby/mnemosyne/corpus.rb — corpus: 444 nodes (method:15, …)</code> —
           carrying the current corpus summary. Markers are consumed.</p></div>
-        <div class="card"><h3>3 · guards</h3>
+        <div class="card"><h3><span class="hsig">◈</span> 3 · guards</h3>
           <p>Idempotent: a path already carrying a <code>promoted</code> note is skipped. And a path that no
           longer exists on disk is never promoted — the ladder lifts the living, not the dead.</p></div>
       </div>

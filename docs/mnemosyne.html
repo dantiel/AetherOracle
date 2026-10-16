@@ -11,26 +11,41 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
-  <div class="nav-inner">
-    <div class="brand"><span class="sigil"></span> AetherOracle</div>
-    <div class="nav-links">
-      <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html" class="active">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
+    <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label on">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html" class="active">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</nav>
+  </nav>
 
   <header class="hero wrap">
   <div class="eyebrow">The memory cascade · four stages of living knowledge</div>
@@ -44,23 +59,23 @@
 
 <section class="section">
   <div class="wrap">
-    <h2>The four stages</h2>
+    <h2><span class="hsig">▚</span> The four stages</h2>
     <p class="sub">Each stage holds a different half-life of truth — from the permanent structure of the
     repository down to thoughts that glow for an hour and decay.</p>
     <div class="grid grid-2">
-      <div class="card"><h3>Stufe 0 · Corpus graph</h3>
+      <div class="card"><h3><span class="hsig">⋈</span> Stufe 0 · Corpus graph</h3>
         <p>The repository itself. An Argonaut sounding extracts files and symbols into
         <code>corpus_nodes</code> / <code>corpus_edges</code> (imports, nesting, defines) and indexes every
         node into the token substrate. The code is recallable before the first note is ever minted.</p></div>
-      <div class="card"><h3>Stufe 1 · Durable notes</h3>
+      <div class="card"><h3><span class="hsig">▚</span> Stufe 1 · Durable notes</h3>
         <p><code>project_notes</code> — the current-state memory. Notes carry <code>tags</code>,
         <code>links</code> and a <code>context_path</code>; they are written via <code>remember</code> and
         purged when reality moves on. Only what is true <em>now</em> belongs here.</p></div>
-      <div class="card"><h3>Stufe 2 · Transient fragments</h3>
+      <div class="card"><h3><span class="hsig">⋄</span> Stufe 2 · Transient fragments</h3>
         <p><code>fragments</code> — notes as metaformat with a TTL (default 3600 s). Freshly minted
         fragments <em>glow</em> in recall, expiring ones dim, and expired ones are lazily purged. Working
         thoughts, deltas, whispers — the change is flüchtig, the structure bleibt.</p></div>
-      <div class="card"><h3>Stufe 3 · Token substrate</h3>
+      <div class="card"><h3><span class="hsig">▚</span> Stufe 3 · Token substrate</h3>
         <p><code>memory_tokens</code> — a polymorphic vector substrate shared by notes, fragments and
         corpus nodes. Three channels index each unit: <strong>content</strong> (tf-text),
         <strong>tags</strong> (explicit semantic anchors, compound tags split on <code>_</code>/<code>-</code>,
@@ -71,16 +86,16 @@
 
 <section class="section section-alt">
   <div class="wrap">
-    <h2>Resonance — the scoring machine</h2>
+    <h2><span class="hsig">◈</span> Resonance — the scoring machine</h2>
     <p class="sub">Every recall is scored by <code>Resonance</code>, not by keyword luck.</p>
     <div class="grid grid-3">
-      <div class="card"><h3>Token scoring</h3>
+      <div class="card"><h3><span class="hsig">∿</span> Token scoring</h3>
         <p>Matches in the query score 4×/3×/2× by channel salience with a +5 path bonus; the cascade adds
         a local bonus (+6 in scope) and a distance-decayed whisper from ancestor scopes.</p></div>
-      <div class="card"><h3>Three lenses</h3>
+      <div class="card"><h3><span class="hsig">◈</span> Three lenses</h3>
         <p><code>:blend</code> merges vector cosine and resonance scoring; <code>:vector</code> is pure
         cosine over the substrate; <code>:resonance</code> is the cascade-scoped ranking without vectors.</p></div>
-      <div class="card"><h3>Scope cascade</h3>
+      <div class="card"><h3><span class="hsig">▚</span> Scope cascade</h3>
         <p>Notes in the current scope (+6) and ancestor scopes (distance-decayed) outrank foreign branches;
         child scopes whisper nothing upward — the parent observes only.</p></div>
     </div>
@@ -89,14 +104,14 @@
 
 <section class="section">
   <div class="wrap">
-    <h2>The promotion ladder</h2>
+    <h2><span class="hsig">⌁</span> The promotion ladder</h2>
     <p class="sub">The documented ascent <code>fragment → note → skill → axiom</code> is being made live
     rung by rung.</p>
     <div class="grid grid-2">
-      <div class="card"><h3>Rung 1 — implemented</h3>
+      <div class="card"><h3><span class="hsig">◈</span> Rung 1 — implemented</h3>
         <p><a href="ouroboros.html">Ouroboros</a> lifts sync-markers that repeatedly glow around the same
         path into a durable structure note — the transient becomes permanent when it keeps happening.</p></div>
-      <div class="card"><h3>Rungs 2–3 — design</h3>
+      <div class="card"><h3><span class="hsig">◈</span> Rungs 2–3 — design</h3>
         <p><code>note → skill → axiom</code> lives in <code>protocol.md</code>; the procedural precursor of a
         skill is <code>companion_skill</code> (steps, tools, output_type, refine_by), bound to a companion.</p></div>
     </div>

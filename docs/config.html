@@ -11,25 +11,39 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
+    <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html" class="active">Configuration</a>
-        <a href="architecture.html">Architecture</a>
-</div>
-
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html" class="active">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -44,7 +58,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>Configuration hierarchy</h2>
+      <h2><span class="hsig">⚙</span> Configuration hierarchy</h2>
       <p class="sub">
         Config layers merge from low to high priority
         normalized on load: <code>kebab-case</code> and <code>camelCase</code> both become
@@ -61,7 +75,7 @@ bundle config
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Models &amp; the fast model</h2>
+      <h2><span class="hsig">◈</span> Models &amp; the fast model</h2>
       <p class="sub">
         <code>model</code> is the only knob a user normally needs. Each known preset contributes its
         fast model, API type and endpoint automatically; a custom model sets the minimal fields directly.
@@ -78,25 +92,25 @@ bundle config
 # fast-model: gpt-4o-mini  # cheaper kopist for digesting &amp; summarizing</code></pre>
       <div class="grid grid-2" style="margin-top: 24px;">
         <div class="card">
-          <h3>Known presets</h3>
+          <h3><span class="hsig">◈</span> Known presets</h3>
           <p><code>deepseek-chat</code>, <code>deepseek-reasoner</code>, <code>gpt-4o</code>,
           <code>gpt-4o-mini</code>, <code>gpt-4.1</code>, <code>gpt-4.1-mini</code>, <code>gpt-5</code>,
           <code>gpt-5-mini</code>, <code>claude-sonnet-4-5</code>, <code>claude-opus-4-5</code>,
           <code>claude-haiku-4-5</code>, <code>gemini-2.5-pro</code>, <code>gemini-2.5-flash</code>.</p>
         </div>
         <div class="card">
-          <h3>Distinct fast model</h3>
+          <h3><span class="hsig">◈</span> Distinct fast model</h3>
           <p>When <code>fast-model</code> resolves to a <em>different</em> identifier than
           <code>model</code>, the flash automations below are live. When they are the same, flash
           degrades gracefully to the old behaviour — no wasted turn.</p>
         </div>
       </div>
     </div>
-  </section>
+  </header>
 
   <section class="section">
     <div class="wrap">
-      <h2>Token scaling</h2>
+      <h2><span class="hsig">⚙</span> Token scaling</h2>
       <p class="sub">
         Tool outputs are bounded by slim defaults so the deep mind reads only what matters. Relax any
         bound in a <code>scaling:</code> section where a bigger mirror is genuinely useful.
@@ -122,7 +136,7 @@ bundle config
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Flash automations</h2>
+      <h2><span class="hsig">✦</span> Flash automations</h2>
       <p class="sub">
         The fast model is the <em>kopist</em> — it digests and summarizes so the deep mind can interpret.
         Two rites weave it into memory automatically, and one is a recall tool. All are gated behind a
@@ -136,18 +150,18 @@ bundle config
 
       <div class="grid grid-3" style="margin-top: 24px;">
         <div class="card">
-          <h3>Flash-Aegis · intent</h3>
+          <h3><span class="hsig">◇</span> Flash-Aegis · intent</h3>
           <p>After a prompt is entered, the fast model distills a transient intent + focus tags into the
           in-memory orientation. Off by default — it adds a pre-turn round-trip.</p>
         </div>
         <div class="card">
-          <h3>Flash-Aegis · sediment</h3>
+          <h3><span class="hsig">◇</span> Flash-Aegis · sediment</h3>
           <p>After the turn completes, the fast model condenses it into a new current-state summary +
           tags and weaves them into the persisted Aegis. The oracle <em>flashes</em> onto a new course on
           its own.</p>
         </div>
         <div class="card">
-          <h3>Ouroboros recall</h3>
+          <h3><span class="hsig">⌁</span> Ouroboros recall</h3>
           <p>An intelligent recall: matched notes are flash-synthesized into <em>one</em> compact
           current-state digest, so the deep mind reads a living summary instead of N stale fragments.</p>
         </div>
@@ -161,7 +175,7 @@ bundle config
 
   <section class="section">
     <div class="wrap">
-      <h2>Cartography (Arsara)</h2>
+      <h2><span class="hsig">⬡</span> Cartography (Atlas)</h2>
       <p class="sub">
         Complete project mapping, woven into the Mnemosyne cascade. An Argonaut sounding
         (<code>corpus_sound</code>) reads the whole repository into the corpus graph (files,
@@ -190,21 +204,21 @@ cartography:
       </p>
       <div class="grid grid-2" style="margin-top: 24px;">
         <div class="card">
-          <h3>corpus_sound</h3>
+          <h3><span class="hsig">⋈</span> corpus_sound</h3>
           <p>Full idempotent rescan. Rebuilds the graph, re-seeds the delta memory and
           re-mints the map notes.</p>
         </div>
         <div class="card">
-          <h3>project_sync</h3>
+          <h3><span class="hsig">⇄</span> project_sync</h3>
           <p>Incremental rite. Reads project changes into Mnemosyne: delta re-sounding +
           fragment cascade + map refresh. First run falls back to a full sounding.</p>
         </div>
         <div class="card">
-          <h3>project_map</h3>
+          <h3><span class="hsig">◈</span> project_map</h3>
           <p>(Re-)mint the map notes from the current corpus graph on demand. Idempotent.</p>
         </div>
         <div class="card">
-          <h3>Recall the map</h3>
+          <h3><span class="hsig">⬡</span> Recall the map</h3>
           <p>Ask for <code>map</code> in <code>recall_notes</code> — the overview note is the
           landing strip; per-area notes carry file samples for targeted navigation.</p>
         </div>
@@ -218,7 +232,7 @@ cartography:
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Ouroboros — recall &amp; promotion</h2>
+      <h2><span class="hsig">⌁</span> Ouroboros — recall &amp; promotion</h2>
       <p class="sub">The serpent digests and ascends. See the <a href="ouroboros.html">Ouroboros</a> page
       for the full picture.</p>
       <pre><code># .aethercodex
@@ -234,7 +248,7 @@ ouroboros:
 
 <section class="section">
     <div class="wrap">
-      <h2>Reference</h2>
+      <h2><span class="hsig">◈</span> Reference</h2>
       <table>
         <tr><th>Key</th><th>Meaning</th></tr>
         <tr><td><code>model</code></td><td>Primary model ID (preset or custom)</td></tr>

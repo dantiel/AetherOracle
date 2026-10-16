@@ -11,25 +11,39 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
+    <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html" class="active">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
-</div>
-
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html" class="active">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -45,29 +59,29 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>A terminal that respects the craftsperson</h2>
+      <h2><span class="hsig">◈</span> A terminal that respects the craftsperson</h2>
       <p class="sub">
         A CLI is where precision matters most. Every keystroke edge-case was hardened so the tool never
         gets in the way.
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>Draft-preserving history</h3>
+          <h3><span class="hsig">◈</span> Draft-preserving history</h3>
           <p>Scroll up through previous inputs, then back down — your in-progress prompt is restored, not
           discarded. Accidental arrow taps never erase what you were writing.</p>
         </div>
         <div class="card">
-          <h3>Full key fidelity</h3>
+          <h3><span class="hsig">◈</span> Full key fidelity</h3>
           <p>DEL works, extended scan-codes are honored, and UTF-8 multibyte input (umlauts, accented
           characters) is reassembled byte-by-byte — so <em>ä</em> is <em>ä</em>, not a mangled codepoint.</p>
         </div>
         <div class="card">
-          <h3>Non-blocking work</h3>
+          <h3><span class="hsig">◈</span> Non-blocking work</h3>
           <p>The oracle reasons in a background thread while the console stays responsive — Tab/Shift-Tab
           cycle the focus ring, and a minified overlay shows progress without freezing input.</p>
         </div>
         <div class="card">
-          <h3>Live intermediary blocks</h3>
+          <h3><span class="hsig">◈</span> Live intermediary blocks</h3>
           <p>As the oracle works, intermediary thoughts render as <code>-- ~ --</code> blocks in cyan —
           the reasoning is visible in flight, with the full answer once at the end.</p>
         </div>
@@ -77,7 +91,7 @@
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Commands</h2>
+      <h2><span class="hsig">$</span> Commands</h2>
       <p class="sub">Seven names, one dispatcher. The everyday surface.</p>
       <table>
         <tr><th>Command</th><th>Purpose</th></tr>
@@ -95,7 +109,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>Configuration</h2>
+      <h2><span class="hsig">⚙</span> Configuration</h2>
       <p class="sub">Only a model is needed. Pick a known model and the fast model, API type, and endpoint
       are derived automatically; for a custom model, fill the minimal fields directly.</p>
       <pre><code># ~/.aethercodex

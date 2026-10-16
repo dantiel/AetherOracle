@@ -11,26 +11,41 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
-  <div class="nav-inner">
-    <div class="brand"><span class="sigil"></span> AetherOracle</div>
-    <div class="nav-links">
-      <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html" class="active">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
+    <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html" class="active">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</nav>
+  </nav>
 
   <header class="hero wrap">
   <div class="eyebrow">The task engine · ten alchemical steps</div>
@@ -44,23 +59,23 @@
 
 <section class="section">
   <div class="wrap">
-    <h2>The engine</h2>
+    <h2><span class="hsig">▲</span> The engine</h2>
     <p class="sub">Tasks run as step sequences with per-step guidance, temperatures and thinking depths,
     previous results always visible to the current step.</p>
     <div class="grid grid-2">
-      <div class="card"><h3>Workflow shapes</h3>
+      <div class="card"><h3><span class="hsig">◈</span> Workflow shapes</h3>
         <p><code>full</code> = all 10 alchemical steps · <code>analysis</code> = 5 steps ·
         <code>simple</code> = 3 steps · <code>debug</code> = step through every phase without executing
         tools — the plan crystallizes before the first tool call.</p></div>
-      <div class="card"><h3>The ten steps</h3>
+      <div class="card"><h3><span class="hsig">◈</span> The ten steps</h3>
         <p>Generate solution options → evaluate the task → task detail → choose the best option → analyze
         files → apply patches → run tests → validate edge scenarios → audit and optimize → update
         documentation. Each step stores its result; each may retry up to three times.</p></div>
-      <div class="card"><h3>TaskLedger</h3>
+      <div class="card"><h3><span class="hsig">◈</span> TaskLedger</h3>
         <p><code>create_task</code>, <code>execute_task</code>, <code>evaluate_task</code>,
         <code>update_task</code>, <code>list_tasks</code>, <code>remove_task</code>. States:
         pending, active, paused, failed, completed, invalid, cancelled.</p></div>
-      <div class="card"><h3>Subtasks &amp; inheritance</h3>
+      <div class="card"><h3><span class="hsig">◈</span> Subtasks &amp; inheritance</h3>
         <p>Tasks can spawn subtasks (depth-bounded); a subtask inherits its parent's context — the child
         wakes inside the parent's room, not in a vacuum.</p></div>
     </div>
@@ -69,17 +84,17 @@
 
 <section class="section section-alt">
   <div class="wrap">
-    <h2>Seals — Salomo's executive ledger</h2>
+    <h2><span class="hsig">▲</span> Seals — Salomo's executive ledger</h2>
     <p class="sub">The king decomposes the great work. A seal is a goal plus an ordered list of milestones,
     each a real engine task, each optionally gated on earlier milestones and owned by a companion.</p>
     <div class="grid grid-3">
-      <div class="card"><h3>seal_create</h3>
+      <div class="card"><h3><span class="hsig">▲</span> seal_create</h3>
         <p>Goal + milestones with <code>depends_on</code> edges (0-based indices). Ungated milestones run
         in parallel; <code>depends_on: [i-1]</code> builds a strict chain.</p></div>
-      <div class="card"><h3>seal_run</h3>
+      <div class="card"><h3><span class="hsig">▲</span> seal_run</h3>
         <p>Drives the critical path: executes the next unblocked milestone and re-evaluates, hermetically
         bounded (max steps per turn) — never a runaway loop.</p></div>
-      <div class="card"><h3>seal_delegate</h3>
+      <div class="card"><h3><span class="hsig">▲</span> seal_delegate</h3>
         <p>Each milestone can be owned by a companion glyph — the fox takes the clever path, the wolf the
         radical cut, the owl the architecture. <code>seal_status</code> shows the computed next action.</p></div>
     </div>

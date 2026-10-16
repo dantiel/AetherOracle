@@ -11,25 +11,39 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
+    <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html" class="active">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
-</div>
-
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html" class="active">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -45,18 +59,18 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>The projects</h2>
+      <h2><span class="hsig">◈</span> The projects</h2>
       <p class="sub">Four faces of the same aether.</p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>AetherCodex — TextMate</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — TextMate</h3>
           <p>Where it began: the hermetically-aware editor companion as a TextMate plugin. The first
           embodiment of the voice, with CLI functionality from the start.</p>
           <p style="margin-top: 12px;"><a href="https://dantiel.github.io/AetherCodex-TextMate/">Site</a>
           · <a href="https://github.com/dantiel/AetherCodex-TextMate">Source</a></p>
         </div>
         <div class="card">
-          <h3>AetherCodex — native</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — native</h3>
           <p>The native shell: the editor on macOS (iOS · Android companions forthcoming). The companion is
           <strong>Pythia</strong> — an identity, not a client — reaching the same daemon over the wire
           contract.</p>
@@ -64,13 +78,13 @@
           · <a href="https://github.com/dantiel/AetherCodex">Source</a></p>
         </div>
         <div class="card">
-          <h3>AetherCodex — Windows</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — Windows</h3>
           <p>The native Windows shell (C# · .NET 8 · WPF), carrying the same brain into the Windows desktop
           with the Ruby daemon as its soul.</p>
           <p style="margin-top: 12px;"><a href="https://github.com/dantiel/AetherCodex-win">Source</a></p>
         </div>
         <div class="card">
-          <h3>AetherOracle</h3>
+          <h3><span class="hsig">✧</span> AetherOracle</h3>
           <p>The shared core: the brain + engine + assets + per-OS integration shims, packaged as a RubyGem.
           Install it anywhere and that OS becomes an Aether OS.</p>
           <p style="margin-top: 12px;"><a href="https://github.com/dantiel/AetherOracle">Source</a></p>
@@ -81,30 +95,30 @@
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>Development history</h2>
+      <h2><span class="hsig">◈</span> Development history</h2>
       <p class="sub">A quiet lineage, traced by founding month and year.</p>
       <div class="timeline">
         <div class="item">
           <div class="when">July 2025</div>
-          <h3>AetherCodex — TextMate</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — TextMate</h3>
           <p>The origin: an editor companion born as a TextMate plugin, carrying CLI functionality from
           the very beginning. The voice speaks for the first time.</p>
         </div>
         <div class="item">
           <div class="when">September 2026</div>
-          <h3>AetherCodex — native (macOS)</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — native (macOS)</h3>
           <p>The editor graduates to a native shell. Pythia is named — the same familiar, now across
           platforms, reaching the one daemon.</p>
         </div>
         <div class="item">
           <div class="when">September 2026</div>
-          <h3>AetherOracle</h3>
+          <h3><span class="hsig">✧</span> AetherOracle</h3>
           <p>The shared core is extracted: the brain, the memory cascade, the instrumentarium, the companion
           pantheon — packaged as a portable RubyGem with seven CLI names.</p>
         </div>
         <div class="item">
           <div class="when">October 2026</div>
-          <h3>AetherCodex — Windows</h3>
+          <h3><span class="hsig">✧</span> AetherCodex — Windows</h3>
           <p>The native Windows shell (C# · .NET 8 · WPF) arrives, carrying the Ruby daemon as its soul into
           the Windows desktop.</p>
         </div>
@@ -114,24 +128,24 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>The philosophy</h2>
+      <h2><span class="hsig">◈</span> The philosophy</h2>
       <p class="sub">
         The aether is the <strong>reasoning substrate</strong> — the calculating space where the model
         actually thinks. Everything in the Aetherverse is an expression of that one invariant:
       </p>
       <div class="grid grid-3">
         <div class="card">
-          <h3>One oracle</h3>
+          <h3><span class="hsig">◈</span> One oracle</h3>
           <p>Every turn resolves to <code>POST /aether/invoke</code> on some host that carries the core.
           There is no client/server split — there is only the aether.</p>
         </div>
         <div class="card">
-          <h3>Pythia is its voice</h3>
+          <h3><span class="hsig">◈</span> Pythia is its voice</h3>
           <p>The companion is an identity, not an interface. The same familiar speaks in the editor panel,
           on iOS, and in the terminal.</p>
         </div>
         <div class="card">
-          <h3>The aether is everywhere</h3>
+          <h3><span class="hsig">✧</span> The aether is everywhere</h3>
           <p>Install the core on any OS and it becomes an Aether OS — hermetically in sync with one and
           only one aether.</p>
         </div>

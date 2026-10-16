@@ -3,7 +3,7 @@
 require 'socket'
 
 class Mnemosyne
-  # Arsara -- the cartographer/curator of Mnemosyne. Complete project mapping,
+  # Atlas -- the cartographer/curator of Mnemosyne. Complete project mapping,
   # woven into the cascade: after every Corpus sounding/sync the cartographer
   # (re-)mints compact `map` notes (Stufe 1 -- durable current-state maps, one
   # per project area plus an overview) and, for sync deltas, transient
@@ -12,8 +12,8 @@ class Mnemosyne
   # descriptions are written by the kopist (fast model) when a distinct fast
   # model exists (Mnemosyne.flash_available?(:map)); otherwise a heuristic
   # fallback writes them. Config: .aethercodex `cartography:` section
-  # (auto_map / delta_fragments / fragment_ttl / map_flash).
-  class Arsara
+  # (auto_map / delta_fragments / fragment_ttl / map_flash / git_track / observe_edits / sync_marker).
+  class Atlas
     MAP_TAG = 'map'
     DELTA_TAG = 'corpus-delta'
 
@@ -111,7 +111,7 @@ class Mnemosyne
         total_files = groups.values.sum { |g| g[:files].size }
         total_symbols = groups.values.sum { |g| g[:symbols] }
         name = (defined?(CONFIG) && CONFIG.respond_to?(:project_name) && CONFIG.project_name) || 'project'
-        overview = "Arsara map (#{name}): #{total_files} files, #{total_symbols} symbols, #{groups.size} areas — " \
+        overview = "Atlas map (#{name}): #{total_files} files, #{total_symbols} symbols, #{groups.size} areas — " \
                    "#{groups.keys.first(8).join(', ')}" \
                    "#{groups.size > 8 ? ", +#{groups.size - 8} more" : ''}"
         Notes.remember(content: overview,

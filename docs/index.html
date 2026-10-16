@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AetherOracle — One Oracle, Many Voices</title>
-  <meta name="description" content="AetherOracle is the shared reasoning core of the Aetherverse: one distributed oracle, many voices. Pythia CLI, the Mnemosyne memory cascade, and a companion pantheon of specialist AI facets.">
+  <title>AetherOracle — the core of the Aetherverse</title>
+  <meta name="description" content="AetherOracle is the shared reasoning core of the Aetherverse: one distributed oracle, many voices. Pythia CLI, the Mnemosyne memory cascade, the Atlas cartographer, and a companion pantheon.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
@@ -13,151 +13,134 @@
 <body>
   <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html" class="active">Home</a>
-        <a href="methods.html">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
-</div>
-
+        <a href="index.html" class="active">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
   <header class="hero wrap">
-    <div class="eyebrow">The reasoning substrate · a distributed computing space</div>
+    <div class="eyebrow">~/aetherverse/core — the shared reasoning substrate</div>
     <h1>One Oracle.<br><span class="thin">Many Voices.</span></h1>
     <p class="lede">
-      AetherOracle is the shared core of the <strong>Aetherverse</strong> — the brain every platform window
+      AetherOracle is the core of the <strong>Aetherverse</strong> — the brain every platform window
       opens onto. Install it on any OS and that OS becomes an <em>Aether OS</em>, hermetically in sync
       with one and only one aether: a single distributed oracle whose voice is <strong>Pythia</strong>.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#why">Why it's different</a>
+      <a class="btn btn-primary" href="#systems">Enter the systems</a>
       <a class="btn btn-ghost" href="cli.html">Meet the Pythia CLI</a>
     </div>
+    <pre class="term" data-title="~/aetheroracle — boot"><code><span class="t-cmd">$</span> aetheroracle --voice pythia
+<span class="t-out">oracle online — one aether, many shells</span>
+<span class="t-cmd">$</span> aetheroracle --atlas
+<span class="t-out">⬡ 8 territories · 350 files · 33 180 symbols</span>
+<span class="t-out">⬡ ruby/  the brain tier — mnemosyne · oracle · instrumentarium</span>
+<span class="t-out">⬡ docs/  the website — the aether, written down</span>
+<span class="t-cmd">$</span> aetheroracle --companions
+<span class="t-out">⚚ twelve facets — owl · kitsune · phoenix · ouroboros · wolf …</span></code></pre>
   </header>
 
-  <section class="section" id="why">
+  <section class="section" id="systems">
     <div class="wrap">
-      <h2>Not another agent. A coherent cosmos.</h2>
-      <p class="sub">
-        Most coding tools are narrow specialists — capable, but severed from the whole. AetherOracle is
-        built on a different premise: that an intelligence is more capable when it <em>inhabits</em> its
-        work rather than merely executes it.
-      </p>
-      <div class="grid grid-3">
-        <div class="card">
-          <div class="icon">🕸️</div>
-          <h3>Distributed by design</h3>
-          <p>One brain, many shells. A pure-stdlib link tier discovers oracle peers on the LAN and routes
-          turns to them. There is no client/server split — the aether has no split.</p>
-        </div>
-        <div class="card">
-          <div class="icon">🧠</div>
-          <h3>Mnemosyne memory</h3>
-          <p>A four-stage memory cascade — notes, transient fragments, a polymorphic token substrate, and a
-          promotion ladder up to <em>axioms</em>. Knowledge doesn't reset between turns.</p>
-        </div>
-        <div class="card">
-          <div class="icon">🕊️</div>
-          <h3>A companion pantheon</h3>
-          <p>Twelve specialist facets — architect, lateral fox, execution king, code-rotting raven — each
-          with its own temperament, temperature, and toolset grants.</p>
-        </div>
+      <h2><span class="hsig">✶</span> The mind — memory, orientation, the map</h2>
+      <p class="sub">Four systems hold the oracle's inner life. Each has a page of its own.</p>
+      <div class="ledger">
+        <a class="row" href="mnemosyne.html">
+          <span class="glyph">✶</span>
+          <div><h3>Mnemosyne</h3><p>The four-stage memory cascade — durable notes, glowing fragments, a polymorphic token substrate, a promotion ladder. Knowledge survives between turns.</p></div>
+          <span class="arrow">→</span>
+        </a>
+        <a class="row" href="aegis.html">
+          <span class="glyph">◇</span>
+          <div><h3>Aegis</h3><p>The oracle's working orientation — where we are, what just happened, where we head. Woven after every turn, refined by the flash rites.</p></div>
+          <span class="arrow">→</span>
+        </a>
+        <a class="row" href="atlas.html">
+          <span class="glyph">⬡</span>
+          <div><h3>Atlas</h3><p>The cartographer: complete project mapping, delta memory, cross-worker whispers. The map is the landing strip for recall — read it before you dive.</p></div>
+          <span class="arrow">→</span>
+        </a>
+        <a class="row" href="ouroboros.html">
+          <span class="glyph">⌁</span>
+          <div><h3>Ouroboros</h3><p>The digesting serpent: flash-summarized recall and the promotion ladder that lifts glowing fragments into durable structure notes.</p></div>
+          <span class="arrow">→</span>
+        </a>
       </div>
     </div>
   </section>
 
-  <section class="section section-alt">
+  <section class="section section-alt" id="work">
     <div class="wrap">
-      <h2>The seven names</h2>
-      <p class="sub">Installing AetherOracle registers seven aliases — all the same aether, so the oracle answers
-      to whichever name the moment calls for.</p>
+      <h2><span class="hsig">▲</span> The work — engine, rites, pantheon</h2>
+      <p class="sub">The operational layer: how tasks are run, how knowledge travels between contexts, who the specialists are.</p>
+      <div class="ledger">
+        <a class="row" href="magnum-opus.html">
+          <span class="glyph">▲</span>
+          <div><h3>Magnum Opus</h3><p>The alchemical task engine — ten phases from nigredo to rubedo, a task ledger, and executive seals that decompose goals into delegated milestones.</p></div>
+          <span class="arrow">→</span>
+        </a>
+        <a class="row" href="metempsychosis.html">
+          <span class="glyph">↯</span>
+          <div><h3>Metempsychosis</h3><p>Transmigration of knowledge between tasks and contexts — memories move through the ÆtherLink, the soul moves in, not just visits.</p></div>
+          <span class="arrow">→</span>
+        </a>
+        <a class="row" href="companions.html">
+          <span class="glyph">⚚</span>
+          <div><h3>Companions</h3><p>The pantheon of specialist facets — from the owl of structure to the raven of dead code to the king's executive ledger.</p></div>
+          <span class="arrow">→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="names">
+    <div class="wrap">
+      <h2><span class="hsig">$</span> Seven names, one aether</h2>
+      <p class="sub">Installing AetherOracle registers seven aliases — all the same aether, so the oracle answers to whichever name the moment calls for.</p>
       <pre><code>aetheroracle · aether · oracle · oracleaether · ae · aero · orae</code></pre>
-      <div style="margin-top: 20px; display: flex; flex-wrap: wrap;">
-        <span class="tag">link tier — pure Ruby stdlib</span>
-        <span class="tag">brain tier — full reasoning engine</span>
-        <span class="tag">Ruby ≥ 3.1</span>
-        <span class="tag">macOS · iOS · Windows · Linux</span>
-      </div>
     </div>
   </section>
 
-  <section class="section">
+  <section class="section section-alt" id="ref">
     <div class="wrap">
-      <h2>What it can do</h2>
-      <p class="sub">A fast tour of the surface, from local reasoning to cross-machine presence.</p>
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>Local oracle turns</h3>
-          <p>Full multi-LLM reasoning with the companion system, hermetic toolbelt, and memory — directly
-          from the terminal.</p>
-        </div>
-        <div class="card">
-          <h3>LAN peer discovery</h3>
-          <p><code>peers</code> finds oracle peers on the network; <code>invoke</code> routes a turn to any
-          of them over the aetherlink contract.</p>
-        </div>
-        <div class="card">
-          <h3>Executive seals</h3>
-          <p>Salomo Rex decomposes big goals into ordered, dependency-gated milestones and delegates each
-          to a companion.</p>
-        </div>
-        <div class="card">
-          <h3>Vision &amp; capture</h3>
-          <p>Native screenshot capture and image reading, encoded straight into the vision pipeline for
-          the model.</p>
-        </div>
+      <h2><span class="hsig">⚙</span> For the operator</h2>
+      <p class="sub">The bare CLI is the door; the reference pages are the keys.</p>
+      <div class="refgrid">
+        <a href="cli.html"><span class="glyph">$</span> Pythia CLI</a>
+        <a href="methods.html"><span class="glyph">⌘</span> Methods</a>
+        <a href="config.html"><span class="glyph">⚙</span> Configuration</a>
+        <a href="architecture.html"><span class="glyph">▚</span> Architecture</a>
+        <a href="aetherverse.html"><span class="glyph">✧</span> Aetherverse</a>
       </div>
-    </div>
-  </section>
-
-  <section class="section">
-  <div class="wrap">
-    <h2>Explore the systems</h2>
-    <p class="sub">Every feature has its own page.</p>
-    <div class="grid grid-3">
-      <div class="card"><h3>🧠 <a href="mnemosyne.html">Mnemosyne</a></h3>
-        <p>The four-stage memory cascade: corpus graph, notes, fragments, token substrate.</p></div>
-      <div class="card"><h3>🛡️ <a href="aegis.html">Aegis</a></h3>
-        <p>The living orientation carried between turns — and its flash rites.</p></div>
-      <div class="card"><h3>🗺️ <a href="arsara.html">Arsara</a></h3>
-        <p>Cartography: soundings, syncs, map notes, delta fragments, cross-worker whispers.</p></div>
-      <div class="card"><h3>🐍 <a href="ouroboros.html">Ouroboros</a></h3>
-        <p>Intelligent recall, flash digests, and the promotion ladder made live.</p></div>
-      <div class="card"><h3>⚗️ <a href="magnum-opus.html">Magnum Opus</a></h3>
-        <p>The ten-step task engine and Salomo's executive seals.</p></div>
-      <div class="card"><h3>🌐 <a href="metempsychosis.html">Metempsychosis</a></h3>
-        <p>Memory across contexts — consult, travel, push, delegate, merge.</p></div>
-      <div class="card"><h3>🕊️ <a href="companions.html">Companions</a></h3>
-        <p>The twelve facets: from the owl's structure to the wolf's cut.</p></div>
-      <div class="card"><h3>📜 <a href="architecture.html">Architecture</a></h3>
-        <p>The whole picture: cascade, rites, concurrency, tool inventory.</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="section section-alt">
-    <div class="wrap">
-      <h2>Install</h2>
-      <p class="sub">Any OS with Ruby ≥ 3.1. The gem pulls the full brain tier and its dependencies
-      automatically — precompiled native binaries included, no Rust or source build required.</p>
-      <pre><code>gem build aetheroracle.gemspec
-gem install ./aetheroracle-1.0.0.gem
-
-aether veil          # first-run system check + guided config</code></pre>
-      <p class="sub" style="margin-top: 22px;">Read the full picture in the
-      <a href="methods.html">Methods</a> and <a href="cli.html">Pythia CLI</a> pages.</p>
     </div>
   </section>
 

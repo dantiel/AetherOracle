@@ -27,7 +27,7 @@ require_relative 'vectors'
 require_relative 'corpus'
 require_relative 'ouroboros'
 require_relative 'flash_aegis'
-require_relative 'arsara'
+require_relative 'atlas'
 
 class Mnemosyne
   DB_VERSION = 15
@@ -423,7 +423,7 @@ class Mnemosyne
         db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_kind ON corpus_edges (kind)'
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '14')"
       end
-      # Version 15 -- Corpus-Sichtungen (Arsara delta memory): per-file
+      # Version 15 -- Corpus-Sichtungen (Atlas delta memory): per-file
       # fingerprint (mtime + size) recorded at every sounding, so the
       # incremental sync! rite knows exactly which files changed since
       # the last weave.
@@ -505,11 +505,18 @@ class Mnemosyne
     def corpus_nodes_count = Corpus.count_nodes
     def corpus_edges_count = Corpus.count_edges
 
-    # -- Arsara (cartography: map notes + delta-fragment weaving) --
+    # -- Atlas (cartography: map notes + delta-fragment weaving) --
     def corpus_sync!(root = Argonaut.project_root) = Corpus.sync!(root)
     def corpus_observe!(path, root = Argonaut.project_root) = Corpus.observe!(path, root)
-    def arsara_weave!(kind:, report: nil) = Arsara.weave!(kind: kind, report: report)
-    def project_map! = Arsara.map!
+    def atlas_weave!(kind:, report: nil) = Atlas.weave!(kind: kind, report: report)
+    def project_map! = Atlas.map!
+  def atlas_view
+    notes = Notes.recall_notes('map', limit: 24) || []
+    overview = notes.find { |n| (n[:tags] || '').to_s.include?('overview') }
+    areas = notes.reject { |n| (n[:tags] || '').to_s.include?('overview') }
+    { overview: overview && overview[:content],
+      areas: areas.map { |n| n[:content] }.compact }
+  end
     def remove_notes_by_tag(tag) = Notes.remove_by_tag(tag)
 
     # -- Ouroboros promotion ladder (fragment -> note rung) --

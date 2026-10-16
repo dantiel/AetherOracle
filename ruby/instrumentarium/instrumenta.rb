@@ -546,7 +546,7 @@ instrument :recall_notes,
                         'into corpus_nodes (files + symbols) and corpus_edges (imports / ' \
                         'nesting / defines), then index each node into the token substrate ' \
                         '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph. ' \
-                        'Afterwards the cartographer (Arsara) re-mints the map notes.',
+                        'Afterwards the cartographer (Atlas) re-mints the map notes.',
            params: {},
            returns: { files: Integer, nodes: Integer, edges: Integer, maps: Hash, error: String } do
   Mnemosyne.corpus_sound!
@@ -596,6 +596,20 @@ instrument :project_map,
            params: {},
            returns: { notes: Integer, areas: Integer, error: String } do
   Mnemosyne.project_map!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+ instrument :atlas_map,
+           description: 'Atlas view: read the current project map from Mnemosyne -- the ' \
+                        'compact overview note plus one note per territory (tag "map"). ' \
+                        'The map is the landing strip for recall: read it before diving ' \
+                        'into files. Pure read -- no DB writes; re-mint via project_map ' \
+                        '(map only) or project_sync (delta + map).',
+           params: {},
+           returns: { overview: String, areas: Array, error: String } do
+  Mnemosyne.atlas_view
  rescue StandardError => e
   { error: e.message }
  end

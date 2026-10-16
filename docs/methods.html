@@ -11,25 +11,39 @@
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav class="nav">
+    <nav class="nav">
     <div class="nav-inner">
-      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="brand"><a href="index.html"><span class="sigil"></span><span class="brand-name">AetherOracle</span><span class="brand-sub">core</span></a></div>
       <div class="nav-links">
-  <a href="index.html">Home</a>
-        <a href="methods.html" class="active">Methods</a>
-        <a href="cli.html">Pythia CLI</a>
-        <a href="aetherverse.html">Aetherverse</a>
-        <a href="mnemosyne.html">Mnemosyne</a>
-        <a href="aegis.html">Aegis</a>
-        <a href="arsara.html">Arsara</a>
-        <a href="ouroboros.html">Ouroboros</a>
-        <a href="magnum-opus.html">Magnum Opus</a>
-        <a href="metempsychosis.html">Metempsychosis</a>
-        <a href="companions.html">Companions</a>
-        <a href="config.html">Configuration</a>
-        <a href="architecture.html">Architecture</a>
-</div>
-
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Aegis <span class="dsub">orientation</span></a>
+            <a href="atlas.html">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label on">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html" class="active">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Aetherverse</a>
+          </div>
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -44,7 +58,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>1 · Mnemosyne — the memory cascade</h2>
+      <h2><span class="hsig">✶</span> 1 · Mnemosyne — the memory cascade</h2>
       <p class="sub">
         Memory is not a flat log. It is a <strong>cascade of four stages</strong>, from the folder you stand
         in, through transient thoughts, to durable axioms. Everything persists, decays, or is promoted by
@@ -53,53 +67,53 @@
 
       <div class="grid grid-2">
         <div class="card">
-          <h3>Stage 0 — Corpus graph</h3>
+          <h3><span class="hsig">⋈</span> Stage 0 — Corpus graph</h3>
           <p>The Argonaut sounding scans the whole repo into <em>corpus nodes</em> (files + symbols) and
           <em>corpus edges</em> (imports, nesting, defines, references). Every node is indexed into the token
           substrate — a self-mapping structural graph of the codebase.</p>
         </div>
         <div class="card">
-          <h3>Stage 1 — Context scope</h3>
+          <h3><span class="hsig">▚</span> Stage 1 — Context scope</h3>
           <p>Every note is bound to the folder it was minted in. Recall ranks local (+6) &gt; ancestors
           (distance-decayed) &gt; tag-resonant foreign branches. The parent is <em>observer-only</em> — child
           scopes whisper nothing upward.</p>
         </div>
         <div class="card">
-          <h3>Stage 2 — Fragments</h3>
+          <h3><span class="hsig">⋄</span> Stage 2 — Fragments</h3>
           <p>Notes as metaformat: same shape, but transient. Every fragment carries a TTL (default 3600 s)
           and decays; expired ones are purged lazily. Freshness is itself a voice in the score.</p>
         </div>
         <div class="card">
-          <h3>Stage 3 — Token substrate</h3>
+          <h3><span class="hsig">▚</span> Stage 3 — Token substrate</h3>
           <p>Every note is stored a second time as a term vector. The substrate is <em>channeled</em> —
           content, tag, and path — and each query is a vector projected onto every channel. Search
           algorithms are just <em>lenses</em> over the same substrate.</p>
         </div>
       </div>
 
-      <h3 style="margin-top: 28px;">The promotion ladder</h3>
+      <h3 style="margin-top: 28px;"><span class="hsig">⌁</span> The promotion ladder</h3>
       <div class="grid grid-4" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-        <div class="card"><h3>Fragment</h3><p>A transient working thought. Decays unless promoted.</p></div>
-        <div class="card"><h3>Note</h3><p>A durable inscription. The everyday unit of memory.</p></div>
-        <div class="card"><h3>Skill</h3><p>A procedural unit — recipe-shaped knowledge, reusable across contexts.</p></div>
-        <div class="card"><h3>Axiom</h3><p><em>Gesichertes Wissen</em> — a note that survived repeated use and contradiction; an invariant of the project cosmos.</p></div>
+        <div class="card"><h3><span class="hsig">⋄</span> Fragment</h3><p>A transient working thought. Decays unless promoted.</p></div>
+        <div class="card"><h3><span class="hsig">◈</span> Note</h3><p>A durable inscription. The everyday unit of memory.</p></div>
+        <div class="card"><h3><span class="hsig">◈</span> Skill</h3><p>A procedural unit — recipe-shaped knowledge, reusable across contexts.</p></div>
+        <div class="card"><h3><span class="hsig">◈</span> Axiom</h3><p><em>Gesichertes Wissen</em> — a note that survived repeated use and contradiction; an invariant of the project cosmos.</p></div>
       </div>
 
-      <h3 style="margin-top: 28px;">Living memory — the flash rites</h3>
+      <h3 style="margin-top: 28px;"><span class="hsig">✶</span> Living memory — the flash rites</h3>
       <div class="grid grid-2" style="margin-top: 16px;">
         <div class="card">
-          <h3>Ouroboros recall</h3>
+          <h3><span class="hsig">⌁</span> Ouroboros recall</h3>
           <p>An intelligent recall: matched notes are flash-synthesized by the fast model into
           <em>one</em> compact current-state digest, so the deep mind reads a living summary instead of
           N stale fragments.</p>
         </div>
         <div class="card">
-          <h3>Flash-Aegis</h3>
+          <h3><span class="hsig">◇</span> Flash-Aegis</h3>
           <p>After a prompt is entered, the fast model auto-weaves the turn into the Aegis orientation —
           a new summary + focus tags, so the oracle flashes onto a new course on its own.</p>
         </div>
         <div class="card">
-          <h3>Arsara — the cartographer</h3>
+          <h3><span class="hsig">⬡</span> Atlas — the cartographer</h3>
           <p><code>corpus_sound</code> maps the whole project into the corpus graph and map notes;
           <code>project_sync</code> reads changes in incrementally and mints transient
           <em>corpus-delta</em> fragments — the project's change glows in recall, then decays into
@@ -111,7 +125,7 @@
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>2 · The companion pantheon</h2>
+      <h2><span class="hsig">⚚</span> 2 · The companion pantheon</h2>
       <p class="sub">
         One crystal, many facets. Each companion reads and writes through its own facet of the shared
         memory — three layers: <em>episodic</em> (facet-tagged notes), <em>procedural</em> (distilled
@@ -119,18 +133,18 @@
         they are the oracle veiled in a specialist temperament.
       </p>
       <div class="grid grid-3">
-        <div class="card"><div class="icon">🦉</div><h3>Eule der Athene</h3><p>Architecture and hidden dependencies — the big picture.</p></div>
-        <div class="card"><div class="icon">🦊</div><h3>Inari-no-Kitsune</h3><p>Clever paths and lateral thinking — the unconventional approach.</p></div>
-        <div class="card"><div class="icon">🔥</div><h3>Bennu Aeternus</h3><p>Risen from failure — finds the gold in the ashes.</p></div>
-        <div class="card"><div class="icon">🐍</div><h3>Jörmungandr</h3><p>Cycles and recurring patterns — surfaces technical debt.</p></div>
-        <div class="card"><div class="icon">🐈</div><h3>Bastet-Mafdet</h3><p>Code elegance — smells out over-complexity and hidden mess.</p></div>
-        <div class="card"><div class="icon">🐺</div><h3>Fenrisúlfr</h3><p>Tears complexity apart — demands radical simplification.</p></div>
-        <div class="card"><div class="icon">🌊</div><h3>Undine</h3><p>Data flow — sees streams, pipelines, and bottlenecks.</p></div>
-        <div class="card"><div class="icon">🦢</div><h3>Cygnus Divinus</h3><p>Grace and elegance — the beauty of clear form.</p></div>
-        <div class="card"><div class="icon">🐉</div><h3>Tiamat-Ur</h3><p>The grand scale — the eternal lines, the whole sky.</p></div>
-        <div class="card"><div class="icon">⬛</div><h3>Codex Corax</h3><p>Spots the orphaned and forgotten — prepares the cut.</p></div>
-        <div class="card"><div class="icon">☁️</div><h3>Kintōun</h3><p>The somersault cloud — travels between contexts via ÆtherLink.</p></div>
-        <div class="card"><div class="icon">👑</div><h3>Salomo Rex</h3><p>The executive — decomposes goals, delegates, holds the critical path.</p></div>
+        <div class="card"><div class="icon">🦉</div><h3><span class="hsig">◈</span> Eule der Athene</h3><p>Architecture and hidden dependencies — the big picture.</p></div>
+        <div class="card"><div class="icon">🦊</div><h3><span class="hsig">◈</span> Inari-no-Kitsune</h3><p>Clever paths and lateral thinking — the unconventional approach.</p></div>
+        <div class="card"><div class="icon">🔥</div><h3><span class="hsig">◈</span> Bennu Aeternus</h3><p>Risen from failure — finds the gold in the ashes.</p></div>
+        <div class="card"><div class="icon">🐍</div><h3><span class="hsig">◈</span> Jörmungandr</h3><p>Cycles and recurring patterns — surfaces technical debt.</p></div>
+        <div class="card"><div class="icon">🐈</div><h3><span class="hsig">◈</span> Bastet-Mafdet</h3><p>Code elegance — smells out over-complexity and hidden mess.</p></div>
+        <div class="card"><div class="icon">🐺</div><h3><span class="hsig">◈</span> Fenrisúlfr</h3><p>Tears complexity apart — demands radical simplification.</p></div>
+        <div class="card"><div class="icon">🌊</div><h3><span class="hsig">◈</span> Undine</h3><p>Data flow — sees streams, pipelines, and bottlenecks.</p></div>
+        <div class="card"><div class="icon">🦢</div><h3><span class="hsig">◈</span> Cygnus Divinus</h3><p>Grace and elegance — the beauty of clear form.</p></div>
+        <div class="card"><div class="icon">🐉</div><h3><span class="hsig">◈</span> Tiamat-Ur</h3><p>The grand scale — the eternal lines, the whole sky.</p></div>
+        <div class="card"><div class="icon">⬛</div><h3><span class="hsig">◈</span> Codex Corax</h3><p>Spots the orphaned and forgotten — prepares the cut.</p></div>
+        <div class="card"><div class="icon">☁️</div><h3><span class="hsig">◈</span> Kintōun</h3><p>The somersault cloud — travels between contexts via ÆtherLink.</p></div>
+        <div class="card"><div class="icon">👑</div><h3><span class="hsig">◈</span> Salomo Rex</h3><p>The executive — decomposes goals, delegates, holds the critical path.</p></div>
       </div>
 
       <p class="sub" style="margin-top: 28px;">Each companion carries its own <strong>temperament</strong> —
@@ -142,7 +156,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>3 · Executive seals</h2>
+      <h2><span class="hsig">▲</span> 3 · Executive seals</h2>
       <p class="sub">
         Salomo Rex turns a single goal into an <strong>ordered set of milestones</strong> — each a real
         engine task, each delegated to a companion owner, each gated by dependencies. A seal is a plan
@@ -150,12 +164,12 @@
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>Dependency-gated</h3>
+          <h3><span class="hsig">◈</span> Dependency-gated</h3>
           <p>Milestones declare their prerequisites as indices into the plan. The critical path is computed,
           and only unblocked steps are executed.</p>
         </div>
         <div class="card">
-          <h3>Delegated, not centralized</h3>
+          <h3><span class="hsig">◈</span> Delegated, not centralized</h3>
           <p>Every milestone can carry an owner glyph — the right specialist for that step — so a big effort
           is orchestrated, not brute-forced.</p>
         </div>
@@ -165,7 +179,7 @@
 
   <section class="section section-alt">
     <div class="wrap">
-      <h2>4 · Metempsychosis &amp; ÆtherLink</h2>
+      <h2><span class="hsig">↯</span> 4 · Metempsychosis &amp; ÆtherLink</h2>
       <p class="sub">
         The transmigration of knowledge between contexts. Query the memory of another task, push notes into
         a remote context, or execute a prompt there — the peer works with the combined memories of both
@@ -173,12 +187,12 @@
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>Cross-context recall</h3>
+          <h3><span class="hsig">◈</span> Cross-context recall</h3>
           <p>Consult notes and state from a specific task, or merge another task's context into your own
           orientation — the soul moves in, not just visits.</p>
         </div>
         <div class="card">
-          <h3>Peer routing</h3>
+          <h3><span class="hsig">◈</span> Peer routing</h3>
           <p><code>peers</code>, <code>heartbeat</code>, <code>invoke</code> — a pure-Ruby box reaches the
           brain on another machine over the same wire contract.</p>
         </div>
@@ -188,7 +202,7 @@
 
   <section class="section">
     <div class="wrap">
-      <h2>5 · Vision &amp; capture</h2>
+      <h2><span class="hsig">◈</span> 5 · Vision &amp; capture</h2>
       <p class="sub">
         Native capture on macOS and Windows — screenshots, windows, regions, and displays — plus direct
         reading of image files. The captured image flows straight into the vision pipeline, encoded for the
@@ -196,12 +210,12 @@
       </p>
       <div class="grid grid-2">
         <div class="card">
-          <h3>Native OS capture</h3>
+          <h3><span class="hsig">◈</span> Native OS capture</h3>
           <p>Full screen, window-by-title, active app, region, menu bar, or per-display — through CoreGraphics
           on macOS and System.Drawing/PowerShell on Windows.</p>
         </div>
         <div class="card">
-          <h3>Image reading</h3>
+          <h3><span class="hsig">◈</span> Image reading</h3>
           <p>Pass a path and read any png/jpg/jpeg/webp straight into the vision model — no capture needed.</p>
         </div>
       </div>
