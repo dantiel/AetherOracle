@@ -680,13 +680,7 @@ end
   # it in place so all existing references observe the new contents.
   def self.reload!
     CFG.replace(apply_model_defaults(load_hierarchical_config(Dir.pwd)))
-
-  # Curated keys surfaced to the native editor's Project config view. Order is
-=======
   end
-
-  # Curated keys surfaced to the native editor's Project config view. Order is
-=======
 
   # Curated keys surfaced to the native editor's Project config view. Order is
   # the display order. `name` / `model` / `port` etc. resolve through the same
