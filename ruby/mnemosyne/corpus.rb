@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../argonaut/aether_scopes_hierarchical'
+require 'open3'
 
 class Mnemosyne
   # Corpus -- the project-native graph (Stufe 0 of the ladder). An Argonaut
@@ -55,11 +56,13 @@ class Mnemosyne
 
       # Full idempotent rescan: wipe graph + corpus tokens, sound the repo
       # (pass 1: files + symbols), then wire imports (pass 2: needs the
-      # complete file map to resolve cross-references).
+      # complete file map to resolve cross-references). Afterwards the
+      # delta memory (corpus_sightings) is re-seeded and the cartographer
+      # weaves the fresh map into Mnemosyne (Arsara, config-gated).
       def sound!(root = project_root)
+        files = source_files(root)
         Mnemosyne.db.transaction do
           wipe!
-          files = source_files(root)
           pending = {}
           files.each do |rel|
             file_id, imports = index_file(rel, root)
@@ -73,13 +76,186 @@ class Mnemosyne
             end
           end
         end
-        { files: source_files(root).size, nodes: count_nodes, edges: count_edges }
+        files.each { |rel| record_sighting(rel, fingerprint(rel, root)) }
+        woven = defined?(Arsara) ? Mnemosyne.arsara_weave!(kind: :sound) : nil
+        { files: files.size, nodes: count_nodes, edges: count_edges, maps: woven }
       end
 
       def wipe!
         Mnemosyne.db.execute('DELETE FROM corpus_nodes')
         Mnemosyne.db.execute('DELETE FROM corpus_edges')
         Mnemosyne.db.execute("DELETE FROM memory_tokens WHERE unit_type = 'corpus_node'")
+      end
+
+      # -- Delta memory (corpus_sightings): the cartographer remembers
+      # every file's fingerprint (mtime + size) so the incremental sync!
+      # rite only re-sounds what actually changed. --
+
+      def fingerprint(rel, root = project_root)
+        st = File.stat(File.join(root, rel))
+        "#{st.mtime.to_f.round(3)}:#{st.size}"
+      rescue StandardError
+        nil
+      end
+
+      def record_sighting(rel, fp)
+        Mnemosyne.db.execute(<<~SQL, [rel, fp])
+          INSERT OR REPLACE INTO corpus_sightings (path, fingerprint, indexed_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+        SQL
+      end
+
+      def remove_sighting(rel)
+        Mnemosyne.db.execute('DELETE FROM corpus_sightings WHERE path = ?', [rel])
+      end
+
+      def sighting_map
+        Mnemosyne.db.execute('SELECT path, fingerprint FROM corpus_sightings')
+                  .each_with_object({}) { |r, h| h[r['path']] = r['fingerprint'] }
+      end
+
+      def sighting_count
+        Mnemosyne.db.execute('SELECT COUNT(*) AS c FROM corpus_sightings').first['c'].to_i
+      end
+
+      # Excise one file's nodes, edges and substrate tokens (changed/deleted).
+      def remove_file_nodes(rel)
+        ids = Mnemosyne.db.execute('SELECT id FROM corpus_nodes WHERE path = ?', [rel]).map { |r| r['id'] }
+        return 0 if ids.empty?
+
+        ph = (['?'] * ids.size).join(',')
+        Mnemosyne.db.execute("DELETE FROM corpus_edges WHERE source_id IN (#{ph}) OR target_id IN (#{ph})", ids + ids)
+        Mnemosyne.db.execute("DELETE FROM corpus_nodes WHERE id IN (#{ph})", ids)
+        ids.each { |id| Vectors.unindex_unit('corpus_node', id) if defined?(Vectors) }
+        ids.size
+      end
+
+      # Incremental rite: compare the repo against the delta memory,
+      # re-sound only added/changed files, excise deleted ones, then let
+      # the cartographer weave the delta into the cascade. Falls back to
+      # a full sounding when the graph or the sightings are empty.
+      def cartography
+        CONFIG.respond_to?(:cartography) ? CONFIG.cartography : {}
+      end
+
+      def meta_get(key)
+        row = Mnemosyne.db.execute('SELECT value FROM corpus_meta WHERE key = ?', [key]).first
+        row && (row.is_a?(Hash) ? row['value'] : row[0])
+      end
+
+      def meta_set(key, value)
+        Mnemosyne.db.execute(
+          'INSERT INTO corpus_meta (key, value) VALUES (?, ?) ' \
+          'ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+          [key, value]
+        )
+        value
+      end
+
+      # Git-assisted delta capture: `git status --porcelain` lists staged and
+      # unstaged changes that fingerprint collisions (same size + same mtime)
+      # would miss. Used by sync! as a force-set; safe under concurrency.
+      def git_changed_paths(root = project_root)
+        out, _err, status = Open3.capture3('git', 'status', '--porcelain', chdir: root)
+        return [] unless status.success?
+
+        out.lines.filter_map do |line|
+          code = line[0, 2]
+          next if code.strip.empty?
+
+          path = line[3..].to_s.split(' -> ').last.to_s.strip
+          path.empty? ? nil : path.tr("\\", "/")
+        end
+      rescue StandardError
+        []
+      end
+
+      # Auto-memory for agent edits: re-sight a single touched path into the
+      # corpus and weave the delta fragments (Stufe-2 glow). Hooked by the
+      # write tools (create_file/patch_file/rename_file) via the central
+      # handle. Config-gated: cartography.observe_edits.
+      def observe!(path, root = project_root)
+        return { observed: false, reason: 'disabled' } unless cartography[:observe_edits]
+
+        abs = File.expand_path(path)
+        root_abs = File.expand_path(root)
+        rel = abs.delete_prefix(root_abs + File::SEPARATOR).tr("\\", "/")
+        return { observed: false, reason: 'outside project', path: abs } if abs == rel || rel.start_with?('..')
+
+        report = sync!(root, force: [rel])
+        { observed: true, path: rel, report: report }
+      rescue StandardError => e
+        { observed: false, error: e.message }
+      end
+
+      def sync!(root = project_root, force: [])
+        return sound!(root) if count_nodes.zero? || sighting_count.zero?
+
+        files = source_files(root)
+        known = sighting_map
+        started_at = Time.now
+        git_paths = cartography[:git_track] ? git_changed_paths(root) : []
+        report = { added: [], changed: [], removed: [], unchanged: 0, files: files.size }
+        files.each do |rel|
+          fp = fingerprint(rel, root)
+          if !known.key?(rel)
+            report[:added] << rel
+          elsif known[rel] != fp || force.include?(rel)
+            report[:changed] << rel
+          else
+            report[:unchanged] += 1
+          end
+        end
+        report[:removed] = known.keys - files
+        # Git union: fingerprints only see mtime+size; git sees content changes
+        # invisible to them (same-size same-second edits, external tools,
+        # concurrent workers touching the tree). Force re-sound those paths.
+        git_paths.each do |gp|
+          rel = gp.tr("\\", "/")
+          next unless files.include?(rel)
+          next if report[:added].include?(rel) || report[:changed].include?(rel)
+
+          report[:changed] << rel
+        end
+
+        Mnemosyne.db.transaction do
+          reindexed = {}
+          (report[:added] + report[:changed]).each do |rel|
+            remove_file_nodes(rel)
+            file_id, imports = index_file(rel, root)
+            reindexed[file_id] = { rel: rel, imports: imports } if file_id
+            record_sighting(rel, fingerprint(rel, root))
+          end
+          report[:removed].each do |rel|
+            remove_file_nodes(rel)
+            remove_sighting(rel)
+          end
+          file_by_path = file_index
+          reindexed.each do |file_id, info|
+            info[:imports].each do |imp|
+              target = resolve_import(imp, info[:rel], file_by_path)
+              insert_edge(file_id, target, 'imports', imp[:meta])
+            end
+          end
+        end
+
+        describe = lambda do |rels|
+          rels.map do |rel|
+            symbols = Mnemosyne.db.execute(
+              "SELECT COUNT(*) AS c FROM corpus_nodes WHERE path = ? AND kind = 'symbol'", [rel]
+            ).first['c'].to_i
+            language = Mnemosyne.db.execute(
+              "SELECT language FROM corpus_nodes WHERE path = ? AND kind = 'file' LIMIT 1", [rel]
+            ).first&.[]('language').to_s
+            { rel: rel, symbols: symbols, language: language }
+          end
+        end
+        report[:added] = describe.call(report[:added])
+        report[:changed] = describe.call(report[:changed])
+        report[:removed].map! { |rel| { rel: rel } }
+        woven = defined?(Arsara) ? Mnemosyne.arsara_weave!(kind: :sync, report: report) : nil
+        meta_set('last_sync_at', started_at.utc.iso8601(3))
+        report.merge(fragments: woven, git: git_paths.size, synced_at: meta_get('last_sync_at'))
       end
 
       def index_file(rel, root = project_root)
@@ -221,6 +397,34 @@ class Mnemosyne
           end
         end
         parts.join('/')
+      end
+
+      # Area view for the cartographer: top-level directories with file and
+      # symbol counts plus a handful of sample files per area.
+      def map_groups(limit_samples: 6)
+        rows = Mnemosyne.db.execute(
+          "SELECT path FROM corpus_nodes WHERE kind = 'file' ORDER BY path"
+        )
+        groups = Hash.new { |h, k| h[k] = { files: [], symbols: 0 } }
+        rows.each do |r|
+          seg = r['path'].split('/')
+          area = seg.size > 1 ? seg[0] : '(root)'
+          groups[area][:files] << r['path']
+        end
+        groups.each do |area, g|
+          g[:symbols] = if area == '(root)'
+                          Mnemosyne.db.execute(
+                            "SELECT COUNT(*) AS c FROM corpus_nodes WHERE kind = 'symbol' AND path NOT LIKE '%/%'"
+                          ).first['c'].to_i
+                        else
+                          Mnemosyne.db.execute(
+                            "SELECT COUNT(*) AS c FROM corpus_nodes WHERE kind = 'symbol' AND path LIKE ?",
+                            ["#{area}/%"]
+                          ).first['c'].to_i
+                        end
+          g[:samples] = g[:files].first(limit_samples)
+        end
+        groups.sort_by { |area, g| -g[:files].size }.to_h
       end
 
       def file_index

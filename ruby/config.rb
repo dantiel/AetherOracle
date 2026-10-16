@@ -317,6 +317,86 @@ class CONFIG
     'tm-ai': '.aether/',
     'memory-db': '.aether/mnemosyne.db'
   }
+
+  # Output-scaling defaults (slim by design). Every knob below is overridable
+  # from a `.aethercodex` `scaling:` section (kebab-case keys are symbolized on
+  # load, so `tag-cloud-limit` becomes `:tag_cloud_limit`). The agent never
+  # needs a "slim mode" switch — these are the canonical minimal bounds, and a
+  # project may relax them where a bigger mirror is genuinely useful.
+  DEFAULT_SCALING = {
+    file_overview: {
+      tag_cloud_limit:   12,
+      file_cloud_limit:  10,
+      notes_preview:     3,
+      note_excerpt:      200,
+      max_chars:         4000,
+      short_timestamps:  true
+    },
+    recall_notes: {
+      max_chars:     3000,
+      note_content:  1111
+    },
+    run_command: {
+      max_chars: 4000
+    }
+  }.freeze
+
+  # Merge the project's `scaling:` section over the slim defaults. Only the
+  # declared keys override — everything else stays minimal.
+  def self.scaling
+    raw = CFG[:scaling] || CFG['scaling'] || {}
+    deep_merge(DEFAULT_SCALING, raw)
+  end
+
+
+  # Flash (fast-model) defaults. The kopist (fast model) only earns its keep
+  # when a DISTINCT fast model is configured: if `fast-model` resolves to the
+  # same identifier as `model`, a "flash" call would just re-invoke the normal
+  # model at full cost, so every flash rite degrades to the old behaviour (off).
+  DEFAULT_FLASH = {
+    enabled:    true,   # master switch for all flash rites
+    intent:     false,  # pre-turn intent digest (adds pre-turn latency)
+    sediment:   true,   # post-turn Aegis weave
+    synthesize: true,   # Ouroboros note synthesis
+        map:        true    # Arsara cartography: one-line area descriptions
+  }.freeze
+
+  def self.flash
+    raw = CFG[:flash] || CFG['flash'] || {}
+    deep_merge(DEFAULT_FLASH, raw)
+  end
+
+  # True only when a distinct fast model exists AND the flash rites are enabled.
+  # This is the single gate the flash automations consult before spending a turn.
+  def self.flash_available?
+    return false unless flash[:enabled]
+    fast_model.to_s.strip != model.to_s.strip
+  rescue StandardError
+    false
+  end
+
+# Cartography (Arsara) defaults: complete project mapping + the weaving
+# of change into the transient cascade. auto_map (re-)mints the compact
+# `map` notes after every sounding/sync; delta_fragments mints transient
+# TTL fragments for touched files (Stufe-2 glow, decays into the
+# substrate); fragment_ttl is the half-life of that glow; map_flash lets
+# the kopist (fast model) write the one-line area descriptions when a
+# distinct fast model exists (falls back to a heuristic otherwise).
+DEFAULT_CARTOGRAPHY = {
+  auto_map:        true,
+  delta_fragments: true,
+  fragment_ttl:    3600,
+  map_flash:       true,
+  git_track:       true,
+  observe_edits:   true,
+  sync_marker:     true
+}.freeze
+
+def self.cartography
+  raw = CFG[:cartography] || CFG['cartography'] || {}
+  deep_merge(DEFAULT_CARTOGRAPHY, raw)
+end
+
   
   
   # Get configuration value with ENV override and default fallback

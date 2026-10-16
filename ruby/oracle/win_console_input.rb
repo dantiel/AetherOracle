@@ -249,16 +249,23 @@ module ÆtherWinConsole
     # Ref-counted and thread-safe: the chamber's foreground browse-poll and the
     # agent's background ask_user menu may both enter raw mode, so only the
     # outermost end_raw_input restores the original console mode.
-    def begin_raw_input
+    def begin_raw_input(mouse: true)
       raw_mutex.synchronize do
         if @raw_depth.to_i.zero?
           mode = get_mode(console_handle)
-          # Raw key events plus mouse input (clicks, wheel). QuickEdit — the
-          # console's built-in drag-select/right-click-paste mode — is cleared:
-          # it would swallow clicks as text selection before we ever see a
-          # MOUSE_EVENT record. The original mode is restored on end_raw_input.
-          new_mode = (mode & ~INPUT_MASK) | ENABLE_MOUSE_INPUT | ENABLE_EXTENDED_FLAGS
-          new_mode &= ~ENABLE_QUICK_EDIT_MODE
+          # Raw key events plus, by default, mouse input (clicks, wheel).
+          # QuickEdit — the console's built-in drag-select/right-click-paste
+          # mode — is cleared when mouse capture is on: it would swallow clicks
+          # as text selection before we ever see a MOUSE_EVENT record. With
+          # `mouse: false` QuickEdit is left intact so the practitioner can
+          # drag-select text natively (no click-to-focus, keyboard still works).
+          new_mode = (mode & ~INPUT_MASK) | ENABLE_EXTENDED_FLAGS
+          if mouse
+            new_mode |= ENABLE_MOUSE_INPUT
+            new_mode &= ~ENABLE_QUICK_EDIT_MODE
+          else
+            new_mode |= ENABLE_QUICK_EDIT_MODE
+          end
           ok = set_mode(console_handle, new_mode)
           if ok.nil? || ok.zero?
             err = Fiddle.win32_last_error
@@ -440,6 +447,12 @@ module ÆtherWinConsole
       when VK_NEXT   then { kind: :key, action: :page_down }
       when VK_INSERT then { kind: :key, action: :ignore }
       else
+        ch = char_for(e)
+        # AltGr (Ctrl+Alt) still yields its printable character — @ € ² ³ on
+        # German layouts — so a printable char under Alt must never be swallowed
+        # by the Ctrl-shortcut branch; emit it as a literal.
+        return { kind: :key, action: :literal, char: ch } if alt && !ch.empty?
+
         if ctrl
           act = CTRL_ACTIONS[vk]
           return { kind: :key, action: act } if act
@@ -447,7 +460,6 @@ module ÆtherWinConsole
           return { kind: :key, action: :ignore }
         end
 
-        ch = char_for(e)
         ch.empty? ? { kind: :key, action: :ignore } : { kind: :key, action: :literal, char: ch }
       end
     end

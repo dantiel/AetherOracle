@@ -486,6 +486,21 @@ class PrimaMateria
   end
 
 
+  # Auto-memory for agent edits: after a successful write tool the
+  # cartographer re-sights the touched path (corpus graph + delta fragment
+  # glow). Best-effort and config-gated (cartography.observe_edits) -- a
+  # failure here must never break the tool result.
+  def observe_write(tool, args, out)
+    return unless %w[create_file patch_file rename_file write_file].include?(tool)
+    return if out.is_a?(Hash) && out[:error]
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:corpus_observe!)
+
+    path = args[:path] || args[:to]
+    Mnemosyne.corpus_observe!(path) if path && !path.to_s.empty?
+  rescue StandardError
+    nil
+  end
+
   def handle(tool:, args: {}, context: nil, timeout: nil)
     tool = tool.to_s
     tool = tool_aliases[tool] || tool
@@ -512,6 +527,7 @@ class PrimaMateria
           end
 
     out = truncate_tool_output(tool, out)
+    observe_write(tool, args, out)
   rescue Oracle::StepTerminationException => e
     # Step completion is expected termination - handle differently based on context
     puts "[PRIMA_MATERIA][STEP_COMPLETE]: #{tool}: #{e.message.truncate(100)}"
@@ -572,12 +588,17 @@ class PrimaMateria
   end
 
 
-  # Truncate tool output to per-tool character limit with audit notice.
-  # Prevents context-window flooding from large file reads / command outputs.
+  # Truncate tool output to a per-tool character limit with a structural audit
+  # notice. Prevents context-window flooding from large reads / commands. The
+  # limit resolves scaling-config first, then the static table, then the global
+  # default. Truncation is *structural*, never a full copy: long string values
+  # are capped, nested arrays/hashes collapse to a placeholder, and a single
+  # lean notice replaces the old `_original_chars`/`_limit`/`partial` envelope
+  # that paid twice for the same Leviathan.
   def truncate_tool_output(tool, out)
     return out if out.nil? || out.is_a?(Oracle::StepTerminationException)
 
-    limit = TOOL_OUTPUT_LIMITS[tool.to_sym] || DEFAULT_MAX_OUTPUT_CHARS
+    limit = configured_tool_limit(tool)
     original = nil
 
     truncated = case out
@@ -589,34 +610,40 @@ class PrimaMateria
                   json = out.to_json
                   return out if json.length <= limit
                   original = json.length
-                  out.transform_values { |v|
-                    v.is_a?(String) && v.length > (limit / 2) ? "#{v[0, limit / 2]}…" : v
-                  }.tap { |h|
-                    if h.to_json.length > limit
-                      return { _truncated: true, _original_chars: original, _limit: limit,
-                               _notice: "[TRUNCATED: #{original} → #{limit} chars. Use range/limit params to narrow results.]",
-                               partial: h.transform_values { |v| v.to_s[0, 512] } }
-                    end
-                  }
+                  cap = [limit / 2, 1].max
+                  out.each_with_object({}) do |(k, v), h|
+                    h[k] = case v
+                           when String then v[0, cap]
+                           when Array  then "[#{v.length} items omitted]"
+                           when Hash   then "{#{v.size} keys omitted}"
+                           else v
+                           end
+                  end.merge(_truncated: true,
+                            _notice: "[TRUNCATED: #{original} → #{limit} chars. Use range/limit params to narrow results.]")
                 when Array
                   json = out.to_json
                   return out if json.length <= limit
                   original = json.length
-                  { _truncated: true, _original_chars: original, _limit: limit,
-                    _notice: "[TRUNCATED: #{original} → #{limit} chars. #{out.length} items.]",
+                  { _truncated: true,
+                    _notice: "[TRUNCATED: #{original} → #{limit} chars. #{out.length} items. Use range/limit params to narrow results.]",
                     partial: out.first([out.length, 8].min) }
                 else
                   out
                 end
 
-    if original && !truncated.is_a?(Hash)
-      truncated
-    elsif truncated.is_a?(Hash)
-      truncated[:_notice] ||= "[TRUNCATED: #{original} → #{limit} chars. Use range/limit params to narrow results.]"
-      truncated
-    else
-      truncated
-    end
+    truncated
+  end
+
+  # Slim per-tool output limit: the `.aethercodex` `scaling:` section wins, then
+  # the static table, then the global default. `file_overview`/`run_command`/
+  # `recall_notes` map onto their scaling buckets; everything else falls through
+  # untouched.
+  def configured_tool_limit(tool)
+    key = { file_overview: :file_overview, run_command: :run_command,
+            recall_notes: :recall_notes, recall_fragments: :recall_notes }.fetch(tool.to_sym, nil)
+    sc = defined?(CONFIG) && CONFIG.respond_to?(:scaling) ? CONFIG.scaling : {}
+    from_scaling = sc.dig(key, :max_chars) if key
+    from_scaling || TOOL_OUTPUT_LIMITS[tool.to_sym] || DEFAULT_MAX_OUTPUT_CHARS
   end
 
 
@@ -663,6 +690,7 @@ class PrimaMateria
   # Per-tool output character limits — prevents context-window flooding.
   # Tools not listed here fall back to DEFAULT_MAX_OUTPUT_CHARS.
   TOOL_OUTPUT_LIMITS = {
+    file_overview:        4000,
     read_file:            8000,
     run_command:          6000,
     recall_notes:         4000,

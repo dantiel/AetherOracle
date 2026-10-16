@@ -242,6 +242,7 @@ class Argonaut
 
   def self.file_overview(path:, max_notes: 3, max_content_length: 555, max_depth: nil)
     fullpath = File.join project_root, path
+    sc = scaling_for_overview
 
     # Get notes count for statistics only
     notes = Mnemosyne.fetch_notes_by_links(path)
@@ -253,7 +254,7 @@ class Argonaut
     file_info = {
       lines:         line_count,
       size:          File.size(fullpath),
-      last_modified: File.mtime(fullpath),
+      last_modified: short_mtime(fullpath),
       path:          path
     }
 
@@ -279,19 +280,20 @@ class Argonaut
 
     # Generate hermetic symbolic overview from Mnemosyne notes
     hermetic_overview = begin
-      LexiconResonantia.generate_from_notes notes, min_count: 1, top_k: 5
+      LexiconResonantia.generate_from_notes(notes, min_count: 1, top_k: 5)
+                       .first(sc[:file_cloud_limit])
     rescue StandardError => e
       { error: "Hermetic overview failed: #{e.message}" }
     end
 
     # Related echoes — a short surface excerpt per note so the file mirror can
     # show what Mnemosyne holds about this file without dragging the deep up.
-    notes_preview = notes.first(max_notes).map do |note|
+    notes_preview = notes.first([max_notes, sc[:notes_preview]].min).map do |note|
       {
         id:      note[:id],
-        tags:    (note[:tags] || '').to_s.split(',').map(&:strip).reject(&:empty?),
-        excerpt: (note[:content] || '').to_s[0, max_content_length],
-        links:   (note[:links] || '').to_s.split(',').map(&:strip).reject(&:empty?)
+        tags:    (note[:tags] || '').to_s.split(',').map(&:strip).reject(&:empty?).first(6),
+        excerpt: (note[:content] || '').to_s[0, [max_content_length, sc[:note_excerpt]].min],
+        links:   (note[:links] || '').to_s.split(',').map(&:strip).reject(&:empty?).first(6)
       }
     end
 
@@ -304,6 +306,22 @@ class Argonaut
     }
   rescue StandardError => e
     { error: e.inspect }
+  end
+
+  # `scaling.file_overview` with hard slim fallbacks.
+  def self.scaling_for_overview
+    sc = defined?(CONFIG) && CONFIG.respond_to?(:scaling) ? CONFIG.scaling : {}
+    defaults = { tag_cloud_limit: 12, file_cloud_limit: 10, notes_preview: 3,
+                 note_excerpt: 200, max_chars: 4000, short_timestamps: true }
+    defaults.merge(sc[:file_overview] || {})
+  end
+
+  # Minimal timestamp: date + minute, no microseconds/zone noise. The mirror
+  # cares *when* a file last moved, not which nanosecond.
+  def self.short_mtime(fullpath)
+    File.mtime(fullpath).strftime('%Y-%m-%d %H:%M')
+  rescue StandardError
+    nil
   end
 
 

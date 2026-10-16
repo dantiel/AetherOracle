@@ -73,6 +73,18 @@ end
 def instrument(...) = Instrumenta::PRIMA_MATERIA.add_instrument(...)
 
 
+# Slim per-note content cap for recall: `scaling.recall_notes.note_content`
+# divided by the limit, so more results yield tighter excerpts. Falls back to
+# 1111 (the historical heuristic base) when unset.
+def recall_note_cap(limit)
+  base = if defined?(CONFIG) && CONFIG.respond_to?(:scaling)
+           CONFIG.scaling.dig(:recall_notes, :note_content)
+         end
+  base = 1111 if base.nil? || base.to_i <= 0
+  [base.to_i / [limit.to_i, 1].max, 1].max
+end
+
+
 # --- Register All Tools ---
 instrument :read_file,
            description: <<~DESC,
@@ -286,7 +298,9 @@ instrument :run_command,
     # Use Scriptorium HTML utils for proper escaping
     escaped_out = Scriptorium.escape_html out
 
-    { ok: true, exit_status: exitstatus, result: "Command output: #{escaped_out}", cwd: cwd, peer_drift: drift }
+    result = { ok: true, exit_status: exitstatus, result: "Command output: #{escaped_out}" }
+    result[:peer_drift] = drift unless drift.empty?
+    result
   rescue StandardError => e
     { error: "Command error: #{e.message}" }
   end
@@ -449,7 +463,8 @@ instrument :recall_notes,
                { error: "Note ##{id} not found" }
              end
            else
-             { notes: Mnemosyne.recall_notes(query, limit: limit, max_content_length: 1111 / limit,
+             { notes: Mnemosyne.recall_notes(query, limit: limit,
+                                             max_content_length: recall_note_cap(limit),
                                              context_path: Mnemosyne.working_dir) }
            end
   HorologiumAeternum.notes_recalled query, limit, result[:notes] if result[:notes]
@@ -488,7 +503,7 @@ instrument :recall_notes,
                     limit: { type: Integer, required: false, default: 3 } },
           returns: { fragments: Array, error: String } do |query: '', limit: 2|
  { fragments: Mnemosyne.recall_fragments(query, limit: limit,
-                                         max_content_length: 1111 / limit,
+                                         max_content_length: recall_note_cap(limit),
                                          context_path: Mnemosyne.working_dir) }
  rescue StandardError => e
  { error: e.message }
@@ -509,14 +524,78 @@ instrument :recall_notes,
  end
  
  
+ instrument :ouroboros_recall,
+           description: 'Intelligent Ouroboros recall: recalls matching Mnemosyne notes, then ' \
+                        'flash-synthesizes them (fast model) into ONE compact current-state ' \
+                        'digest -- duplicates merged, historical/transient matter dropped. ' \
+                        'Use when you want the living summary of memory rather than N raw ' \
+                        'fragments. Returns both the digest and the raw notes.',
+           params: { query:      { type: String, required: false },
+                     limit:      { type: Integer, required: false, default: 8 },
+                     synthesize: { type: Boolean, required: false, default: true } },
+           returns: { digest: String, notes: Array, error: String } do |query: '', limit: 8, synthesize: true|
+  result = Mnemosyne.ouroboros_recall(query, limit: limit, synthesize: synthesize)
+  { digest: result[:digest], notes: result[:notes] }
+ rescue StandardError => e
+  { error: e.message }
+ end
+ 
+ 
  instrument :corpus_sound,
            description: 'Run an Argonaut sounding of the whole repo: scan every source file ' \
                         'into corpus_nodes (files + symbols) and corpus_edges (imports / ' \
                         'nesting / defines), then index each node into the token substrate ' \
-                        '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph.',
+                        '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph. ' \
+                        'Afterwards the cartographer (Arsara) re-mints the map notes.',
            params: {},
-           returns: { files: Integer, nodes: Integer, edges: Integer, error: String } do
+           returns: { files: Integer, nodes: Integer, edges: Integer, maps: Hash, error: String } do
   Mnemosyne.corpus_sound!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :project_sync,
+           description: 'Incremental cartography rite: reads project changes into Mnemosyne. ' \
+                        'Compares the repo against the delta memory (corpus_sightings) AND git ' \
+                        '(porcelain status) -- catches edits invisible to mtime+size ' \
+                        'fingerprints, e.g. same-size same-second edits or concurrent workers ' \
+                        'touching the tree. Re-sounds only added/changed files, excises ' \
+                        'deleted ones, then weaves: transient corpus-delta fragments (Stufe 2, ' \
+                        'TTL glow), a cross-worker sync-marker fragment, plus refreshed map ' \
+                        'notes. First run falls back to a full corpus_sound. Rarely needed for ' \
+                        'edits the agent made itself (those auto-observe); use after external ' \
+                        'edits or branch switches.',
+           params: {},
+           returns: { report: Hash, fragments: Hash, error: String } do
+  Mnemosyne.corpus_sync!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :mnemosyne_observe,
+           description: 'Cartography micro-rite: re-sight one edited file into the corpus ' \
+                        '(re-index + delta fragment glow). Automatic after every ' \
+                        'create_file/patch_file/rename_file (cartography.observe_edits); ' \
+                        'call manually only for edits made outside the tool loop, e.g. by ' \
+                        'a host editor or another worker instance.',
+           params: { path: { type: String, required: true } },
+           returns: { observed: Boolean, report: Hash, error: String } do |path:|
+  Mnemosyne.corpus_observe!(path)
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :project_map,
+           description: 'Cartography rite: (re-)mint the compact map notes (tag "map") from ' \
+                        'the current corpus graph -- one overview note plus one note per ' \
+                        'project area (files/symbols, sample files, one-line description). ' \
+                        'Idempotent; previous map notes are replaced.',
+           params: {},
+           returns: { notes: Integer, areas: Integer, error: String } do
+  Mnemosyne.project_map!
  rescue StandardError => e
   { error: e.message }
  end
@@ -545,7 +624,7 @@ instrument :recall_notes,
     notes_count:        results[:notes_count],
     notes_preview:      results[:notes_preview],
     file_info:          results[:file_info],
-    structural_summary: results[:symbolic_overview][:structural_summary],
+    structural_summary: results[:symbolic_overview][:structural_summary_text] || results[:symbolic_overview][:structural_summary],
     symbolic_overview:  results[:symbolic_overview][:symbolic_overview_text],
     tag_cloud:          results[:symbolic_overview][:tag_cloud_text],
     file_cloud:         results[:symbolic_overview][:file_cloud_text],

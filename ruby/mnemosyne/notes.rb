@@ -57,15 +57,26 @@ class Mnemosyne
               Mnemosyne.truncate_note_content(note[:content], max_length: max_content_length)
           end
           if note[:links]
-            note[:links] = note[:links].split(',').map do |link|
-              if Argonaut.file_exists? link
-                link
-              else
-                "~~#{link}~~ (path not found)"
-              end
+            note[:links] = note[:links].split(',').map(&:strip).reject(&:empty?).map do |link|
+              Argonaut.file_exists?(link) ? link : "~#{link}~"
             end.join ','
           end
+          # Minimal format: created_at stays (minting time IS significant) but
+          # sheds seconds/zone; empty context_path, transient age and score
+          # float noise are dropped. The DB keeps everything — only the mirror
+          # is lean.
+          note.delete(:context_path) if note.key?(:context_path) && note[:context_path].to_s.strip.empty?
+          note.delete(:age) if note.key?(:age)
+          note[:score] = note[:score].round(1) if note[:score].is_a?(Numeric)
+          note[:created_at] = short_timestamp(note[:created_at]) if note[:created_at]
           note
+        end
+
+        # "YYYY-MM-DD HH:MM" — enough to know when a note was minted, without
+        # seconds or zone noise.
+        def short_timestamp(ts)
+          s = ts.to_s
+          s.length > 16 ? s[0, 16] : s
         end
 
         def create_note(content:, links: nil, tags: nil, context_path: nil)
@@ -146,6 +157,19 @@ class Mnemosyne
         def remove_note(id)
           Mnemosyne.db.execute 'DELETE FROM project_notes WHERE id = ?', [id]
           Vectors.unindex_unit('note', id) if defined?(Vectors)
+        end
+
+        # Remove all notes carrying a tag (comma-joined storage) -- used by
+        # the cartographer to refresh map notes idempotently. Returns count.
+        def remove_by_tag(tag)
+          rows = Mnemosyne.db.execute('SELECT id FROM project_notes WHERE tags LIKE ?', ["%#{tag}%"])
+          ids = rows.map { |r| r['id'] }
+          return 0 if ids.empty?
+
+          placeholders = (['?'] * ids.size).join(',')
+          Mnemosyne.db.execute("DELETE FROM project_notes WHERE id IN (#{placeholders})", ids)
+          ids.each { |id| Vectors.unindex_unit('note', id) if defined?(Vectors) }
+          ids.size
         end
 
         # Create a *linked* note — a pointer to a knowledge unit in another

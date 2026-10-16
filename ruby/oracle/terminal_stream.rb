@@ -91,9 +91,9 @@ class TerminalStream
       thinking_time = data[:thinking_time]
       puts "\e[2m  > Thought for #{thinking_time}s\e[0m"
     when 'oracle_revelation'
-      render_markdown_event(data, keys: %i[raw_content content], block: true)
+      render_markdown_event(data, keys: %i[raw_content content message], block: true)
     when 'oracle_conjuration_revelation'
-      render_markdown_event(data, keys: %i[raw_content content], block: true)
+      render_markdown_event(data, keys: %i[raw_content content message], block: true)
     when 'file_reading'
       puts "  \e[34m-> #{data[:message]}\e[0m"
     when 'file_read_complete'

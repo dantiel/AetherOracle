@@ -1041,6 +1041,31 @@ class Conduit
       ''
     end
 
+    # Hermetic flash conjuration: a minimal one-shot on the fast model for
+    # digesting, summarizing and classifying — the kopist writes, the master
+    # interprets. No tools, low temperature, tight budget. Best-effort: returns
+    # the text or nil, and never breaks the divination. The fast model is
+    # selected by temporarily lowering the Aegis thinking level, mirroring the
+    # one-shot flash override used in `Oracle.divination`.
+    def flash(messages, max_tokens: 1024, temperature: 0.2)
+      previous = Mnemosyne.aegis[:thinking]
+      Mnemosyne.aegis[:thinking] = 'fast'
+      body = build_body_with_messages_and_tools(messages, tools: nil, reasoning: false,
+                                                temperature: temperature)
+      body[:max_tokens] = max_tokens
+      raw = post(body, 30)
+      json = ensure_json raw
+      json = parse_anthropic_response_to_openai_format(json) if :anthropic == CONFIG::CFG[:api_type]&.to_sym
+      json = parse_gemini_response_to_openai_format(json) if :gemini == CONFIG::CFG[:api_type]&.to_sym
+      stream_token_usage(json, body[:model])
+      (json['choices'] || []).first&.dig('message', 'content').to_s
+    rescue StandardError => e
+      HorologiumAeternum.system_error "Flash conjuration failed: #{e.message.truncate 100}"
+      nil
+    ensure
+      Mnemosyne.aegis[:thinking] = previous
+    end
+
 
     def generate_ai_response(messages, tools, reasoning, set_temperature, attachments = nil)
       # Handle nil tools case - use empty array for instrumenta_schema

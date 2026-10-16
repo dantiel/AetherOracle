@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration — AetherOracle</title>
+  <meta name="description" content="Configuration and usage of AetherOracle: hierarchical .aethercodex files, model + fast-model routing, token-scaling bounds, and the flash automations (Flash-Aegis, Ouroboros recall).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand"><span class="sigil"></span> AetherOracle</div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="methods.html">Methods</a>
+        <a href="cli.html">Pythia CLI</a>
+        <a href="aetherverse.html">Aetherverse</a>
+        <a href="config.html" class="active">Configuration</a>
+        <a href="architecture.html">Architecture</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero wrap">
+    <div class="eyebrow">Configuration &amp; usage</div>
+    <h1>One file.<br><span class="thin">Intelligent defaults.</span></h1>
+    <p class="lede">
+      AetherOracle is configured through <strong>.aethercodex</strong> files — a single, hierarchical
+      contract with sensible (slim) defaults. Every knob is optional; the oracle derives the rest.
+    </p>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Configuration hierarchy</h2>
+      <p class="sub">
+        Config layers merge from low to high priority
+        normalized on load: <code>kebab-case</code> and <code>camelCase</code> both become
+        <code>snake_case</code> symbols, and environment variables (<code>AETHER_&lt;KEY&gt;</code>) outrank them all.
+      </p>
+      <pre><code># merge order (low → high)
+bundle config
+~/.aethercodex                      # user-wide
+./.aethercodex                      # walked up from the working dir
+./.aether_properties                # alternate filename
+# deepest wins  ·  AETHER_* env vars override everything</code></pre>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>Models &amp; the fast model</h2>
+      <p class="sub">
+        <code>model</code> is the only knob a user normally needs. Each known preset contributes its
+        fast model, API type and endpoint automatically; a custom model sets the minimal fields directly.
+      </p>
+      <pre><code>model: deepseek-chat     # known preset → everything else is derived
+
+# --- custom model: minimal fields ---
+# model:     your-model-id
+# api-type:  openai        # openai | anthropic | gemini | deepseek
+# api-url:   https://api.example.com/v1/chat/completions
+# api-key:   sk-...        # or export AETHER_API_KEY=...
+
+# --- distinct fast model (optional) ---
+# fast-model: gpt-4o-mini  # cheaper kopist for digesting &amp; summarizing</code></pre>
+      <div class="grid grid-2" style="margin-top: 24px;">
+        <div class="card">
+          <h3>Known presets</h3>
+          <p><code>deepseek-chat</code>, <code>deepseek-reasoner</code>, <code>gpt-4o</code>,
+          <code>gpt-4o-mini</code>, <code>gpt-4.1</code>, <code>gpt-4.1-mini</code>, <code>gpt-5</code>,
+          <code>gpt-5-mini</code>, <code>claude-sonnet-4-5</code>, <code>claude-opus-4-5</code>,
+          <code>claude-haiku-4-5</code>, <code>gemini-2.5-pro</code>, <code>gemini-2.5-flash</code>.</p>
+        </div>
+        <div class="card">
+          <h3>Distinct fast model</h3>
+          <p>When <code>fast-model</code> resolves to a <em>different</em> identifier than
+          <code>model</code>, the flash automations below are live. When they are the same, flash
+          degrades gracefully to the old behaviour — no wasted turn.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Token scaling</h2>
+      <p class="sub">
+        Tool outputs are bounded by slim defaults so the deep mind reads only what matters. Relax any
+        bound in a <code>scaling:</code> section where a bigger mirror is genuinely useful.
+      </p>
+      <pre><code>scaling:
+  file-overview:
+    tag-cloud-limit:    12    # max tags listed per file
+    file-cloud-limit:   10    # max files in the relation cloud
+    notes-preview:      3     # notes shown in the overview
+    note-excerpt:       200   # chars per note preview
+    max-chars:          4000  # hard cap on the overview
+    short-timestamps:   true  # %Y-%m-%d %H:%M, not full precision
+  recall-notes:
+    max-chars:          3000
+    note-content:       1111
+  run-command:
+    max-chars:          4000</code></pre>
+      <p class="sub" style="margin-top: 20px;">Note output is minimal by default — full
+      <code>created_at</code> is shortened, scores are rounded, empty <code>context_path</code> and
+      dead links are dropped. The database keeps everything; only the presentation is slim.</p>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>Flash automations</h2>
+      <p class="sub">
+        The fast model is the <em>kopist</em> — it digests and summarizes so the deep mind can interpret.
+        Two rites weave it into memory automatically, and one is a recall tool. All are gated behind a
+        single check: a <strong>distinct fast model</strong> must exist.
+      </p>
+      <pre><code>flash:
+  enabled:     true    # master switch for all flash rites
+  intent:      false   # pre-turn intent digest (adds latency → off by default)
+  sediment:    true    # post-turn Aegis weave (on by default)
+  synthesize:  true    # Ouroboros note synthesis (on by default)</code></pre>
+
+      <div class="grid grid-3" style="margin-top: 24px;">
+        <div class="card">
+          <h3>Flash-Aegis · intent</h3>
+          <p>After a prompt is entered, the fast model distills a transient intent + focus tags into the
+          in-memory orientation. Off by default — it adds a pre-turn round-trip.</p>
+        </div>
+        <div class="card">
+          <h3>Flash-Aegis · sediment</h3>
+          <p>After the turn completes, the fast model condenses it into a new current-state summary +
+          tags and weaves them into the persisted Aegis. The oracle <em>flashes</em> onto a new course on
+          its own.</p>
+        </div>
+        <div class="card">
+          <h3>Ouroboros recall</h3>
+          <p>An intelligent recall: matched notes are flash-synthesized into <em>one</em> compact
+          current-state digest, so the deep mind reads a living summary instead of N stale fragments.</p>
+        </div>
+      </div>
+      <p class="sub" style="margin-top: 20px;">
+        No distinct fast model? All four rites fall back silently
+        manual <code>aegis</code> summaries) is preserved. Nothing breaks.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>Cartography (Arsara)</h2>
+      <p class="sub">
+        Complete project mapping, woven into the Mnemosyne cascade. An Argonaut sounding
+        (<code>corpus_sound</code>) reads the whole repository into the corpus graph (files,
+        symbols, imports) and indexes every node into the token substrate. The cartographer
+        then mints compact <em>map notes</em> (tag <code>map</code>) — one per project area plus
+        an overview. Changes are read in incrementally via <code>project_sync</code>: only
+        added/changed/deleted files are re-sounded, and every touched file mints a transient
+        <em>corpus-delta fragment</em> — the change glows fresh in recall, then decays into the
+        substrate (Stufe 2 of the cascade).
+      </p>
+      <pre><code># .aethercodex
+cartography:
+  auto-map:         true     # (re-)mint map notes after every sounding/sync
+  delta-fragments:  true     # mint transient corpus-delta fragments on sync
+  fragment-ttl:     3600     # half-life of the delta glow (seconds)
+  map-flash:        true     # let the fast model write the map one-liners
+  git-track:        true     # union with `git status` to catch fingerprint-blind edits
+  observe-edits:    true     # auto re-sight files the agent writes (patch/create/rename)
+  sync-marker:      true     # mint a cross-worker marker fragment on every sync</code></pre>
+      <p class="sub" style="margin-top: 22px;">
+        <strong>Git-assisted deltas:</strong> fingerprints see <code>mtime</code> + size; git sees
+        content. <code>sync!</code> unions both, so same-size same-second edits and changes from
+        concurrent workers are never missed. Edits the agent makes itself auto-observe (the write
+        tools re-sight the touched path); the <code>sync-marker</code> fragment whispers the delta
+        to sibling instances sharing the memory db.
+      </p>
+      <div class="grid grid-2" style="margin-top: 24px;">
+        <div class="card">
+          <h3>corpus_sound</h3>
+          <p>Full idempotent rescan. Rebuilds the graph, re-seeds the delta memory and
+          re-mints the map notes.</p>
+        </div>
+        <div class="card">
+          <h3>project_sync</h3>
+          <p>Incremental rite. Reads project changes into Mnemosyne: delta re-sounding +
+          fragment cascade + map refresh. First run falls back to a full sounding.</p>
+        </div>
+        <div class="card">
+          <h3>project_map</h3>
+          <p>(Re-)mint the map notes from the current corpus graph on demand. Idempotent.</p>
+        </div>
+        <div class="card">
+          <h3>Recall the map</h3>
+          <p>Ask for <code>map</code> in <code>recall_notes</code> — the overview note is the
+          landing strip; per-area notes carry file samples for targeted navigation.</p>
+        </div>
+      </div>
+      <p class="sub" style="margin-top: 20px;">
+        No distinct fast model? The kopist stays silent — map one-liners fall back to a
+        heuristic. Everything else (graph, deltas, fragments) needs no model at all.
+      </p>
+    </div>
+  </section>
+
+<section class="section">
+    <div class="wrap">
+      <h2>Reference</h2>
+      <table>
+        <tr><th>Key</th><th>Meaning</th></tr>
+        <tr><td><code>model</code></td><td>Primary model ID (preset or custom)</td></tr>
+        <tr><td><code>fast-model</code></td><td>Optional cheaper model for flash rites</td></tr>
+        <tr><td><code>api-type</code></td><td>openai · anthropic · gemini · deepseek</td></tr>
+        <tr><td><code>api-url</code> / <code>api-key</code></td><td>Endpoint + credential (or <code>AETHER_API_KEY</code>)</td></tr>
+        <tr><td><code>scaling</code></td><td>Token-efficient bounds for tool output</td></tr>
+        <tr><td><code>flash</code></td><td>Fast-model automation toggles</td></tr>
+        <tr><td><code>allowed-commands</code></td><td>Shell whitelist — <code>"*"</code> allows all, or regex list</td></tr>
+        <tr><td><code>memory-db</code></td><td>Path to the Mnemosyne SQLite database</td></tr>
+        <tr><td><code>token-usage</code></td><td>Hermetic token + cost accounting (auto-written)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="motto">There is one oracle; Pythia is its voice.</div>
+      <div>The aether is everywhere. AetherOracle — the shared core of the Aetherverse.</div>
+    </div>
+  </footer>
+</body>
+</html>

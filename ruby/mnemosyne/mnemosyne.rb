@@ -25,9 +25,12 @@ require_relative 'chronicle'
 require_relative 'fragments'
 require_relative 'vectors'
 require_relative 'corpus'
+require_relative 'ouroboros'
+require_relative 'flash_aegis'
+require_relative 'arsara'
 
 class Mnemosyne
-  DB_VERSION = 14
+  DB_VERSION = 15
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -126,6 +129,10 @@ class Mnemosyne
         FileUtils.mkdir_p File.dirname(db_path)
         db = SQLite3::Database.new db_path
         db.results_as_hash = true
+        # Concurrent AetherOracle workers share this db; wait politely instead
+        # of dying on SQLITE_BUSY when a sibling instance writes at the same
+        # moment (sync markers, delta fragments, notes).
+        db.busy_timeout = 5000
         migrate db
         restore_aegis db
         db
@@ -416,6 +423,30 @@ class Mnemosyne
         db.execute 'CREATE INDEX IF NOT EXISTS idx_corpus_edges_kind ON corpus_edges (kind)'
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '14')"
       end
+      # Version 15 -- Corpus-Sichtungen (Arsara delta memory): per-file
+      # fingerprint (mtime + size) recorded at every sounding, so the
+      # incremental sync! rite knows exactly which files changed since
+      # the last weave.
+      if 15 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_sightings (
+            path TEXT PRIMARY KEY,
+            fingerprint TEXT,
+            indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '15')"
+      end
+
+      if 16 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          );
+        SQL
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '16')"
+      end
     end
 
     def tokenize(text)
@@ -473,6 +504,34 @@ class Mnemosyne
     def corpus_source_files = Corpus.source_files
     def corpus_nodes_count = Corpus.count_nodes
     def corpus_edges_count = Corpus.count_edges
+
+    # -- Arsara (cartography: map notes + delta-fragment weaving) --
+    def corpus_sync!(root = Argonaut.project_root) = Corpus.sync!(root)
+    def corpus_observe!(path, root = Argonaut.project_root) = Corpus.observe!(path, root)
+    def arsara_weave!(kind:, report: nil) = Arsara.weave!(kind: kind, report: report)
+    def project_map! = Arsara.map!
+    def remove_notes_by_tag(tag) = Notes.remove_by_tag(tag)
+
+    # -- Flash rites (single runtime gate) --
+    # A flash turn is only worth spending when a DISTINCT fast model exists
+    # (else `flash` re-invokes the normal model at full cost), the Conduit
+    # exposes the one-shot conjuration, and — when a rite is given — that
+    # rite's flag in the `flash:` section is on. Per-rite flags (in config):
+    # intent (off), sediment (on), synthesize (on), map (on).
+    def flash_available?(rite = nil)
+      return false unless defined?(CONFIG) && CONFIG.respond_to?(:flash_available?) && CONFIG.flash_available?
+      return false unless defined?(Conduit) && Conduit.respond_to?(:flash)
+      return true if rite.nil?
+      !CONFIG.respond_to?(:flash) || CONFIG.flash[rite] == true
+    end
+
+    # -- Ouroboros (flash-digest recall) --
+    def ouroboros_recall(query, limit: 8, context_path: nil, synthesize: true) = Ouroboros.recall(query, limit: limit, context_path: context_path, synthesize: synthesize)
+    def ouroboros_digest(notes, query) = Ouroboros.digest_notes(notes, query)
+
+    # -- FlashAegis (flash-woven orientation) --
+    def flash_aegis_intent(prompt) = FlashAegis.pre_turn_intent(prompt)
+    def flash_aegis_sediment(prompt, answer) = FlashAegis.post_turn_sediment(prompt, answer)
 
     # -- Companion --
     def companion_save_state(glyph:, summary:, tags: [], score: nil, domain_model: nil) = Companion.save_state(glyph: glyph, summary: summary, tags: tags, score: score, domain_model: domain_model)
