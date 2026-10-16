@@ -475,6 +475,13 @@ class StandaloneDaemon
     when 'activate_context'
       activate_context(args['path'].to_s)
 
+    # -- Project config introspection / write (the native editor's config view) --
+    when 'config'
+      handle_config(args)
+
+    when 'set_config'
+      handle_set_config(args)
+
     # -- Interrupt the in-flight Oracle computation --
     when 'interrupt'
       interrupt_computation
@@ -541,6 +548,19 @@ class StandaloneDaemon
       config_path: CONFIG.config_file_in($project_root),
       memory_db: CONFIG.memory_db_path
     }
+  end
+
+  # Effective project config (values + source layers) for the native editor.
+  def handle_config(_args)
+    CONFIG.effective_config($project_root)
+  end
+
+  # Write one config key into the project's `.aethercodex` / `.aether_properties`,
+  # or into `~/.aethercodex` when `target` is 'home' (the personal defaults).
+  def handle_set_config(args)
+    key = args['key'].to_s
+    return { error: 'set_config: no key given' } if key.empty?
+    CONFIG.write_key(key, args['value'], args['target'].to_s)
   end
 
   # Set the worker's cooperative pause flag. The Oracle loop checks

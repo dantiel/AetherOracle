@@ -665,5 +665,187 @@ end
   # it in place so all existing references observe the new contents.
   def self.reload!
     CFG.replace(apply_model_defaults(load_hierarchical_config(Dir.pwd)))
+
+  # Curated keys surfaced to the native editor's Project config view. Order is
+=======
+  end
+
+  # Curated keys surfaced to the native editor's Project config view. Order is
+=======
+
+  # Curated keys surfaced to the native editor's Project config view. Order is
+  # the display order. `name` / `model` / `port` etc. resolve through the same
+  # accessors the soul uses, so the UI can never disagree with actual routing.
+  CONFIG_KEYS = %w[name model fast-model reasoning-model api-type api-url api-key port dev_mode].freeze
+
+  # The ordered config layers for `start_dir` (lowest → highest priority) WITHOUT
+  # merging: bundle → home → project chain (nearest last). Reused by
+  # effective_config to attribute each value to the layer that produced it.
+  def self.config_layers(start_dir = Dir.pwd)
+    layers = []
+    home = File.expand_path(Dir.home)
+
+    bundle_path = config_file_in(__dir__)
+    if bundle_path
+      layers << { source: :bundle, file: bundle_path, data: load_config_file(bundle_path) }
+    end
+
+    user_path = File.join(home, '.aethercodex')
+    if File.file?(user_path) && !config_chain(start_dir).include?(user_path)
+      layers << { source: :home, file: user_path, data: load_config_file(user_path) }
+    end
+
+    config_chain(start_dir).reverse_each do |path|
+      dir = File.dirname(path)
+      src = (dir == home) ? :home : :project
+      layers << { source: src, file: path, data: load_config_file(path) }
+    end
+
+    layers
+  end
+
+  # Source layer that EXPLICITLY defines `key` (env wins; otherwise nearest
+  # config down the chain), or nil when it is only inherited from a preset/default.
+  def self.explicit_source(key, layers)
+    sym = key.to_sym
+    env = ENV["AETHER_#{key.to_s.tr('-', '_').upcase}"]
+    return :env if env && !env.empty?
+
+    layers.reverse_each do |layer|
+      data = layer[:data]
+      return layer[:source] if data.key?(sym) || data.key?(key)
+    end
+    nil
+  end
+
+  # Effective project config for the native editor: each curated key carries the
+  # value the soul actually resolves plus the source that produced it. Derived
+  # keys (fast-model / api-type / api-url) fall back to `preset` when the model
+  # registry filled them rather than an explicit config line.
+  def self.effective_config(start_dir = Dir.pwd)
+    layers = config_layers(start_dir)
+    cfg_path = config_file_in(project_root)
+
+    values = CONFIG_KEYS.each_with_object({}) do |key, acc|
+      sym = key.to_sym
+      value =
+        case key
+        when 'name' then project_name
+        when 'model' then (CFG[:model] || CFG['model'])
+        when 'fast-model' then resolve_fast_model(CFG)
+        when 'reasoning-model' then self['reasoning-model']
+        when 'api-type' then resolve_api_type(CFG)
+        when 'api-url' then api_url
+        when 'api-key' then api_key
+        when 'port' then port
+        when 'dev_mode' then dev_mode?
+        end
+
+      fallback = %w[fast-model api-type api-url].include?(key) ? :preset : :default
+      source = explicit_source(key, layers) || fallback
+      # `api-key` may also be stored under the underscored spelling.
+      if key == 'api-key' && source == fallback && explicit_source('api_key', layers)
+        source = explicit_source('api_key', layers)
+      end
+
+      acc[key] = { value: value, source: source }
+    end
+
+    {
+      project_root: project_root,
+      name: project_name,
+      config_path: cfg_path,
+      format: cfg_path && File.basename(cfg_path) == '.aether_properties' ? 'properties' : 'yaml',
+      values: values
+    }
+  end
+
+  # Write one top-level config key, preserving surrounding lines/comments.
+  # `target` is 'project' (default — the existing context marker, or a new
+  # `<root>/.aethercodex`) or 'home' (the global `~/.aethercodex` personal
+  # defaults). Reloads in place so every accessor observes it immediately.
+  def self.write_key(key, value, target = 'project')
+    path = if target == 'home'
+             File.join(Dir.home, '.aethercodex')
+           else
+             config_file_in(project_root) || File.join(project_root, '.aethercodex')
+           end
+    value = coerce_value(key, value)
+
+    if File.basename(path) == '.aether_properties'
+      write_properties_key(path, key, value)
+      format = 'properties'
+    else
+      write_yaml_key(path, key, value)
+      format = 'yaml'
+    end
+
+    reload!
+    { path: path, format: format, key: key, saved: true }
+  end
+
+  # Coerce a UI-supplied string to the scalar the key expects (port→int,
+  # dev_mode/reasoning-model→bool, everything else stays a string).
+  def self.coerce_value(key, raw)
+    return raw unless raw.is_a?(String)
+    v = raw.strip
+    case key
+    when 'port' then v.to_i
+    when 'dev_mode', 'reasoning-model'
+      v == 'true' || v == '1' || v.downcase == 'yes'
+    else
+      v
+    end
+  end
+
+  def self.write_yaml_key(path, key, value)
+    lines = File.exist?(path) ? File.readlines(path) : []
+    rendered = render_yaml_value(key, value)
+    idx = lines.index { |l| l =~ /\A#{Regexp.escape(key)}\s*:/ }
+    if idx
+      lines[idx] = rendered + "\n"
+    else
+      lines << "\n" unless lines.empty? || lines.last.end_with?("\n")
+      lines << rendered + "\n"
+    end
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, lines.join)
+  end
+
+  def self.write_properties_key(path, key, value)
+    lines = File.exist?(path) ? File.readlines(path) : []
+    rendered = "#{key} = #{value}"
+    idx = lines.index { |l| l =~ /\A#{Regexp.escape(key)}\s*[=:]/ }
+    if idx
+      lines[idx] = rendered + "\n"
+    else
+      lines << "\n" unless lines.empty? || lines.last.end_with?("\n")
+      lines << rendered + "\n"
+    end
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, lines.join)
+  end
+
+  # Render a scalar as `key: value`; JSON-quote strings that YAML would otherwise
+  # reinterpret (leading/trailing space, sigils, reserved literals, delimiters).
+  def self.render_yaml_value(key, value)
+    case value
+    when true  then "#{key}: true"
+    when false then "#{key}: false"
+    when Integer then "#{key}: #{value}"
+    when Float   then "#{key}: #{value}"
+    else
+      s = value.to_s
+      yaml_plain_safe?(s) ? "#{key}: #{s}" : "#{key}: #{s.to_json}"
+    end
+  end
+
+  def self.yaml_plain_safe?(s)
+    return false if s.empty? || s != s.strip
+    return false if s =~ /[\n\r]/
+    return false if s =~ /\A(?:true|false|null|yes|no|on|off|~)\z/i
+    return false if s =~ /[#:{}\[\]"']/
+    return false if s =~ /[&*!|>%@`]/
+    true
   end
 end
