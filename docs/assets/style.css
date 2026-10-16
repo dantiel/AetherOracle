@@ -53,7 +53,7 @@ a:hover { text-decoration: underline; }
   background: conic-gradient(from 180deg, var(--accent), var(--accent-2), var(--accent));
   box-shadow: 0 0 14px rgba(124, 108, 255, 0.55);
 }
-.nav-links { display: flex; gap: 22px; font-size: 15px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; }
 .nav-links a { color: var(--muted); }
 .nav-links a.active, .nav-links a:hover { color: var(--text); text-decoration: none; }
 

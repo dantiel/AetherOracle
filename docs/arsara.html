@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherOracle — Arsara</title>
+  <meta name="description" content="Cartography: the living project map of AetherOracle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <nav class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="sigil"></span> AetherOracle</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+        <a href="methods.html">Methods</a>
+        <a href="cli.html">Pythia CLI</a>
+        <a href="aetherverse.html">Aetherverse</a>
+        <a href="mnemosyne.html">Mnemosyne</a>
+        <a href="aegis.html">Aegis</a>
+        <a href="arsara.html" class="active">Arsara</a>
+        <a href="ouroboros.html">Ouroboros</a>
+        <a href="magnum-opus.html">Magnum Opus</a>
+        <a href="metempsychosis.html">Metempsychosis</a>
+        <a href="companions.html">Companions</a>
+        <a href="config.html">Configuration</a>
+        <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</nav>
+
+    <header class="hero wrap">
+    <div class="eyebrow">Cartography · the project's living map</div>
+    <h1>Arsara.<br><span class="thin">The Cartographer.</span></h1>
+    <p class="lede">
+      A project is read once, woven into memory, and then kept alive: every change re-sights the touched
+      files, every sync glows in the transient cascade, and every worker whispers its deltas to its siblings.
+    </p>
+  </header>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>The delta memory</h2>
+      <p class="sub">The cartographer never re-scans blindly. <code>corpus_sightings</code> remembers a
+      <code>mtime:size</code> fingerprint per file; <code>corpus_meta</code> holds
+      <code>last_sync_at</code>. A sync compares, re-sounds only what moved, and excises what vanished.</p>
+      <div class="grid grid-3">
+        <div class="card"><h3>corpus_sound</h3>
+          <p>The first contact: a full Argonaut sounding of the repository into the corpus graph, followed by
+          the map weaving. Idempotent — wipes and rebuilds.</p></div>
+        <div class="card"><h3>project_sync</h3>
+          <p>The incremental rite. Unions <code>git status --porcelain</code> with the fingerprints — catching
+          same-size same-second edits and concurrent workers — then re-sounds added/changed files only.</p></div>
+        <div class="card"><h3>auto-observe</h3>
+          <p>Edits made by the oracle itself (<code>create_file</code>, <code>patch_file</code>,
+          <code>rename_file</code>) re-sight the path automatically the moment the tool succeeds.
+          <code>mnemosyne_observe</code> covers host-editor edits.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>The map notes</h2>
+      <p class="sub">After every sounding and sync, Arsara (re-)mints compact durable notes under the
+      <code>map</code> tag: one overview plus one note per project area — files, symbols, sample files and a
+      one-line description written by the kopist (fast model) when available, else a heuristic.</p>
+      <pre><code>Arsara map (aetheroracle): 342 files, 32790 symbols, 8 areas
+ruby/ — the brain tier: mnemosyne, oracle, instrumentarium …
+docs/ — the website: architecture, configuration …</code></pre>
+      <p class="sub">The map is the landing strip for recall: read the map first, then dive into the area.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>The transient weaving — fused with the cascade</h2>
+      <div class="grid grid-2">
+        <div class="card"><h3>corpus-delta fragments</h3>
+          <p>Every touched file mints a Stufe-2 fragment (<code>Δ added/changed/removed …</code>, TTL 3600 s).
+          The change <em>glows</em> fresh in recall and decays into the substrate — exactly like a working
+          thought.</p></div>
+        <div class="card"><h3>sync-marker — the cross-worker whisper</h3>
+          <p>Every sync with a delta mints one marker fragment
+          (<code>sync-marker GAMAYUN-WIN:39544 @ 22:00: +0 a, 24 c, -1 r</code>). Sibling AetherOracle
+          workers sharing the memory db feel it through their normal fragment recall — no polling, no re-scan.
+          <code>busy_timeout = 5000</code> keeps concurrent writers polite.</p></div>
+        <div class="card"><h3>promotion hook</h3>
+          <p>After every sync the ladder checks in with <a href="ouroboros.html">Ouroboros</a>: paths glowing
+          repeatedly are lifted into durable structure notes.</p></div>
+        <div class="card"><h3>configuration</h3>
+          <p><code>cartography:</code> — <code>auto_map</code>, <code>delta_fragments</code>,
+          <code>fragment_ttl</code>, <code>map_flash</code>, <code>git_track</code>,
+          <code>observe_edits</code>, <code>sync_marker</code>. All defaults on; flip them per project in
+          <code>.aethercodex</code>.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="motto">There is one oracle; Pythia is its voice.</div>
+      <div>The aether is everywhere. AetherOracle — the shared core of the Aetherverse.</div>
+    </div>
+  </footer>
+</body>
+</html>

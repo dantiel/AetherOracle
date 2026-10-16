@@ -512,6 +512,9 @@ class Mnemosyne
     def project_map! = Arsara.map!
     def remove_notes_by_tag(tag) = Notes.remove_by_tag(tag)
 
+    # -- Ouroboros promotion ladder (fragment -> note rung) --
+    def ouroboros_promote!(threshold: nil) = Ouroboros.promote!(threshold: threshold)
+
     # -- Flash rites (single runtime gate) --
     # A flash turn is only worth spending when a DISTINCT fast model exists
     # (else `flash` re-invokes the normal model at full cost), the Conduit

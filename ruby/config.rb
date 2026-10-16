@@ -358,12 +358,27 @@ class CONFIG
     intent:     false,  # pre-turn intent digest (adds pre-turn latency)
     sediment:   true,   # post-turn Aegis weave
     synthesize: true,   # Ouroboros note synthesis
-        map:        true    # Arsara cartography: one-line area descriptions
+    map:        true    # Arsara cartography: one-line area descriptions
   }.freeze
 
   def self.flash
     raw = CFG[:flash] || CFG['flash'] || {}
     deep_merge(DEFAULT_FLASH, raw)
+  end
+
+  # Ouroboros defaults: intelligent recall + the promotion ladder. The
+  # promotion rung makes the documented cascade fragment -> note live:
+  # sync-markers that repeatedly glow around the same path (threshold)
+  # are lifted into a durable structure note and their markers consumed.
+  # Pure DB work -- no flash model needed; gate only on the config.
+  DEFAULT_OUROBOROS = {
+    synthesize: true,                          # digest recall results via flash
+    promotion:  { enabled: true, threshold: 3 }
+  }.freeze
+
+  def self.ouroboros
+    raw = CFG[:ouroboros] || CFG['ouroboros'] || {}
+    deep_merge(DEFAULT_OUROBOROS, raw)
   end
 
   # True only when a distinct fast model exists AND the flash rites are enabled.

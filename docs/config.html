@@ -15,13 +15,21 @@
     <div class="nav-inner">
       <div class="brand"><span class="sigil"></span> AetherOracle</div>
       <div class="nav-links">
-        <a href="index.html">Home</a>
+  <a href="index.html">Home</a>
         <a href="methods.html">Methods</a>
         <a href="cli.html">Pythia CLI</a>
         <a href="aetherverse.html">Aetherverse</a>
+        <a href="mnemosyne.html">Mnemosyne</a>
+        <a href="aegis.html">Aegis</a>
+        <a href="arsara.html">Arsara</a>
+        <a href="ouroboros.html">Ouroboros</a>
+        <a href="magnum-opus.html">Magnum Opus</a>
+        <a href="metempsychosis.html">Metempsychosis</a>
+        <a href="companions.html">Companions</a>
         <a href="config.html" class="active">Configuration</a>
         <a href="architecture.html">Architecture</a>
-      </div>
+</div>
+
     </div>
   </nav>
 
@@ -205,6 +213,22 @@ cartography:
         No distinct fast model? The kopist stays silent — map one-liners fall back to a
         heuristic. Everything else (graph, deltas, fragments) needs no model at all.
       </p>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>Ouroboros — recall &amp; promotion</h2>
+      <p class="sub">The serpent digests and ascends. See the <a href="ouroboros.html">Ouroboros</a> page
+      for the full picture.</p>
+      <pre><code># .aethercodex
+ouroboros:
+  synthesize: true                      # digest recall results via flash
+  promotion:  { enabled: true, threshold: 3 }</code></pre>
+      <p class="sub"><code>synthesize</code> gates the flash digest of <code>ouroboros_recall</code>
+      (silently nil without a distinct fast model). <code>promotion</code> gates the ladder:
+      sync-markers glowing <code>threshold</code> times around one path lift it into a durable structure
+      note. Pure DB work — no flash model needed. The manual rite is <code>mnemosyne_promote</code>.</p>
     </div>
   </section>
 

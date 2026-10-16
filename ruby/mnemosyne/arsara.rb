@@ -19,7 +19,10 @@ class Mnemosyne
 
     class << self
       # Entry point invoked by Corpus.sound!/sync! -- config-gated weaving.
-      # Returns { kind:, fragments:, notes: } for the caller's report.
+      # Returns { kind:, fragments:, notes:, promoted: } for the caller's
+      # report. After a sync delta, Ouroboros' promotion ladder checks
+      # whether any path glowed often enough to be lifted into a durable
+      # structure note (fragment -> note rung of the cascade).
       def weave!(kind:, report: nil)
         fragments = 0
         if report && cartography[:delta_fragments]
@@ -27,7 +30,8 @@ class Mnemosyne
           fragments += marker_fragment!(report) if fragments.positive? && cartography[:sync_marker]
         end
         notes = cartography[:auto_map] ? map! : 0
-        { kind: kind, fragments: fragments, notes: notes }
+        promoted = (kind == :sync && report) ? Ouroboros.promote! : 0
+        { kind: kind, fragments: fragments, notes: notes, promoted: promoted }
       end
 
       def cartography

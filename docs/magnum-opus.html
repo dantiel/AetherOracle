@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherOracle — Magnum Opus</title>
+  <meta name="description" content="The alchemical task engine and executive seals.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <nav class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="sigil"></span> AetherOracle</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+        <a href="methods.html">Methods</a>
+        <a href="cli.html">Pythia CLI</a>
+        <a href="aetherverse.html">Aetherverse</a>
+        <a href="mnemosyne.html">Mnemosyne</a>
+        <a href="aegis.html">Aegis</a>
+        <a href="arsara.html">Arsara</a>
+        <a href="ouroboros.html">Ouroboros</a>
+        <a href="magnum-opus.html" class="active">Magnum Opus</a>
+        <a href="metempsychosis.html">Metempsychosis</a>
+        <a href="companions.html">Companions</a>
+        <a href="config.html">Configuration</a>
+        <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</nav>
+
+  <header class="hero wrap">
+  <div class="eyebrow">The task engine · ten alchemical steps</div>
+  <h1>Magnum Opus.<br><span class="thin">The Great Work, Staged.</span></h1>
+  <p class="lede">
+    A complex prompt becomes the alchemical work: research, options, detail, analysis, patches, tests,
+    edge cases, audit, documentation — ten steps, tracked, retried and inherited by subtasks. And above
+    the engine, Salomo's seals turn goals into ordered milestones.
+  </p>
+</header>
+
+<section class="section">
+  <div class="wrap">
+    <h2>The engine</h2>
+    <p class="sub">Tasks run as step sequences with per-step guidance, temperatures and thinking depths,
+    previous results always visible to the current step.</p>
+    <div class="grid grid-2">
+      <div class="card"><h3>Workflow shapes</h3>
+        <p><code>full</code> = all 10 alchemical steps · <code>analysis</code> = 5 steps ·
+        <code>simple</code> = 3 steps · <code>debug</code> = step through every phase without executing
+        tools — the plan crystallizes before the first tool call.</p></div>
+      <div class="card"><h3>The ten steps</h3>
+        <p>Generate solution options → evaluate the task → task detail → choose the best option → analyze
+        files → apply patches → run tests → validate edge scenarios → audit and optimize → update
+        documentation. Each step stores its result; each may retry up to three times.</p></div>
+      <div class="card"><h3>TaskLedger</h3>
+        <p><code>create_task</code>, <code>execute_task</code>, <code>evaluate_task</code>,
+        <code>update_task</code>, <code>list_tasks</code>, <code>remove_task</code>. States:
+        pending, active, paused, failed, completed, invalid, cancelled.</p></div>
+      <div class="card"><h3>Subtasks &amp; inheritance</h3>
+        <p>Tasks can spawn subtasks (depth-bounded); a subtask inherits its parent's context — the child
+        wakes inside the parent's room, not in a vacuum.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="wrap">
+    <h2>Seals — Salomo's executive ledger</h2>
+    <p class="sub">The king decomposes the great work. A seal is a goal plus an ordered list of milestones,
+    each a real engine task, each optionally gated on earlier milestones and owned by a companion.</p>
+    <div class="grid grid-3">
+      <div class="card"><h3>seal_create</h3>
+        <p>Goal + milestones with <code>depends_on</code> edges (0-based indices). Ungated milestones run
+        in parallel; <code>depends_on: [i-1]</code> builds a strict chain.</p></div>
+      <div class="card"><h3>seal_run</h3>
+        <p>Drives the critical path: executes the next unblocked milestone and re-evaluates, hermetically
+        bounded (max steps per turn) — never a runaway loop.</p></div>
+      <div class="card"><h3>seal_delegate</h3>
+        <p>Each milestone can be owned by a companion glyph — the fox takes the clever path, the wolf the
+        radical cut, the owl the architecture. <code>seal_status</code> shows the computed next action.</p></div>
+    </div>
+    <pre><code>seal_create goal: "Ship the cartography",
+milestones: [
+  { title: "Delta memory", owner: "owl" },
+  { title: "Sync rite",    owner: "drache", depends_on: [0] },
+  { title: "Docs",         owner: "schwan", depends_on: [1] }
+]</code></pre>
+  </div>
+</section>
+
+  <footer>
+    <div class="wrap">
+      <div class="motto">There is one oracle; Pythia is its voice.</div>
+      <div>The aether is everywhere. AetherOracle — the shared core of the Aetherverse.</div>
+    </div>
+  </footer>
+</body>
+</html>

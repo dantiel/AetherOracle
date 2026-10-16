@@ -39,6 +39,67 @@ class Mnemosyne
           max_tokens: 512, temperature: 0.2
         )
       end
+
+      # -- The promotion ladder, first rung made live: fragment -> note.
+      # Sync-markers (Stufe 2) that repeatedly glow around the same path --
+      # i.e. a file kept changing across syncs -- are lifted into ONE
+      # durable structure note (Stufe 1) carrying the current corpus state,
+      # and the consumed markers are expired. Pure DB work: no flash model
+      # required, gated on `ouroboros.promotion` config. Idempotent: a path
+      # already carrying a `promoted` note is skipped. Returns the number of
+      # promoted paths.
+      def promote!(threshold: nil)
+        cfg = CONFIG.respond_to?(:ouroboros) ? CONFIG.ouroboros : {}
+        promotion = cfg[:promotion] || {}
+        return 0 unless promotion[:enabled]
+
+        thr = threshold || promotion[:threshold] || 3
+        markers = Mnemosyne.db.execute(
+          "SELECT id, links FROM fragments WHERE tags LIKE '%sync-marker%' " \
+          "AND datetime(created_at, '+' || ttl || ' seconds') > datetime('now')"
+        )
+        by_path = Hash.new { |h, k| h[k] = [] }
+        markers.each do |m|
+          path = (m['links'] || '').split(',').first
+          by_path[path] << m['id'] if path && !path.empty?
+        end
+
+        promoted = 0
+        by_path.each do |path, ids|
+          next if ids.size < thr
+          # never promote a path that no longer exists on disk
+          next unless File.exist?(File.join(Corpus.project_root, path))
+          next if Mnemosyne.db.execute(
+            "SELECT id FROM project_notes WHERE links LIKE ? AND tags LIKE '%promoted%' LIMIT 1",
+            ["%#{path}%"]
+          ).any?
+
+          Notes.remember(
+            content: "Repeatedly active: #{path} — #{corpus_summary(path)} " \
+                     "(promoted from #{ids.size} sync-markers)",
+            tags: %w[structure promoted sync-hotspot],
+            links: [path]
+          )
+          placeholders = (['?'] * ids.size).join(',')
+          Mnemosyne.db.execute("DELETE FROM fragments WHERE id IN (#{placeholders})", ids)
+          ids.each { |i| Vectors.unindex_unit('fragment', i) if defined?(Vectors) }
+          promoted += 1
+        end
+        promoted
+      end
+
+      # Current-state corpus summary for one repo-relative path; falls back
+      # to the fingerprint when the path is no longer indexed.
+      def corpus_summary(path)
+        rows = Mnemosyne.db.execute(
+          "SELECT COALESCE(symbol_type, kind, 'file') AS type, COUNT(*) AS c FROM corpus_nodes " \
+          "WHERE path = ? GROUP BY type ORDER BY c DESC LIMIT 5", [path]
+        )
+        return 'not currently indexed in the corpus' if rows.empty?
+
+        total = rows.sum { |r| r['c'] }
+        "corpus: #{total} nodes (#{rows.map { |r| "#{r['type']}:#{r['c']}" }.join(', ')})"
+      end
     end
   end
 end

@@ -599,6 +599,20 @@ instrument :project_map,
  rescue StandardError => e
   { error: e.message }
  end
+
+
+instrument :mnemosyne_promote,
+           description: 'Promotion-ladder rite (Ouroboros): lifts sync-marker fragments that ' \
+                        'repeatedly glow around the same path (threshold) into ONE durable ' \
+                        'structure note (Stufe 2 -> Stufe 1) and consumes the markers. Runs ' \
+                        'automatically after every project_sync with a delta; call manually ' \
+                        'to force a ladder pass. Pure DB work -- no flash model needed.',
+           params: { threshold: { type: Integer, required: false } },
+           returns: { promoted: Integer, error: String } do |threshold: nil|
+  { promoted: Mnemosyne.ouroboros_promote!(threshold: threshold) }
+ rescue StandardError => e
+  { error: e.message }
+ end
  
  
  instrument :file_overview,

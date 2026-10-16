@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherOracle — Ouroboros</title>
+  <meta name="description" content="Intelligent recall and the promotion ladder.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <nav class="nav">
+  <div class="nav-inner">
+    <div class="brand"><span class="sigil"></span> AetherOracle</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+        <a href="methods.html">Methods</a>
+        <a href="cli.html">Pythia CLI</a>
+        <a href="aetherverse.html">Aetherverse</a>
+        <a href="mnemosyne.html">Mnemosyne</a>
+        <a href="aegis.html">Aegis</a>
+        <a href="arsara.html">Arsara</a>
+        <a href="ouroboros.html" class="active">Ouroboros</a>
+        <a href="magnum-opus.html">Magnum Opus</a>
+        <a href="metempsychosis.html">Metempsychosis</a>
+        <a href="companions.html">Companions</a>
+        <a href="config.html">Configuration</a>
+        <a href="architecture.html">Architecture</a>
+    </div>
+  </div>
+</nav>
+
+    <header class="hero wrap">
+    <div class="eyebrow">The eternal serpent · digestion and ascent</div>
+    <h1>Ouroboros.<br><span class="thin">Intelligent Recall &amp; Promotion.</span></h1>
+    <p class="lede">
+      The serpent eats its own tail: memory recalling memory, distilling itself, and lifting the transient
+      into the durable. Two rites — the digest and the ladder.
+    </p>
+  </header>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>The digest — intelligent recall</h2>
+      <p class="sub"><code>ouroboros_recall</code> runs the normal Mnemosyne recall, then flash-synthesizes
+      the matches into <em>one</em> compact current-state digest: duplicates merged, historical and transient
+      matter dropped. The deep mind reads one living summary instead of N raw fragments — the kopist writes,
+      the master interprets.</p>
+      <pre><code># returns { digest:, notes: }
+digest: "Concurrent-Worker-Modell: shared memory_db, sync-marker whispers,
+         busy_timeout 5000. Files: corpus.rb, arsara.rb."
+notes:  [ the raw matches, for when the deep mind wants the source ]</code></pre>
+      <p class="sub">Without a distinct fast model the digest is simply <code>nil</code> and the raw notes
+      remain — no cost, no surprise.</p>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>The ladder — promotion made live</h2>
+      <p class="sub">The first rung of the documented cascade <code>fragment → note</code> is now real:</p>
+      <div class="grid grid-3">
+        <div class="card"><h3>1 · observe</h3>
+          <p>After every sync with a delta, the ladder counts active sync-markers per path. A file that keeps
+          changing keeps glowing.</p></div>
+        <div class="card"><h3>2 · threshold</h3>
+          <p>Three glows (configurable) and the path is lifted: one durable structure note —
+          <code>Repeatedly active: ruby/mnemosyne/corpus.rb — corpus: 444 nodes (method:15, …)</code> —
+          carrying the current corpus summary. Markers are consumed.</p></div>
+        <div class="card"><h3>3 · guards</h3>
+          <p>Idempotent: a path already carrying a <code>promoted</code> note is skipped. And a path that no
+          longer exists on disk is never promoted — the ladder lifts the living, not the dead.</p></div>
+      </div>
+      <pre><code># .aethercodex
+ouroboros:
+  synthesize: true                      # digest recall results via flash
+  promotion: { enabled: true, threshold: 3 }</code></pre>
+      <p class="sub">Promotion is pure DB work — no flash model needed. The manual rite is
+      <code>mnemosyne_promote</code>.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="motto">There is one oracle; Pythia is its voice.</div>
+      <div>The aether is everywhere. AetherOracle — the shared core of the Aetherverse.</div>
+    </div>
+  </footer>
+</body>
+</html>
