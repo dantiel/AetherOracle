@@ -65,9 +65,12 @@ a:hover { text-decoration: underline; }
 .brand a { display: flex; align-items: center; gap: 10px; color: var(--text); }
 .brand a:hover { text-decoration: none; }
 .brand .sigil {
-  width: 24px; height: 24px; border-radius: 50%;
-  background: conic-gradient(from 180deg, var(--accent), var(--accent-2), var(--accent));
-  box-shadow: 0 0 12px rgba(139, 125, 255, 0.5);
+  font-family: var(--mono); font-size: 30px; line-height: 1; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px rgba(139, 125, 255, 0.45));
+  transform: translateY(-1px);
 }
 .brand-name { font-weight: 700; letter-spacing: 0.4px; font-size: 17px; }
 .brand-sub {
@@ -110,7 +113,17 @@ a:hover { text-decoration: underline; }
 .nav-drop a:hover .dsub { color: var(--accent-2); }
 
 /* ---------- hero ---------- */
-.hero { padding: 84px 0 56px; }
+.hero { position: relative; padding: 84px 0 56px; }
+.hero::after {
+  content: "Æ";
+  position: absolute; top: -6px; right: -40px; z-index: -1;
+  font-family: var(--mono); font-weight: 700; line-height: 1;
+  font-size: clamp(220px, 30vw, 460px);
+  background: linear-gradient(160deg, rgba(139, 125, 255, 0.15), rgba(85, 214, 200, 0.05));
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none; user-select: none;
+}
 .eyebrow {
   font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.6px;
   color: var(--accent-2); margin-bottom: 20px;
@@ -261,8 +274,8 @@ footer .motto {
   font-family: var(--mono); color: var(--text); font-size: 14px;
   margin-bottom: 10px; letter-spacing: 0.3px;
 }
-footer .motto::before { content: "⬡ "; color: var(--accent); }
-footer .motto::after { content: " ⬡"; color: var(--accent); }
+footer .motto::before { content: "Æ "; color: var(--accent); }
+footer .motto::after { content: " Æ"; color: var(--accent); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
