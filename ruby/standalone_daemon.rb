@@ -84,6 +84,16 @@ trap('INT')  { exit }
 # Death evidence: log every process exit to stderr (drained by the Swift bridge
 # into daemonLog) so a crash or signal death is never silent.
 at_exit { warn "[AETHER-DAEMON] exit (pid #{Process.pid})" }
+# The Bonjour advertiser (`dns-sd -R`) is a child process; if the daemon dies on
+# a signal before `shutdown` runs, the child would orphan and keep advertising a
+# dead context. Kill it on every exit path so the æther never promises a ghost.
+at_exit do
+  begin
+    Process.kill('TERM', $aether_bonjour_pid) if $aether_bonjour_pid
+  rescue StandardError
+    nil
+  end
+end
 
 # Point bundler at this Ruby tree's Gemfile so the full dependency set resolves
 # regardless of the process working directory.
@@ -119,6 +129,7 @@ require_relative 'instrumentarium/horologium_aeternum'
 require_relative 'magnum_opus/magnum_opus_engine'
 require_relative 'shell_session'
 require_relative 'textmate_tokenizer'
+require_relative 'instrumentarium/vox'
 
 # PipeStream adapts HorologiumAeternum's WebSocket-style sink to STDOUT frames.
 # HorologiumAeternum.send builds a JSON string {"method":...,"result":{...}}
@@ -253,6 +264,101 @@ class PipeStream
   end
 end
 
+# Captures the single `result` frame the worker emits for an HTTP-queued turn.
+# The worker writes `emit(...)` to `Thread.current[:aether_sink]`; this sink is
+# that sink — it parses the JSON frame and hands it to the waiting HTTP thread.
+class HTTPResultSink
+  def initialize(queue)
+    @queue = queue
+  end
+
+  def write(data)
+    frame = begin
+      JSON.parse(data)
+    rescue StandardError
+      nil
+    end
+    @queue << frame if frame.is_a?(Hash) && frame['type'] == 'result'
+  end
+
+  def flush; end
+end
+
+# Minimal LAN HTTP server (stdlib only). WEBrick is not in the bundle's lock, so
+# the æther opens its few JSON doors with a plain TCPServer — one listener, one
+# thread per request, HTTP/1.1 with Content-Length and Connection: close.
+class AetherHTTPServer
+  STATUS_TEXT = {
+    200 => 'OK', 400 => 'Bad Request', 404 => 'Not Found',
+    405 => 'Method Not Allowed', 409 => 'Conflict',
+    422 => 'Unprocessable Entity', 500 => 'Internal Server Error'
+  }.freeze
+
+  def initialize(port, handler)
+    @port = port
+    @handler = handler
+    @server = TCPServer.new('0.0.0.0', port)
+    @running = true
+  end
+
+  def start
+    @thread = Thread.new do
+      while @running
+        begin
+          client = @server.accept
+          Thread.new(client) { |c| handle(c) }
+        rescue IOError, Errno::EBADF
+          break unless @running
+        rescue StandardError => e
+          warn "[AETHER-HTTP] accept: #{e.message}"
+        end
+      end
+    end
+  end
+
+  def stop
+    @running = false
+    @server.close rescue nil
+    @thread&.kill
+  end
+
+  private
+
+  def handle(client)
+    request_line = client.gets
+    return client.close unless request_line
+    method, path, = request_line.strip.split(' ')
+    headers = {}
+    while (line = client.gets)
+      line = line.strip
+      break if line.empty?
+      key, value = line.split(':', 2)
+      headers[key.downcase] = value.to_s.strip if key
+    end
+    body = ''
+    if headers['content-length']
+      body = client.read(headers['content-length'].to_i) || ''
+    end
+    status, payload = @handler.call(method, path, body)
+    write_response(client, status, payload)
+  rescue StandardError => e
+    write_response(client, 500, { error: "#{e.class}: #{e.message}" }.to_json)
+  ensure
+    client.close rescue nil
+  end
+
+  def write_response(client, status, json_body)
+    body = json_body.to_s
+    client.write("HTTP/1.1 #{status} #{STATUS_TEXT[status] || 'OK'}\r\n" \
+                 "Content-Type: application/json\r\n" \
+                 "Content-Length: #{body.bytesize}\r\n" \
+                 "Connection: close\r\n\r\n" \
+                 "#{body}")
+  rescue StandardError
+    nil
+  end
+end
+
 class StandaloneDaemon
   # A held turn (⏸) whispers into the stream now and then: Swift's watchdog only
   # declares a daemon wedged after a fully *silent* window, so a long hold must
@@ -290,6 +396,11 @@ class StandaloneDaemon
     # coupling the user's CLI and the model's shell into one filesystem truth.
     $aether_shell = @shell
     @running = true
+    # The LAN æther: whether a turn is in flight (busy) and the HTTP port the
+    # iOS companion reaches. `@busy` is written by the single worker, read by
+    # the heartbeat + invoke endpoints.
+    @busy = false
+    @http_port = nil
     start_worker
   end
 
@@ -365,6 +476,7 @@ class StandaloneDaemon
 
         turn_shell = @shell.branch
         $aether_shell = turn_shell
+        @busy = true
 
         begin
           result = dispatch(request['command'], request['arguments'] || {})
@@ -406,6 +518,7 @@ class StandaloneDaemon
             nil
           end
         ensure
+          @busy = false
           # Merge the turn's branch back into the trunk unless a context switch
           # replaced it mid-flight (activate_context re-points @shell to the new
           # project's cwd; the stale branch must not clobber it).
@@ -434,6 +547,9 @@ class StandaloneDaemon
   # (Unix-domain socket, survives the app); otherwise the daemon speaks the
   # original framed JSON protocol over STDIN/STDOUT (dev / spawn mode).
   def run
+    # The LAN æther (HTTP + Bonjour) rides along in every mode: the iOS
+    # companion reaches this very brain over http://<mac>:<port>/aether/...
+    start_http_server
     if (idx = ARGV.index('--listen'))
       run_socket(ARGV[idx + 1])
     else
@@ -527,7 +643,161 @@ class StandaloneDaemon
     end
   end
 
+  # ── The LAN æther: HTTP + Bonjour for the iOS companion ──
+  # One brain, many windows. The Ruby brain already speaks a framed JSON
+  # protocol over STDIN/STDOUT (and a Unix socket); here it also opens an HTTP
+  # door on the LAN (0.0.0.0) and advertises itself via Bonjour so the iOS
+  # companion can find it without ever typing an IP address.
+
+  def start_http_server
+    port = (ENV['AETHER_PORT'] && ENV['AETHER_PORT'].to_i)
+    port = CONFIG.port.to_i if port.nil? || port <= 0
+    port = 4567 if port.nil? || port <= 0
+    @http_port = port
+
+    @http_server = AetherHTTPServer.new(port, method(:http_route))
+    @http_server.start
+    warn "[AETHER-HTTP] listening on 0.0.0.0:#{port}"
+    start_bonjour(port)
+  rescue StandardError => e
+    warn "[AETHER-HTTP] failed to start: #{e.class}: #{e.message}"
+  end
+
+  # Route one HTTP request to a [status, json_string] pair.
+  def http_route(method, path, body)
+    case [method, path]
+    when ['GET', '/aether/heartbeat']
+      [200, heartbeat_payload.to_json]
+    when ['POST', '/aether/invoke']
+      http_invoke(body)
+    when ['GET', '/aether/voices']
+      [200, { voices: Vox.voices }.to_json]
+    when ['POST', '/aether/speak']
+      http_speak(body)
+    when ['GET', '/aether/aegis']
+      aegis = Mnemosyne.aegis || {}
+      [200, {
+        thinking: aegis[:thinking] || 'normal',
+        temperature: aegis[:temperature] || 1.0,
+        working_dir: aegis[:working_dir],
+        summary: aegis[:summary] || '',
+        tags: aegis[:tags] || []
+      }.to_json]
+    else
+      [404, { error: 'Not found' }.to_json]
+    end
+  end
+
+  def http_invoke(body)
+    payload = begin
+      JSON.parse(body.to_s, symbolize_names: true)
+    rescue StandardError
+      {}
+    end
+    prompt = payload[:prompt].to_s.strip
+    memory = Array(payload[:memory]).reject(&:nil?)
+    active = payload[:active_companions].is_a?(Array) ? payload[:active_companions] : nil
+
+    if prompt.empty? && memory.empty?
+      return [400, { error: 'Missing prompt' }.to_json]
+    end
+    if @busy
+      return [409, { error: 'busy', message: 'The oracle is mid-turn.', busy: true }.to_json]
+    end
+
+    frame = http_oracle_turn(prompt: prompt, active_companions: active, memory: memory)
+    if frame['success'] == false
+      return [500, { error: frame['error'].to_s }.to_json]
+    end
+    result = frame['result'] || {}
+    resp = result['response']
+    if resp.is_a?(Hash)
+      [200, { answer: resp['answer'].to_s, html: resp['html'],
+              source_context: 'pythia-ios' }.to_json]
+    elsif resp.is_a?(String)
+      [500, { error: resp }.to_json]
+    else
+      [200, { answer: '', html: nil, source_context: 'pythia-ios' }.to_json]
+    end
+  end
+
+  def http_speak(body)
+    payload = begin
+      JSON.parse(body.to_s, symbolize_names: true)
+    rescue StandardError
+      {}
+    end
+    text = payload[:text]
+    if !text.is_a?(String) || text.strip.empty?
+      [422, { error: 'text is required' }.to_json]
+    else
+      [200, { ok: Vox.speak(text: text, voice: payload[:voice]) }.to_json]
+    end
+  end
+
+  # Advertise the Mac on the local network via Bonjour (`dns-sd`), so the iOS
+  # companion browses `_aethercodex._tcp` and finds us without an IP address.
+  def start_bonjour(port)
+    $aether_bonjour_pid = Process.spawn(
+      'dns-sd', '-R', 'AetherCodex', '_aethercodex._tcp', 'local', port.to_s,
+      'name=AetherCodex', out: File::NULL, err: File::NULL
+    )
+    warn "[AETHER-HTTP] Bonjour advertising _aethercodex._tcp : #{port}"
+  rescue StandardError => e
+    warn "[AETHER-HTTP] Bonjour failed: #{e.message}"
+  end
+
+  def stop_bonjour
+    return unless $aether_bonjour_pid
+    Process.kill('TERM', $aether_bonjour_pid) rescue nil
+    $aether_bonjour_pid = nil
+  end
+
+  def heartbeat_payload
+    active_tasks = begin
+      Mnemosyne.manage_tasks(action: 'list')
+               .select { |t| t[:status] == 'active' }
+    rescue StandardError
+      []
+    end
+    {
+      name: 'AetherCodex',
+      path: $project_root,
+      port: @http_port,
+      capabilities: %w[metempsychosis task_spawn invoke manifest],
+      version: '3.0.0',
+      busy: @busy,
+      active_tasks: active_tasks
+    }
+  end
+
+  # Queue an oracle turn through the single worker (serialized, linear history)
+  # and wait for its result frame. The iOS companion sends `active_companions`
+  # (array); map the first non-Pythia voice to `companion` so that companion
+  # actually answers instead of default Pythia.
+  def http_oracle_turn(prompt:, active_companions: nil, memory: [])
+    queue = Queue.new
+    sink = HTTPResultSink.new(queue)
+
+    messages = memory
+    if messages.empty? && !prompt.empty?
+      messages = [{ 'role' => 'user', 'content' => prompt }]
+    end
+
+    args = { 'messages' => messages, 'history' => false, 'record' => false }
+    if active_companions.is_a?(Array) && !active_companions.empty?
+      voice = active_companions.first.to_s
+      args['companion'] = voice unless voice.empty? || voice == 'pythia'
+    end
+
+    @queue << [{ 'command' => 'oracle', 'arguments' => args },
+               "http_#{SecureRandom.hex(6)}", sink]
+    queue.pop || {}
+  end
+
   def shutdown
+    stop_bonjour
+    @http_server&.stop
     warn "[AETHER-DAEMON] shutdown (pid #{Process.pid})"
     @running = false
     @queue << [:shutdown, nil, nil]
