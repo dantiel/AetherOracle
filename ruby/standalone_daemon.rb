@@ -689,6 +689,10 @@ class StandaloneDaemon
       [200, { voices: Vox.voices }.to_json]
     when ['POST', '/aether/speak']
       http_speak(body)
+    when ['GET', '/aether/pending']
+      [200, { questions: HorologiumAeternum.pending_questions }.to_json]
+    when ['POST', '/aether/respond']
+      http_respond(body)
     when ['GET', '/aether/aegis']
       aegis = Mnemosyne.aegis || {}
       [200, {
@@ -750,6 +754,24 @@ class StandaloneDaemon
     end
   end
 
+  # Answer a pending `ask_user` consultation raised mid-turn. The turn is paused
+  # inside `await_user_response`; pushing the response unblocks it immediately.
+  def http_respond(body)
+    payload = begin
+      JSON.parse(body.to_s, symbolize_names: true)
+    rescue StandardError
+      {}
+    end
+    uuid = payload[:uuid].to_s
+    response = payload[:response].to_s
+    if uuid.empty? || response.empty?
+      [422, { error: 'uuid and response are required' }.to_json]
+    else
+      HorologiumAeternum.receive_user_response(uuid, response)
+      [200, { ok: true }.to_json]
+    end
+  end
+
   # Advertise the Mac on the local network via Bonjour (`dns-sd`), so the iOS
   # companion browses `_aethercodex._tcp` and finds us without an IP address.
   def start_bonjour(port)
@@ -797,6 +819,13 @@ class StandaloneDaemon
     messages = memory
     if messages.empty? && !prompt.empty?
       messages = [{ 'role' => 'user', 'content' => prompt }]
+    end
+
+    # Broadcast the iOS prompt into the Mac panel's live stream so the companion's
+    # words appear in *both* windows. Without this the panel only saw the tool
+    # telemetry that followed — the prompt itself stayed invisible there.
+    unless prompt.empty?
+      HorologiumAeternum.send_status('user_message', { role: 'user', content: prompt })
     end
 
     args = { 'messages' => messages, 'history' => false, 'record' => false }

@@ -108,6 +108,10 @@ module HorologiumAeternum
     # Bridge to the terminal stream when a CLI chamber is driving the turn, so
     # the interactive REPL sees the same telemetry the web UI receives.
     Thread.current[:aether_terminal_stream]&.send_status(type, data, uuid:)
+    # The æther's consultation (ask_user) must also be *pollable*: the iOS
+    # companion cannot read the live stream, so it polls this registry over HTTP
+    # and answers via /aether/respond. One question, many ears.
+    register_pending_question(uuid, data) if type.to_s == 'ask_user'
     send 'status', type, data, uuid:
   end
 
@@ -1170,6 +1174,34 @@ module HorologiumAeternum
   @user_responses = {}
   @user_response_mutex = Mutex.new
 
+  # Pending ask_user consultations, keyed by the same uuid the response round-trip
+  # uses. The Mac panel reads the live stream; the iOS companion polls this over
+  # HTTP (`GET /aether/pending`) and answers via `POST /aether/respond`.
+  @pending_questions = {}
+  @pending_mutex = Mutex.new
+
+  def self.pending_questions
+    @pending_mutex.synchronize { @pending_questions.values.map(&:dup) }
+  end
+
+  def self.register_pending_question(uuid, data)
+    return if uuid.nil? || uuid.to_s.empty?
+
+    @pending_mutex.synchronize do
+      @pending_questions[uuid.to_s] = {
+        uuid:    uuid.to_s,
+        type:    (data[:type] || data['type'] || 'prompt').to_s,
+        message: (data[:message] || data['message']).to_s,
+        options: Array(data[:options] || data['options'])
+      }
+    end
+  end
+
+  def self.clear_pending_question(uuid)
+    return if uuid.nil?
+    @pending_mutex.synchronize { @pending_questions.delete(uuid.to_s) }
+  end
+
   def self.await_user_response(uuid, timeout: 300)
     queue = Queue.new
     @user_response_mutex.synchronize { @user_responses[uuid] = queue }
@@ -1184,6 +1216,7 @@ module HorologiumAeternum
       { error: 'User response timed out', timed_out: true }
     ensure
       @user_response_mutex.synchronize { @user_responses.delete(uuid) }
+      clear_pending_question(uuid)
     end
   end
 
