@@ -8,6 +8,8 @@ require_relative 'terminal_stream'
 require_relative 'terminal_markdown'
 require_relative 'theme'
 require_relative 'instrumentum_renderer'
+require_relative 'token_ledger'
+require_relative 'ui'
 begin
   require 'tty-reader'
   HAVE_TTY_READER = true
@@ -140,6 +142,7 @@ class ÆtherChamber
     @veiled = []
     @render_markdown = true
     @highlight = true
+    @mouse = false
     @pending_suggestions = []
     @focusable = []
     @focus_keys = {}
@@ -158,7 +161,9 @@ class ÆtherChamber
 
   def run
     force_utf8_console
+    TokenLedger.reset_session!
     banner
+    puts TokenLedger.opening_line
     Readline.completion_proc = ->(s) { slash_commands.grep(/\A#{Regexp.escape(s)}/) } if HAVE_READLINE
 
     loop do
@@ -202,6 +207,7 @@ class ÆtherChamber
                   CompanionPrograms.build_multi_prompt(glyphs)
                 end
     end
+    flash_aegis_intent(input)
     context = Coniunctio.build(history: @history, temperature: current_temperature)
 
     # The agent's turn runs in a background thread -- the groundwork for future
@@ -220,6 +226,7 @@ class ÆtherChamber
     emit_answer(answer)
     @history << { prompt: input, answer: answer, tool_calls: tool_results, created_at: Time.now }
     inscribe_chronicle(input, answer, tool_results, started)
+    flash_aegis_sediment(input, answer)
     Readline::HISTORY.push(input) if HAVE_READLINE
     emit_companion_interactions(tool_results)
     text_suggestions.each { |s| enqueue_text_suggestion(s) }
@@ -244,6 +251,26 @@ class ÆtherChamber
                        tool_calls: tool_results,
                        tool_call_count: Array(tool_results).size,
                        execution_time: (Time.now - started).round(3))
+  end
+
+  # Flash-Aegis: distill the prompt into a transient pre-turn intent (off unless
+  # `flash: { intent: true }`). Best-effort — never breaks the dialogue.
+  def flash_aegis_intent(input)
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:flash_aegis_intent)
+
+    Mnemosyne.flash_aegis_intent(input)
+  rescue StandardError
+    nil
+  end
+
+  # Flash-Aegis: digest the completed turn into a new course (on by default;
+  # `flash: { sediment: false }` disables). Best-effort.
+  def flash_aegis_sediment(input, answer)
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:flash_aegis_sediment)
+
+    Mnemosyne.flash_aegis_sediment(input, answer)
+  rescue StandardError
+    nil
   end
 
   # Run one Oracle.divination turn in the current thread, capturing the
@@ -653,20 +680,29 @@ class ÆtherChamber
   # Tab/Shift-Tab scrolls through.
   def focus_list_rows(selection, width)
     positions = tab_positions
-    return [] if positions.empty?
+    return [] if selection.nil? || positions.empty?
 
-    total = positions.size
-    half = FOCUS_LIST_WINDOW / 2
-    start = [selection - half, 0].max
-    stop = [start + FOCUS_LIST_WINDOW - 1, total - 1].min
-    start = [stop - FOCUS_LIST_WINDOW + 1, 0].max
-
-    rows = ["\e[2m- Fokus #{selection + 1}/#{total} -\e[0m"]
+    start, stop = focus_window(selection)
+    rows = ["\e[2m- Fokus #{selection + 1}/#{positions.size} -\e[0m"]
     (start..stop).each do |i|
       label = truncate_visible(tab_label_for(positions[i]), width)
       rows << truncate_visible(i == selection ? "\e[1;35m> #{label}\e[0m" : "  #{label}", width)
     end
     rows
+  end
+
+  # The [start, stop] index window (inclusive) focus_list_rows renders around
+  # `selection`. Shared by the click resolver so it can map a clicked row back
+  # to the focusable index it represents.
+  def focus_window(selection)
+    total = tab_positions.size
+    return [nil, nil] if selection.nil? || total.zero?
+
+    half = FOCUS_LIST_WINDOW / 2
+    start = [selection - half, 0].max
+    stop = [start + FOCUS_LIST_WINDOW - 1, total - 1].min
+    start = [stop - FOCUS_LIST_WINDOW + 1, 0].max
+    [start, stop]
   end
 
   # The focused instrumentum's body, capped so the prompt and the AI content
@@ -736,7 +772,13 @@ class ÆtherChamber
   end
 
   def morph(glyph)
-    resolved = glyph.to_s.strip.empty? ? select_persona : resolve_persona(glyph)
+    if glyph.to_s.strip.empty?
+      selected = select_personae
+      return false unless selected
+      return apply_veil_set(selected)
+    end
+
+    resolved = resolve_persona(glyph)
     return say_missing_persona(glyph) unless resolved
 
     if @veiled.include?(resolved)
@@ -794,24 +836,67 @@ class ÆtherChamber
     PERSONA_ALIASES[normalized] || PERSONA_ALIASES[key]
   end
 
-  # Interactive companion selection -- tty-prompt when available, else a
-  # numbered list. Both resolve to the same glyph.
-  def select_persona
+  # Interactive companion selection -- checkbox-style multi-select. With
+  # TTY::Prompt the practitioner checks/unchecks companions (space toggles,
+  # enter commits); the current veil is pre-checked. Without it, a numbered
+  # toggle loop reconciles the same way. Returns the final glyph set.
+  def select_personae
     if HAVE_TTY
+      order = COMPANION_PERSONALITIES.keys
       prompt = TTY::Prompt.new(interrupt: :exit)
-      prompt.select('Wen rufst du in den Kristall?', per_page: 12) do |menu|
+      result = prompt.multi_select('Welche Begleiter? (Leertaste = an/ab, Enter = fertig)', per_page: 12) do |menu|
         COMPANION_PERSONALITIES.each do |glyph, p|
           menu.choice "#{p[:glyph]} #{p[:name]}", glyph
         end
+        defaults = @veiled.map { |g| order.index(g) + 1 }.compact
+        menu.default(*defaults) unless defaults.empty?
       end
+      Array(result).compact.map(&:to_sym)
     else
-      COMPANION_PERSONALITIES.each_with_index do |(glyph, p), i|
-        puts "  #{i + 1}. #{p[:glyph]} #{p[:name]} (#{glyph})"
+      set = @veiled.dup
+      loop do
+        COMPANION_PERSONALITIES.each_with_index do |(glyph, p), i|
+          mark = set.include?(glyph) ? '[x]' : '[ ]'
+          puts "  #{format('%2d', i + 1)}. #{mark} #{p[:glyph]} #{p[:name]}"
+        end
+        print 'Nummern umschalten, Leer = fertig: '
+        input = $stdin.gets.to_s.strip
+        break if input.empty?
+        input.split(/[\s,]+/).each do |tok|
+          glyph = COMPANION_PERSONALITIES.keys[tok.to_i - 1]
+          next unless glyph
+          set.include?(glyph) ? set.delete(glyph) : set << glyph
+        end
       end
-      print 'Wähle eine Nummer: '
-      idx = $stdin.gets.to_i - 1
-      COMPANION_PERSONALITIES.keys[idx]
+      set
     end
+  end
+
+  # Reconcile the veil to an exact glyph set (checkbox panel submit): unveil
+  # the deselected, veil the newly selected, keep the rest untouched.
+  def apply_veil_set(selected)
+    selected = Array(selected).compact.map(&:to_sym).uniq
+    added   = selected - @veiled
+    removed = @veiled - selected
+
+    removed.each { |g| CompanionPrograms.unveil(g) }
+    added.each   { |g| CompanionPrograms.veil([g], COMPANION_PERSONALITIES[g]&.dig(:name)) }
+    @veiled = selected
+
+    if @veiled.empty?
+      puts 'Der Schleier fällt -- das Orakel spricht wieder als ÆtherCodex.'
+    else
+      added.each do |g|
+        p = COMPANION_PERSONALITIES[g]
+        puts "\e[1m#{p[:glyph]} #{p[:name]}\e[0m ist in den Kristall getreten." if p
+      end
+      removed.each do |g|
+        p = COMPANION_PERSONALITIES[g]
+        puts "#{p[:glyph]} #{p[:name]} ist aus dem Kristall getreten." if p
+      end
+      puts "   Aktiv: #{active_glyphs_display}"
+    end
+    true
   end
 
   def say_missing_persona(input)
@@ -1092,12 +1177,14 @@ class ÆtherChamber
     cursor = 0
     selection = nil
     hist = nil
+    draft = nil
     mention = nil
+    slash = nil
 
     use_win = win_console_available?
     if use_win
       begin
-        ÆtherWinConsole.begin_raw_input
+        ÆtherWinConsole.begin_raw_input(mouse: @mouse)
       rescue StandardError
         ÆtherWinConsole.disable!
         use_win = false # console mode probing failed -- fall back to TTY::Reader
@@ -1107,18 +1194,44 @@ class ÆtherChamber
 
     @editor_win = use_win
     bracketed = false
-    unless use_win
+    @anchor_row = nil
+    @click_regions = []
+    if use_win
+      @anchor_row = anchor_cursor_row
+    else
       enable_bracketed_paste
       bracketed = true
+      # Anchor before mouse tracking is on so a stray motion event cannot
+      # interleave with the DSR response read.
+      @anchor_row = anchor_cursor_row
+      enable_mouse if @mouse
     end
     begin
       loop do
-        redraw_inline(buffer, cursor, selection, mention)
+        redraw_inline(buffer, cursor, selection, mention, slash)
         input = next_editor_input
         return nil if input.nil?
 
+        if input[:kind] == :mouse
+          mention = nil if mention
+          slash = nil if slash
+          result = apply_mouse_input(input, buffer, cursor, selection)
+          if result[0] == :activate
+            clear_inline_preview
+            print "\n"
+            return result[1]
+          end
+          selection, cursor = result
+          next
+        end
+
         if mention
           mention, buffer, cursor = mention_step(mention, input, buffer, cursor)
+          next
+        end
+
+        if slash
+          slash, buffer, cursor = slash_step(slash, input, buffer, cursor)
           next
         end
 
@@ -1145,6 +1258,13 @@ class ÆtherChamber
             buffer.insert(cursor, '@')
             cursor += 1
             mention = { start: cursor - 1, index: 0, query: '' }
+            next
+          end
+
+          if text == '/'
+            buffer.insert(cursor, '/')
+            cursor += 1
+            slash = { start: 0, index: 0, query: '' } if slash_candidate?(buffer, cursor)
             next
           end
 
@@ -1243,6 +1363,13 @@ class ÆtherChamber
               next
             end
 
+            if ch == '/'
+              buffer.insert(cursor, '/')
+              cursor += 1
+              slash = { start: 0, index: 0, query: '' } if slash_candidate?(buffer, cursor)
+              next
+            end
+
             buffer.insert(cursor, ch)
             cursor += ch.length
           when :up, :ctrl_up
@@ -1250,7 +1377,7 @@ class ÆtherChamber
               @expanded_focus[selection] = true
             else
               selection = nil
-              buffer, hist = recall_history(buffer, hist, -1)
+              buffer, hist, draft = recall_history(buffer, hist, -1, draft)
               cursor = buffer.length
             end
           when :down, :ctrl_down
@@ -1258,7 +1385,7 @@ class ÆtherChamber
               @expanded_focus[selection] = false
             else
               selection = nil
-              buffer, hist = recall_history(buffer, hist, +1)
+              buffer, hist, draft = recall_history(buffer, hist, +1, draft)
               cursor = buffer.length
             end
           when :page_up, :page_down, :ignore
@@ -1277,9 +1404,12 @@ class ÆtherChamber
       $stderr.puts "!! native console reader unavailable (#{e.message}) -- falling back to line input" if $DEBUG
       return read_prompt_plain
     ensure
+      disable_mouse if bracketed
       disable_bracketed_paste if bracketed
       ÆtherWinConsole.end_raw_input if use_win
       @editor_win = nil
+      @anchor_row = nil
+      @click_regions = []
     end
   end
 
@@ -1298,6 +1428,11 @@ class ÆtherChamber
     return nil if char.nil?
 
     char = complete_extended_key(char)
+    char = coalesce_utf8(char)
+    if char.start_with?("\e[<")
+      parsed = parse_sgr_mouse(char)
+      return parsed if parsed
+    end
     return tty_read_paste if char.start_with?("\e[200~")
 
     # Shift+Enter (and a raw LF, e.g. a paste that arrived without bracketed
@@ -1306,6 +1441,9 @@ class ÆtherChamber
     return { kind: :key, action: :newline } if char == "\n" || char == "\e[13;2u" || char == "\e[13;2~"
 
     action = @tty_keymap[char]
+    # tty-reader's win_keys lists the Delete key's extended sequence ([224,83])
+    # twice; the later :clear entry wins, so the chamber never sees :delete.
+    action = :delete if action == :clear && char == [224, 83].pack('U*')
     action = tty_decode_action(char) if action.nil?
     action = :back_tab if action == :shift_tab
 
@@ -1332,13 +1470,50 @@ class ÆtherChamber
   # trailing scan code — but `_kbhit` is already 0 after `_getch` consumed the
   # KEY_EVENT, so `read_keypress` returns a lone "\xE0" / "\x00". A blocking
   # `_getch` still yields the cached scan code, so we complete the pair here.
+  # tty-reader surfaces those bytes as codepoints (U+00E0 / U+0000), not raw
+  # bytes, so the match must compare ordinals — the raw-byte comparison this
+  # used to make never fired and the scan code was silently lost.
   def complete_extended_key(char)
-    return char unless WINDOWS && HAVE_WIN_CONSOLE && (char == "\xE0" || char == "\x00")
+    return char unless WINDOWS && HAVE_WIN_CONSOLE
+
+    cp = char && char.length == 1 ? char.ord : nil
+    return char unless cp == 0xE0 || cp == 0x00
 
     second = ÆtherWinConsole.crt_getch
     return char if second.nil?
 
-    char + [second].pack('C')
+    char + [second].pack('U')
+  end
+
+  # Reassemble a multi-byte UTF-8 character that msvcrt `_getch` delivered one
+  # byte per read_keypress — each byte surfaces as its own Latin-1 codepoint
+  # (0x80..0xFF). A lead byte starts a sequence; the continuation bytes are
+  # consumed here so the prompt editor receives one correct character instead
+  # of a mojibake run like "Ã¤". 0xE0 is skipped: it doubles as the Windows
+  # extended-key prefix, so its follower is a scan code, not a UTF-8 byte.
+  def coalesce_utf8(ch)
+    return ch if ch.nil? || ch.length != 1
+
+    lead = ch.ord
+    return ch if lead < 0x80
+
+    nbytes =
+      if lead >= 0xF0 then 4
+      elsif lead >= 0xE0 then 3
+      elsif lead >= 0xC2 then 2
+      else return ch
+      end
+    return ch if lead == 0xE0
+
+    bytes = [lead]
+    while bytes.size < nbytes
+      nxt = @tty_reader.read_keypress
+      break if nxt.nil? || nxt.length != 1
+      bytes << nxt.ord
+    end
+
+    out = bytes.pack('C*').force_encoding(Encoding::UTF_8)
+    out.valid_encoding? ? out : ch
   end
 
   def tty_read_paste
@@ -1371,15 +1546,19 @@ class ÆtherChamber
     end
   end
 
-  def redraw_inline(buffer, cursor, selection, mention = nil)
+  def redraw_inline(buffer, cursor, selection, mention = nil, slash = nil)
     width = terminal_width
+    focus_rows = []
+    preview_rows = []
     overlay_rows = if mention
                      mention_overlay_rows(mention, width)
+                   elsif slash
+                     slash_overlay_rows(slash, width)
                    elsif selection
                      el = tab_positions[selection]
-                     rows = focus_list_rows(selection, width)
-                     rows.concat(instrumentum_preview_rows(el, selection, width)) if el[:type] == :instrumentum
-                     rows
+                     focus_rows = focus_list_rows(selection, width)
+                     preview_rows = instrumentum_preview_rows(el, selection, width) if el[:type] == :instrumentum
+                     focus_rows + preview_rows
                    else
                      []
                    end
@@ -1397,6 +1576,17 @@ class ÆtherChamber
     end
 
     redraw_block(overlay_rows + prompt_rows, block_row, block_col)
+
+    @click_overlay_rows = overlay_rows.size
+    @click_regions = (mention || slash) ? [] : build_click_regions(focus_rows, preview_rows, prompt_rows, selection)
+
+    # On Windows the cursor position is a cheap synchronous call, so re-anchor
+    # every frame — a growing multi-line block that scrolls the buffer keeps the
+    # click map accurate. Unix anchors once at prompt start instead.
+    if @editor_win && (pos = ÆtherWinConsole.cursor_position)
+      @anchor_row = pos[1] - block_row
+    end
+
     $stdout.flush
   end
 
@@ -1554,6 +1744,205 @@ class ÆtherChamber
     @rendered_lines = cur
   end
 
+  # --------------------------------------------------------------- mouse --
+  # Terminal mouse tracking. The prompt editor resolves clicks against the
+  # screen regions it just drew, so the practitioner may click a focusable to
+  # select it, click an instrumentum to expand it, click the prompt to move the
+  # cursor, or scroll to cycle the Fokus-Ring. Windows drives this natively
+  # (ENABLE_MOUSE_INPUT + MOUSE_EVENT records); Unix uses xterm SGR mode.
+
+  def enable_mouse
+    print "\e[?1000h\e[?1006h"
+    $stdout.flush
+  end
+
+  def disable_mouse
+    print "\e[?1006l\e[?1000l"
+    $stdout.flush
+  end
+
+  # Absolute screen row (0-based) of the top of the prompt block. Windows reads
+  # it straight from the console buffer; Unix asks the terminal where its cursor
+  # sits (DSR \e[6n) while the cursor is still on the block's first line.
+  def anchor_cursor_row
+    if @editor_win
+      pos = ÆtherWinConsole.cursor_position
+      pos && pos[1]
+    else
+      pos = query_cursor_position
+      pos && pos[0] - 1
+    end
+  end
+
+  def query_cursor_position
+    require 'io/console'
+    return nil unless $stdin.tty?
+
+    print "\e[6n"
+    $stdout.flush
+    resp = +''
+    $stdin.raw do
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.25
+      loop do
+        break if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        next unless IO.select([$stdin], nil, nil, 0.1)
+        ch = $stdin.read(1)
+        break if ch.nil?
+        resp << ch
+        break if ch == 'R'
+      end
+    end
+    m = resp.match(/\e\[(\d+);(\d+)R/)
+    m ? [m[1].to_i, m[2].to_i] : nil
+  rescue StandardError
+    nil
+  end
+
+  # Decode an xterm SGR mouse sequence (e.g. "\e[<0;12;34M") into the unified
+  # { kind: :mouse, ... } shape, with x/y normalised to 0-based cells.
+  def parse_sgr_mouse(char)
+    m = char.match(/\A\e\[<(\d+);(\d+);(\d+)([Mm])\z/)
+    return nil unless m
+
+    code = m[1].to_i
+    x = m[2].to_i - 1
+    y = m[3].to_i - 1
+
+    case
+    when code == 64 then { kind: :mouse, action: :scroll_up, button: nil, x: x, y: y }
+    when code == 65 then { kind: :mouse, action: :scroll_down, button: nil, x: x, y: y }
+    when (code & 32) != 0 then { kind: :mouse, action: :motion, button: sgr_button(code), x: x, y: y }
+    when m[4] == 'm' then { kind: :mouse, action: :release, button: nil, x: x, y: y }
+    else { kind: :mouse, action: :click, button: sgr_button(code), x: x, y: y }
+    end
+  end
+
+  def sgr_button(code)
+    case code & 0x3
+    when 0 then :left
+    when 1 then :middle
+    when 2 then :right
+    end
+  end
+
+  # Map each rendered block line to what it is: a focus-list row, an
+  # instrumentum preview row, or a prompt-text row. The block-local row equals
+  # the region's index in the returned array.
+  def build_click_regions(focus_rows, preview_rows, prompt_rows, selection)
+    regions = []
+    start, = focus_window(selection)
+    focus_rows.each_with_index do |_, i|
+      regions << { type: :focus, index: (i.zero? || start.nil?) ? nil : start + i - 1 }
+    end
+    preview_rows.each { regions << { type: :instrumentum, index: selection } }
+    prompt_rows.each do
+      regions << (selection ? { type: :activate, index: selection } : { type: :prompt, index: nil })
+    end
+    regions
+  end
+
+  # Fold a unified mouse input into a new [selection, cursor] pair (unchanged
+  # where the input is irrelevant). Side effects (expand/collapse) happen here.
+  def apply_mouse_input(input, buffer, cursor, selection)
+    case input[:action]
+    when :scroll_up then [next_tab(selection, 1), cursor]
+    when :scroll_down then [next_tab(selection, -1), cursor]
+    when :click then resolve_mouse_click(input, buffer, cursor, selection) || [selection, cursor]
+    else [selection, cursor]
+    end
+  end
+
+  def resolve_mouse_click(input, buffer, cursor, selection)
+    return nil unless @click_regions && !@click_regions.empty? && @anchor_row
+
+    block_row = input[:y] - @anchor_row
+    return nil if block_row.negative? || block_row >= @click_regions.size
+
+    region = @click_regions[block_row]
+    return nil unless region
+
+    case region[:type]
+    when :focus
+      return [nil, cursor] if input[:button] == :right
+      return [region[:index], cursor] if region[:index]
+    when :instrumentum
+      if input[:button] == :left && region[:index]
+        @expanded_focus[region[:index]] = !@expanded_focus[region[:index]]
+      end
+    when :activate
+      return [:activate, tab_positions[region[:index]]] if input[:button] == :left && region[:index]
+    when :prompt
+      if input[:button] == :left
+        offset = prompt_offset_at(buffer, terminal_width, block_row - @click_overlay_rows, input[:x])
+        return [nil, offset] if offset
+      end
+    end
+    nil
+  end
+
+  # Inverse of render_prompt_geometry: given a prompt-relative row and screen
+  # column, return the raw buffer offset the cursor should move to.
+  def prompt_offset_at(buffer, width, row, col)
+    mw = display_width(prompt_marker)
+    content_width = [width - mw, 1].max
+    content_col = col - mw
+    content_col = 0 if content_col.negative?
+
+    global_row = 0
+    raw_offset = 0
+
+    buffer.split("\n", -1).each do |raw_line|
+      line_start = raw_offset
+      tokens = tokenize_inline(raw_line)
+
+      sub_rows = []
+      cur = { raw_end: line_start, tokens: [] }
+      col_pos = 0
+      tok_raw = 0
+      tokens.each do |t|
+        pw = display_width(t[:plain])
+        if col_pos + pw > content_width && col_pos.positive?
+          sub_rows << cur
+          cur = { raw_end: line_start + tok_raw + t[:prefix], tokens: [] }
+          col_pos = 0
+        end
+        cur[:tokens] << [t, tok_raw, col_pos]
+        cur[:raw_end] = line_start + tok_raw + t[:raw].length
+        col_pos += pw
+        tok_raw += t[:raw].length
+      end
+      sub_rows << cur
+
+      if (global_row...global_row + sub_rows.size).cover?(row)
+        sr = sub_rows[row - global_row]
+        sr[:tokens].each do |t, tok_raw, tok_col|
+          pw = display_width(t[:plain])
+          next unless content_col < tok_col + pw
+          local = content_col - tok_col
+          return line_start + tok_raw + t[:prefix] + plain_index_at(t[:plain], [local, 0].max)
+        end
+        return sr[:raw_end]
+      end
+
+      global_row += sub_rows.size
+      raw_offset = line_start + raw_line.length + 1
+      break if global_row > row
+    end
+
+    nil
+  end
+
+  def plain_index_at(plain, col)
+    idx = 0
+    seen = 0
+    plain.each_char do |ch|
+      return idx if seen >= col
+      seen += char_width(ch)
+      idx += 1
+    end
+    idx
+  end
+
   # Move the cursor to the fresh line just below the prompt block and leave it
   # clean, so the answer stream starts there. The entered text stays on screen.
   def commit_prompt
@@ -1608,8 +1997,8 @@ class ÆtherChamber
 
   # Step through the line history. Multi-line entries are recalled verbatim --
   # the prompt editor now supports literal newlines, so no re-folding is needed.
-  def recall_history(buffer, hist, delta)
-    history_step(buffer, hist, delta)
+  def recall_history(buffer, hist, delta, draft = nil)
+    history_step(buffer, hist, delta, draft)
   end
 
   # Expand `[PASTED_CONTENT_n]` back into the text it stood in for. Unknown
@@ -1725,6 +2114,109 @@ class ÆtherChamber
     [nil, buffer, mention[:start] + replacement.length]
   end
 
+  # ------------------------------------------------- slash-command picker --
+  # Mirrors the @-mention picker but completes the slash command at the very
+  # start of the prompt. Enter mints the highlighted command (the cursor lands
+  # ready for its argument), Esc cancels, and typing a space closes the picker
+  # so the command's argument can be typed freely.
+
+  def slash_sources
+    SLASH_HELP.map do |cmd, desc|
+      { command: cmd, desc: desc, chip: cmd,
+        label: "#{cmd}  #{desc}", filter: "#{cmd} #{desc}" }
+    end
+  end
+
+  def slash_filter(query)
+    q = query.to_s.downcase.strip
+    return slash_sources if q.empty?
+
+    slash_sources.select { |s| s[:filter].to_s.downcase.include?(q) }
+  end
+
+  def slash_overlay_rows(slash, width)
+    results = slash_filter(slash[:query])
+    total = results.size
+    idx = total.zero? ? 0 : [[slash[:index], total - 1].min, 0].max
+    half = FOCUS_LIST_WINDOW / 2
+    start = [idx - half, 0].max
+    stop  = [start + FOCUS_LIST_WINDOW, total].min
+    start = [stop - FOCUS_LIST_WINDOW, 0].max
+    head = total.zero? ? "\e[2m  - kein Befehl passt -\e[0m" : "\e[2m  - Befehle #{idx + 1}/#{total} -\e[0m"
+    rows = [head]
+    results[start...stop].each_with_index do |el, i|
+      at = start + i
+      marker = at == idx ? '>' : ' '
+      label = "#{el[:command]}  \e[2m#{el[:desc]}\e[0m"
+      rows << "  #{marker} #{truncate_visible(label, width - 6)}"
+    end
+    rows << "\e[2m  - Enter übernimmt, Tab blättert, Esc verwirft, Leertaste = Argument -\e[0m"
+    rows
+  end
+
+  def slash_step(slash, input, buffer, cursor)
+    slash[:query] = buffer[(slash[:start] + 1)..cursor].to_s
+    results = slash_filter(slash[:query])
+
+    case input[:kind]
+    when :key
+      case input[:action]
+      when :enter, :return
+        return finish_slash(slash, results[slash[:index]], buffer, cursor)
+      when :escape
+        return [nil, buffer, cursor]
+      when :ctrl_c
+        buffer.slice!(slash[:start]..)
+        return [nil, buffer, slash[:start]]
+      when :up, :back_tab
+        slash[:index] = results.empty? ? 0 : (slash[:index] - 1) % results.size
+      when :down, :tab
+        slash[:index] = results.empty? ? 0 : (slash[:index] + 1) % results.size
+      when :backspace
+        if cursor > slash[:start] + 1
+          buffer.slice!(cursor - 1)
+          cursor -= 1
+        else
+          return [nil, buffer, cursor]
+        end
+      when :literal
+        ch = input[:char]
+        buffer.insert(cursor, ch)
+        cursor += ch.length
+        return [nil, buffer, cursor] if ch.match?(/\s/)
+        slash[:index] = 0
+      end
+    when :literal
+      text = input[:text].to_s
+      buffer.insert(cursor, text)
+      cursor += text.length
+      return [nil, buffer, cursor] if text.match?(/\s/)
+      slash[:index] = 0
+    when :paste
+      text = input[:text].to_s
+      buffer.insert(cursor, text)
+      cursor += text.length
+      return [nil, buffer, cursor] if text.match?(/\s/)
+      slash[:index] = 0
+    end
+    [slash, buffer, cursor]
+  end
+
+  def finish_slash(slash, el, buffer, cursor)
+    return [nil, buffer, cursor] if el.nil?
+
+    replacement = el[:chip].to_s
+    buffer.slice!(slash[:start]...cursor)
+    buffer.insert(slash[:start], replacement)
+    [nil, buffer, slash[:start] + replacement.length]
+  end
+
+  # True when the `/` just typed sits at the very start of the prompt and the
+  # text up to the cursor is still a bare command token (`/` + non-space run).
+  def slash_candidate?(buffer, cursor)
+    buffer[0...cursor].match?(/\A\/[^\s]*\z/)
+  end
+
   # Pressing `@` while a Fokus-Ring element is selected mints it directly: a
   # file becomes @file:path, a suggestion becomes its editable prompt text.
   def mint_focusable(el, buffer, cursor)
@@ -1764,16 +2256,26 @@ class ÆtherChamber
     [text, companions.uniq]
   end
 
-  def history_step(buffer, hist, delta)
+  def history_step(buffer, hist, delta, draft = nil)
     items = @line_history
-    return [buffer, hist] if items.empty?
+    return [buffer, hist, draft] if items.empty?
 
-    idx = hist.nil? ? (delta.negative? ? items.size - 1 : nil) : hist + delta
-    return [buffer, hist] if idx.nil?
-    return [+'', nil] if idx >= items.size
-    return [items[0].dup, 0] if idx.negative?
+    if hist.nil?
+      return [buffer, hist, draft] unless delta.negative?
 
-    [items[idx].dup, idx]
+      # First upward navigation: save the in-progress text so it can be
+      # restored when the user steps back down past the newest entry.
+      draft = buffer.dup
+      idx = items.size - 1
+    else
+      idx = hist + delta
+    end
+
+    # Stepped past the newest entry -- bring back the draft (empty if none).
+    return [(draft || +'').dup, nil, draft] if idx >= items.size
+    return [items[0].dup, 0, draft] if idx.negative?
+
+    [items[idx].dup, idx, draft]
   end
 
   # ------------------------------------------------------------ prompt edit --
@@ -1899,9 +2401,29 @@ class ÆtherChamber
     cursor
   end
 
+  SLASH_HELP = [
+    ['/help',       'Zeige diese Hilfe'],
+    ['/morph',      'Begleiter-Checkboxen (an/ab, Leertaste + Enter)'],
+    ['/unmorph',    'Begleiter entfernen'],
+    ['/personae',   'Alle zwölf Begleiter auflisten'],
+    ['/file',       'Datei an die nächste Frage heften'],
+    ['/clear',      'Gesprächsverlauf löschen'],
+    ['/history',    'Verlauf zeigen (Sitzung + Chronik)'],
+    ['/config',     'Konfiguration zeigen'],
+    ['/context',    'Abgeleiteten Kontext zeigen'],
+    ['/tools',      'Werkzeug-Browser (Tab = Doku) · /tools <name> = Detail'],
+    ['/tool',       'Werkzeug-Doku direkt (Alias)'],
+    ['/markdown',   'Markdown-Rendering an/aus'],
+    ['/highlight',  'Syntax-Highlighting an/aus'],
+    ['/theme',      'Highlight-Theme wählen'],
+    ['/cost',       'Token-Kosten zeigen'],
+    ['/mouse',      'Maus-Klicksteuerung an/aus (Aus = native Textauswahl)'],
+    ['/exit',       'Die Kammer verlassen']
+  ].freeze
+
   def slash_commands
     %w[/help /morph /unmorph /personae /file /clear /history /config /context /tools
-       /markdown /highlight /theme /exit]
+       /tool /markdown /highlight /theme /cost /mouse /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -1920,10 +2442,13 @@ class ÆtherChamber
     when '/history'                 then show_history(arg)
     when '/config'                  then config_summary
     when '/context'                 then context_summary
-    when '/tools'                   then list_tools
+    when '/tools'                   then list_tools(arg)
+    when '/tool'                    then list_tools(arg)
     when '/markdown'                then toggle_markdown
     when '/highlight'               then toggle_highlight
+    when '/mouse'                   then toggle_mouse
     when '/theme'                   then set_theme(arg)
+    when '/cost'                    then cost_summary
     when '/exit', '/quit' then @quit = true
     else
       puts "Unbekannter Befehl: #{cmd}"
@@ -1931,41 +2456,45 @@ class ÆtherChamber
   end
 
   def show_help
-    puts <<~HELP
-
-      \e[1mDialog-Kammer -- Befehle\e[0m
-        /morph <begleiter>   Begleiter hinzufügen (kumulativ -- mehrere zugleich)
-        /unmorph [begleiter] Einen Begleiter entfernen (ohne Argument: alle)
-        /personae            Alle zwölf Begleiter auflisten
-        /file <pfad>         Datei an die nächste Frage heften
-        @begleiter           Stimme für genau eine Runde beschwören (z. B. @owl, @kitsune)
-        @file:<pfad>         Datei an die nächste Frage heften
-        @                    Sigillen-Picker öffnen: Enter münzt, Esc verwirft
-        Tab / Shift-Tab      Fokus-Positionen durchlaufen (Dateien - Vorschläge - Instrumenta), Enter öffnet
-        /clear              Gesprächsverlauf löschen
-        /history [n|flags]  Verlauf zeigen (Sitzung + Chronik; --session/--chronicle)
-        /config             Konfiguration zeigen
-        /context            Abgeleiteten Kontext zeigen
-        /tools              Verfügbare Werkzeuge listen
-        /markdown           Markdown-Rendering an/aus
-        /highlight          Syntax-Highlighting an/aus
-        /theme <name>       Highlight-Theme wählen (argonaut - aethernaut - aethernight - aetherlight)
-        /exit, exit         Die Kammer verlassen
-
-      \e[2mBegleiter: owl kitsune phoenix ouroboros bastet fenrir undine schwan
-                 drache corax jindujun solomon\e[0m
-    HELP
+    width = [terminal_width, 96].min
+    cmds = [
+      ['/morph',             'Checkboxen-Panel: Begleiter an-/abwählen'],
+      ['/morph <begleiter>', 'Einzelnen Begleiter hinzufügen'],
+      ['/unmorph [b]',       'Begleiter entfernen (ohne Argument: alle)'],
+      ['/personae',          'Alle zwölf Begleiter auflisten'],
+      ['/file <pfad>',       'Datei an die nächste Frage heften'],
+      ['@begleiter',         'Stimme für genau eine Runde beschwören'],
+      ['@file:<pfad>',       'Datei an die nächste Frage heften'],
+      ['@',                  'Sigillen-Picker öffnen'],
+      ['/',                  'Befehls-Picker öffnen'],
+      ['Tab / Shift-Tab',    'Fokus-Positionen durchlaufen'],
+      ['/clear',             'Gesprächsverlauf löschen'],
+      ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
+      ['/config',            'Konfiguration zeigen'],
+      ['/context',           'Abgeleiteten Kontext zeigen'],
+      ['/tools',             'Verfügbare Werkzeuge listen'],
+      ['/markdown',          'Markdown-Rendering an/aus'],
+      ['/highlight',         'Syntax-Highlighting an/aus'],
+      ['/mouse',             'Maus-Klicksteuerung an/aus'],
+      ['/theme <name>',      'Highlight-Theme wählen'],
+      ['/cost',              'Token-Kosten der Sitzung zeigen'],
+      ['/exit, exit',        'Die Kammer verlassen']
+    ]
+    puts
+    puts AthanorUI.box('Dialog-Kammer · Befehle', [], width: width, palette: @palette)
+    puts AthanorUI.table(['Befehl', 'Wirkung'], cmds, width: width, palette: @palette)
+    puts @palette.dim('  Begleiter: owl kitsune phoenix ouroboros bastet fenrir undine schwan drache corax jindujun solomon')
   end
 
   def list_personae
-    puts "\e[1mDie zwölf Begleiter\e[0m"
-    COMPANION_PERSONALITIES.each do |glyph, p|
-      mark = @veiled.include?(glyph) ? ' *' : '  '
+    rows = COMPANION_PERSONALITIES.map do |glyph, p|
       temper = CompanionPrograms.temperament(glyph)
-      puts "#{mark} #{p[:glyph]} #{p[:name].ljust(28)} #{glyph.to_s.ljust(10)} " \
-           "T:#{temper[:temperature]} D:#{temper[:thinking]}"
+      [@veiled.include?(glyph) ? '*' : '', p[:glyph].to_s, p[:name].to_s, glyph.to_s,
+       "T:#{temper[:temperature]}", "D:#{temper[:thinking]}"]
     end
-    puts "\e[2m  * = aktuell entschleiert\e[0m"
+    puts AthanorUI.table(['', 'Glyph', 'Begleiter', 'Key', 'Temp', 'Denken'], rows,
+                       width: [terminal_width, 96].min, palette: @palette)
+    puts @palette.dim('  * = aktuell entschleiert')
   end
 
   def attach_file(path)
@@ -2048,18 +2577,199 @@ class ÆtherChamber
   end
 
   def config_summary
-    puts "Model: #{CONFIG.model}  -  API: #{CONFIG.api_type}  -  Flash: #{CONFIG.fast_model}"
+    rows = [
+      ['Model', CONFIG.model],
+      ['API',   CONFIG.api_type],
+      ['Flash', CONFIG.fast_model]
+    ]
+    puts AthanorUI.box('Konfiguration', AthanorUI.kv(rows, palette: @palette),
+                     width: [terminal_width, 80].min, palette: @palette)
   end
 
   def context_summary
-    puts "Projekt: #{CONFIG.project_name}  -  Root: #{CONFIG.project_root}"
-    puts "Memory-DB: #{CONFIG.memory_db_path}"
+    rows = [
+      ['Projekt',   CONFIG.project_name],
+      ['Root',      CONFIG.project_root],
+      ['Memory-DB', CONFIG.memory_db_path]
+    ]
+    puts AthanorUI.box('Kontext', AthanorUI.kv(rows, palette: @palette),
+                     width: [terminal_width, 80].min, palette: @palette)
   end
 
-  def list_tools
-    @tools.tools.each do |name, tool|
-      puts "  #{name}: #{tool.description}"
+  def tool_names
+    @tools.tools.keys.map(&:to_s).sort
+  end
+
+  # `/tools` lists the instrument names only (compact, description-free); the
+  # documentation is revealed on demand — either by naming a tool
+  # (`/tools <name>`) or by browsing with Tab/↑↓ in the interactive picker,
+  # which renders each tool's documentation as markdown.
+  def list_tools(arg = nil)
+    names = tool_names
+    return puts(@palette.dim('  Keine Werkzeuge registriert.')) if names.empty?
+
+    return show_tool_detail(arg.strip) unless arg.to_s.strip.empty?
+
+    if $stdin.tty? && inline_tab_available?
+      browse_tools(names)
+    else
+      print_tool_list(names)
     end
+  end
+
+  def print_tool_list(names)
+    width = [terminal_width, 100].min
+    puts AthanorUI.box('Werkzeuge', [], width: width, palette: @palette)
+    columnize(names, width: width).each { |line| puts line }
+    puts
+    puts @palette.dim("  #{names.size} Werkzeuge — '/tools <name>' zeigt die Doku, '/tools' öffnet den Browser.")
+    puts
+  end
+
+  def show_tool_detail(name)
+    tool = @tools.tools[name.to_sym] || @tools.tools[name.to_s]
+    if tool.nil?
+      hit = tool_names.find { |n| n.casecmp?(name) } || tool_names.grep(/#{Regexp.escape(name)}/i).first
+      tool = @tools.tools[hit.to_sym] if hit
+    end
+    unless tool
+      puts "Unbekanntes Werkzeug: #{name}"
+      puts "Verfügbar: #{tool_names.join(', ')}"
+      return
+    end
+    render_tool_document(tool)
+  end
+
+  def render_tool_document(tool)
+    width = [terminal_width, 100].min
+    md = +"# `#{tool.name}`\n\n"
+    md << tool.description.to_s.strip << "\n"
+    if tool.params && !tool.params.empty?
+      md << "\n## Parameter\n\n"
+      md << "| Parameter | Typ | Default |\n|---|---|---|\n"
+      tool.params.each do |pname, pspec|
+        pspec = {} unless pspec.is_a?(Hash)
+        type = (pspec[:type] || pspec['type'] || '—').to_s
+        if pspec.key?(:default) || pspec.key?('default')
+          default = pspec[:default] || pspec['default']
+          default = default.nil? ? '—' : default.to_s
+        elsif pspec[:required] || pspec['required']
+          default = '*erforderlich*'
+        else
+          default = '—'
+        end
+        md << "| `#{pname}` | `#{type}` | #{default} |\n"
+      end
+    end
+    puts
+    puts ÆtherTerminalMarkdown.render(md, theme: @highlight ? @theme : nil, width: width)
+    puts
+  end
+
+  def tool_description_markdown(tool)
+    +"### `#{tool.name}`\n\n#{tool.description.to_s.strip}"
+  end
+
+  def browse_tools(names)
+    idx = 0
+    @tool_browser_lines = 0
+    use_win = win_console_available?
+    if use_win
+      begin
+        ÆtherWinConsole.begin_raw_input(mouse: false)
+      rescue StandardError
+        ÆtherWinConsole.disable!
+        use_win = false
+      end
+    end
+
+    begin
+      loop do
+        draw_tool_browser(names, idx)
+        input = use_win ? ÆtherWinConsole.next_input : tty_editor_input
+        break if input.nil?
+        next unless input.is_a?(Hash)
+
+        case input[:kind]
+        when :key
+          case input[:action]
+          when :up, :back_tab then idx = (idx - 1) % names.size
+          when :down, :tab    then idx = (idx + 1) % names.size
+          when :enter, :return, :right
+            clear_tool_browser
+            render_tool_document(@tools.tools[names[idx].to_sym])
+            return
+          when :escape, :ctrl_c
+            clear_tool_browser
+            return
+          when :literal
+            ch = (input[:char] || '').to_s.downcase
+            if ch.match?(/\A[[:graph:]]\z/)
+              hit = names.index { |n| n.downcase.start_with?(ch) }
+              idx = hit if hit
+            end
+          end
+        end
+      end
+    rescue ÆtherWinConsole::ConsoleInputError
+      ÆtherWinConsole.disable!
+      use_win = false
+      ÆtherWinConsole.end_raw_input
+      clear_tool_browser
+      print_tool_list(names)
+    ensure
+      ÆtherWinConsole.end_raw_input if use_win
+    end
+  end
+
+  def draw_tool_browser(names, idx)
+    n = @tool_browser_lines
+    STDOUT.print "\e[#{n}A" if n.positive?
+    STDOUT.print "\r\e[J"
+
+    width = [terminal_width, 96].min
+    tool = @tools.tools[names[idx].to_sym]
+    preview = ÆtherTerminalMarkdown.render(tool_description_markdown(tool),
+                                           theme: @highlight ? @theme : nil,
+                                           width: width).split("\n").first(6)
+
+    half = FOCUS_LIST_WINDOW / 2
+    start = [idx - half, 0].max
+    stop  = [start + FOCUS_LIST_WINDOW, names.size].min
+    start = [stop - FOCUS_LIST_WINDOW, 0].max
+
+    rows = []
+    rows << "  #{@palette.accent('Werkzeuge')}  #{@palette.dim("#{names.size} · Tab/↑↓ blättern · Enter Doku · Esc zurück")}"
+    names[start...stop].each_with_index do |name, i|
+      at = start + i
+      marker = at == idx ? @palette.accent('>') : ' '
+      rows << "   #{marker} #{at == idx ? @palette.accent(name) : name}"
+    end
+    rows << "  #{@palette.accent('─' * [width - 4, 1].max)}"
+    preview.each { |l| rows << l }
+    rows << @palette.dim('  Enter: vollständige Markdown-Dokumentation · Esc: zurück')
+    @tool_browser_lines = rows.size
+    STDOUT.print rows.join("\n")
+    STDOUT.print "\n"
+    STDOUT.flush
+  end
+
+  def clear_tool_browser
+    n = @tool_browser_lines.to_i
+    STDOUT.print "\e[#{n}A" if n.positive?
+    STDOUT.print "\r\e[J"
+    @tool_browser_lines = 0
+    STDOUT.flush
+  end
+
+  # Wrap a list of names into fixed-width columns (name-only, description-free).
+  def columnize(names, width: 80)
+    return [] if names.empty?
+
+    max = names.map { |n| display_width(n) }.max
+    col_w = max + 2
+    cols = [width / col_w, 1].max
+    names.each_slice(cols).map { |row| row.map { |n| n.ljust(col_w - 2) }.join('  ').rstrip }
   end
 
   def toggle_markdown
@@ -2070,6 +2780,12 @@ class ÆtherChamber
   def toggle_highlight
     @highlight = !@highlight
     puts "Syntax-Highlighting #{@highlight ? 'an' : 'aus'}."
+  end
+
+  def toggle_mouse
+    @mouse = !@mouse
+    puts @mouse ? 'Maus-Klicksteuerung AN (native Textauswahl im Editor deaktiviert).' \
+                : 'Maus-Klicksteuerung AUS (native Textauswahl aktiv, Klick-Fokus deaktiviert).'
   end
 
   def set_theme(name)
@@ -2099,16 +2815,33 @@ class ÆtherChamber
 
   # -------------------------------------------------------------- framing --
 
+  def cost_summary
+    s = TokenLedger.session
+    p = TokenLedger.persisted
+    rows = [
+      ['Session',  "#{TokenLedger.format_usd(s[:cost])} · #{s[:prompt_tokens]} prompt + " \
+                   "#{s[:completion_tokens]} completion · #{s[:turns]} Turns"],
+      ['All-time', "#{TokenLedger.format_usd(p[:cost])} · #{p[:prompt_tokens]} prompt + " \
+                   "#{p[:completion_tokens]} completion · #{p[:sessions]} Sessions"],
+      ['Model',    "#{CONFIG.model} / flash #{CONFIG.fast_model}"]
+    ]
+    puts AthanorUI.box('Token-Ledger', AthanorUI.kv(rows, palette: @palette),
+                     width: [terminal_width, 80].min, palette: @palette)
+  end
+
   def banner
     glyph = @veiled.empty? ? '*' : active_glyphs_display
-    puts "\e[1m+- Dialog-Kammer -- ÆtherCodex -----------------------------+\e[0m"
-    puts "\e[1m|\e[0m  #{glyph}  Der Kristall ist gestimmt; zwölf Stimmen harren.    \e[1m|\e[0m"
-    puts "\e[1m|\e[0m  \e[2m/morph\e[0m ruft sie, \e[2m/unmorph\e[0m entlässt sie, \e[2mexit\e[0m geht.      \e[1m|\e[0m"
-    puts "\e[1m+----------------------------------------------------------+\e[0m"
+    rows = [
+      "  #{glyph}  Der Kristall ist gestimmt; zwölf Stimmen harren.",
+      '  /morph ruft sie · /unmorph entlässt sie · exit geht.'
+    ]
+    puts AthanorUI.box('Dialog-Kammer · ÆtherCodex', rows, width: [terminal_width, 80].min, palette: @palette)
     puts
   end
 
   def farewell
     puts "\e[2m  :: Der Schleier schließt sich. Möge der Äther dich tragen.\e[0m"
+    puts TokenLedger.closing_line
+    TokenLedger.end_session!
   end
 end

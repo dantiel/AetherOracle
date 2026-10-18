@@ -28,6 +28,9 @@ require_relative 'fragments'
 require_relative 'vectors'
 require_relative 'corpus'
 require_relative 'import'
+require_relative 'ouroboros'
+require_relative 'flash_aegis'
+require_relative 'atlas'
 
 class Mnemosyne
   DB_VERSION = 15
@@ -173,6 +176,10 @@ class Mnemosyne
         FileUtils.mkdir_p File.dirname(db_path)
         db = SQLite3::Database.new db_path
         db.results_as_hash = true
+        # Concurrent AetherOracle workers share this db; wait politely instead
+        # of dying on SQLITE_BUSY when a sibling instance writes at the same
+        # moment (sync markers, delta fragments, notes).
+        db.busy_timeout = 5000
         migrate db
         restore_aegis db
         guard_sqlite_connection(db)
@@ -510,6 +517,30 @@ if 15 > db_version
   db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '15')"
 end
       end
+      # Version 15 -- Corpus-Sichtungen (Atlas delta memory): per-file
+      # fingerprint (mtime + size) recorded at every sounding, so the
+      # incremental sync! rite knows exactly which files changed since
+      # the last weave.
+      if 15 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_sightings (
+            path TEXT PRIMARY KEY,
+            fingerprint TEXT,
+            indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '15')"
+      end
+
+      if 16 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS corpus_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          );
+        SQL
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '16')"
+      end
     end
 
     def tokenize(text)
@@ -567,6 +598,44 @@ end
     def corpus_source_files = Corpus.source_files
     def corpus_nodes_count = Corpus.count_nodes
     def corpus_edges_count = Corpus.count_edges
+
+    # -- Atlas (cartography: map notes + delta-fragment weaving) --
+    def corpus_sync!(root = Argonaut.project_root) = Corpus.sync!(root)
+    def corpus_observe!(path, root = Argonaut.project_root) = Corpus.observe!(path, root)
+    def atlas_weave!(kind:, report: nil) = Atlas.weave!(kind: kind, report: report)
+    def project_map! = Atlas.map!
+  def atlas_view
+    notes = Notes.recall_notes('map', limit: 24) || []
+    overview = notes.find { |n| (n[:tags] || '').to_s.include?('overview') }
+    areas = notes.reject { |n| (n[:tags] || '').to_s.include?('overview') }
+    { overview: overview && overview[:content],
+      areas: areas.map { |n| n[:content] }.compact }
+  end
+    def remove_notes_by_tag(tag) = Notes.remove_by_tag(tag)
+
+    # -- Ouroboros promotion ladder (fragment -> note rung) --
+    def ouroboros_promote!(threshold: nil) = Ouroboros.promote!(threshold: threshold)
+
+    # -- Flash rites (single runtime gate) --
+    # A flash turn is only worth spending when a DISTINCT fast model exists
+    # (else `flash` re-invokes the normal model at full cost), the Conduit
+    # exposes the one-shot conjuration, and — when a rite is given — that
+    # rite's flag in the `flash:` section is on. Per-rite flags (in config):
+    # intent (off), sediment (on), synthesize (on), map (on).
+    def flash_available?(rite = nil)
+      return false unless defined?(CONFIG) && CONFIG.respond_to?(:flash_available?) && CONFIG.flash_available?
+      return false unless defined?(Conduit) && Conduit.respond_to?(:flash)
+      return true if rite.nil?
+      !CONFIG.respond_to?(:flash) || CONFIG.flash[rite] == true
+    end
+
+    # -- Ouroboros (flash-digest recall) --
+    def ouroboros_recall(query, limit: 8, context_path: nil, synthesize: true) = Ouroboros.recall(query, limit: limit, context_path: context_path, synthesize: synthesize)
+    def ouroboros_digest(notes, query) = Ouroboros.digest_notes(notes, query)
+
+    # -- FlashAegis (flash-woven orientation) --
+    def flash_aegis_intent(prompt) = FlashAegis.pre_turn_intent(prompt)
+    def flash_aegis_sediment(prompt, answer) = FlashAegis.post_turn_sediment(prompt, answer)
 
     # -- Companion --
     def companion_save_state(glyph:, summary:, tags: [], score: nil, domain_model: nil) = Companion.save_state(glyph: glyph, summary: summary, tags: tags, score: score, domain_model: domain_model)

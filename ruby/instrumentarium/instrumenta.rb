@@ -73,6 +73,18 @@ end
 def instrument(...) = Instrumenta::PRIMA_MATERIA.add_instrument(...)
 
 
+# Slim per-note content cap for recall: `scaling.recall_notes.note_content`
+# divided by the limit, so more results yield tighter excerpts. Falls back to
+# 1111 (the historical heuristic base) when unset.
+def recall_note_cap(limit)
+  base = if defined?(CONFIG) && CONFIG.respond_to?(:scaling)
+           CONFIG.scaling.dig(:recall_notes, :note_content)
+         end
+  base = 1111 if base.nil? || base.to_i <= 0
+  [base.to_i / [limit.to_i, 1].max, 1].max
+end
+
+
 # --- Register All Tools ---
 instrument :read_file,
            description: <<~DESC,
@@ -286,7 +298,9 @@ instrument :run_command,
     # Use Scriptorium HTML utils for proper escaping
     escaped_out = Scriptorium.escape_html out
 
-    { ok: true, exit_status: exitstatus, result: "Command output: #{escaped_out}", cwd: cwd, peer_drift: drift }
+    result = { ok: true, exit_status: exitstatus, result: "Command output: #{escaped_out}" }
+    result[:peer_drift] = drift unless drift.empty?
+    result
   rescue StandardError => e
     { error: "Command error: #{e.message}" }
   end
@@ -449,7 +463,8 @@ instrument :recall_notes,
                { error: "Note ##{id} not found" }
              end
            else
-             { notes: Mnemosyne.recall_notes(query, limit: limit, max_content_length: 1111 / limit,
+             { notes: Mnemosyne.recall_notes(query, limit: limit,
+                                             max_content_length: recall_note_cap(limit),
                                              context_path: Mnemosyne.working_dir) }
            end
   HorologiumAeternum.notes_recalled query, limit, result[:notes] if result[:notes]
@@ -488,7 +503,7 @@ instrument :recall_notes,
                     limit: { type: Integer, required: false, default: 3 } },
           returns: { fragments: Array, error: String } do |query: '', limit: 2|
  { fragments: Mnemosyne.recall_fragments(query, limit: limit,
-                                         max_content_length: 1111 / limit,
+                                         max_content_length: recall_note_cap(limit),
                                          context_path: Mnemosyne.working_dir) }
  rescue StandardError => e
  { error: e.message }
@@ -509,14 +524,106 @@ instrument :recall_notes,
  end
  
  
+ instrument :ouroboros_recall,
+           description: 'Intelligent Ouroboros recall: recalls matching Mnemosyne notes, then ' \
+                        'flash-synthesizes them (fast model) into ONE compact current-state ' \
+                        'digest -- duplicates merged, historical/transient matter dropped. ' \
+                        'Use when you want the living summary of memory rather than N raw ' \
+                        'fragments. Returns both the digest and the raw notes.',
+           params: { query:      { type: String, required: false },
+                     limit:      { type: Integer, required: false, default: 8 },
+                     synthesize: { type: Boolean, required: false, default: true } },
+           returns: { digest: String, notes: Array, error: String } do |query: '', limit: 8, synthesize: true|
+  result = Mnemosyne.ouroboros_recall(query, limit: limit, synthesize: synthesize)
+  { digest: result[:digest], notes: result[:notes] }
+ rescue StandardError => e
+  { error: e.message }
+ end
+ 
+ 
  instrument :corpus_sound,
            description: 'Run an Argonaut sounding of the whole repo: scan every source file ' \
                         'into corpus_nodes (files + symbols) and corpus_edges (imports / ' \
                         'nesting / defines), then index each node into the token substrate ' \
-                        '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph.',
+                        '(Mnemosyne base coverage). Idempotent -- wipes and rebuilds the graph. ' \
+                        'Afterwards the cartographer (Atlas) re-mints the map notes.',
            params: {},
-           returns: { files: Integer, nodes: Integer, edges: Integer, error: String } do
+           returns: { files: Integer, nodes: Integer, edges: Integer, maps: Hash, error: String } do
   Mnemosyne.corpus_sound!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :project_sync,
+           description: 'Incremental cartography rite: reads project changes into Mnemosyne. ' \
+                        'Compares the repo against the delta memory (corpus_sightings) AND git ' \
+                        '(porcelain status) -- catches edits invisible to mtime+size ' \
+                        'fingerprints, e.g. same-size same-second edits or concurrent workers ' \
+                        'touching the tree. Re-sounds only added/changed files, excises ' \
+                        'deleted ones, then weaves: transient corpus-delta fragments (Stufe 2, ' \
+                        'TTL glow), a cross-worker sync-marker fragment, plus refreshed map ' \
+                        'notes. First run falls back to a full corpus_sound. Rarely needed for ' \
+                        'edits the agent made itself (those auto-observe); use after external ' \
+                        'edits or branch switches.',
+           params: {},
+           returns: { report: Hash, fragments: Hash, error: String } do
+  Mnemosyne.corpus_sync!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :mnemosyne_observe,
+           description: 'Cartography micro-rite: re-sight one edited file into the corpus ' \
+                        '(re-index + delta fragment glow). Automatic after every ' \
+                        'create_file/patch_file/rename_file (cartography.observe_edits); ' \
+                        'call manually only for edits made outside the tool loop, e.g. by ' \
+                        'a host editor or another worker instance.',
+           params: { path: { type: String, required: true } },
+           returns: { observed: Boolean, report: Hash, error: String } do |path:|
+  Mnemosyne.corpus_observe!(path)
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :project_map,
+           description: 'Cartography rite: (re-)mint the compact map notes (tag "map") from ' \
+                        'the current corpus graph -- one overview note plus one note per ' \
+                        'project area (files/symbols, sample files, one-line description). ' \
+                        'Idempotent; previous map notes are replaced.',
+           params: {},
+           returns: { notes: Integer, areas: Integer, error: String } do
+  Mnemosyne.project_map!
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+ instrument :atlas_map,
+           description: 'Atlas view: read the current project map from Mnemosyne -- the ' \
+                        'compact overview note plus one note per territory (tag "map"). ' \
+                        'The map is the landing strip for recall: read it before diving ' \
+                        'into files. Pure read -- no DB writes; re-mint via project_map ' \
+                        '(map only) or project_sync (delta + map).',
+           params: {},
+           returns: { overview: String, areas: Array, error: String } do
+  Mnemosyne.atlas_view
+ rescue StandardError => e
+  { error: e.message }
+ end
+
+
+instrument :mnemosyne_promote,
+           description: 'Promotion-ladder rite (Ouroboros): lifts sync-marker fragments that ' \
+                        'repeatedly glow around the same path (threshold) into ONE durable ' \
+                        'structure note (Stufe 2 -> Stufe 1) and consumes the markers. Runs ' \
+                        'automatically after every project_sync with a delta; call manually ' \
+                        'to force a ladder pass. Pure DB work -- no flash model needed.',
+           params: { threshold: { type: Integer, required: false } },
+           returns: { promoted: Integer, error: String } do |threshold: nil|
+  { promoted: Mnemosyne.ouroboros_promote!(threshold: threshold) }
  rescue StandardError => e
   { error: e.message }
  end
@@ -545,7 +652,7 @@ instrument :recall_notes,
     notes_count:        results[:notes_count],
     notes_preview:      results[:notes_preview],
     file_info:          results[:file_info],
-    structural_summary: results[:symbolic_overview][:structural_summary],
+    structural_summary: results[:symbolic_overview][:structural_summary_text] || results[:symbolic_overview][:structural_summary],
     symbolic_overview:  results[:symbolic_overview][:symbolic_overview_text],
     tag_cloud:          results[:symbolic_overview][:tag_cloud_text],
     file_cloud:         results[:symbolic_overview][:file_cloud_text],
@@ -1486,16 +1593,22 @@ end
 
 
 # Visual truth — capture the screen-plane for AI inspection
-instrument :take_screenshot,
+instrument :captura_visus,
            description: <<~DESC,
-             Capture a screenshot using native OS APIs (macOS + Windows). Use autonomously whenever
-             visual inspection would improve task quality — UI changes, layout bugs,
-             rendering issues, Xcode simulator, browser output, etc.
+             Capture a screenshot using native OS APIs (macOS + Windows), or read an existing image
+             file for vision analysis. Use autonomously whenever visual inspection would improve
+             task quality — UI changes, layout bugs, rendering issues, Xcode simulator, browser
+             output, an uploaded graphic, etc.
 
-             The agent should automatically decide when screenshots are needed and
-             never claim a UI is correct without visual verification.
+             The agent should automatically decide when visuals are needed and never claim a UI is
+             correct without visual verification.
 
-             **Modes:**
+             **Reading an existing image (no capture):**
+             Pass `path` to load a graphic straight from disk for vision analysis, e.g.
+             `captura_visus(path: "/tmp/logo.png")`. The file is encoded and sent to the vision
+             model; no screen capture happens. Omit `mode` entirely when `path` is given.
+
+             **Modes:** (capture only — omit `mode` when `path` is given)
              - `screen`: entire display
              - `window`: capture a specific window by title/ID, or frontmost window
              - `area`: specific rectangle (requires x, y, width, height)
@@ -1510,14 +1623,18 @@ instrument :take_screenshot,
 
              After capture, the image path is returned for vision model analysis.
              No user interaction required — fully autonomous.
-             
+             Aliases: `take_screenshot`, `screenshot`, `capturavisus`.
+
              **For large screens:** Use mode: 'info' first to check display sizes,
              then use mode: 'area' with reduced width/height for actual capture.
            DESC
            params: { mode:    { type:        String,
-                                required:    true,
+                                required:    false,
                                 enum:        %w[screen window area display active-app menu-bar info],
-                                description: 'Capture mode' },
+                                description: 'Capture mode (omit when reading an existing image via `path`)' },
+                     path:    { type:        String,
+                                required:    false,
+                                description: 'Read an existing image file directly for vision analysis (no capture). Filesystem path to a png/jpg/jpeg/webp.' },
                      display: { type:        Integer,
                                 required:    false,
                                 description: 'Display number (for display mode)' },
@@ -1564,9 +1681,21 @@ instrument :take_screenshot,
            returns: { path: String, bytes: Integer, format: String, mode: String, error: String,
                       timestamp: String, platform: String, displays: Array, frontmost_app: Hash,
                       visible_windows: Array, menu_bar: Hash } \
-           do |mode:, display: nil, x: nil, y: nil, width: nil, height: nil,
+           do |mode: nil, path: nil, display: nil, x: nil, y: nil, width: nil, height: nil,
                 format: 'png', delay: 0, cursor: true, shadow: true, output: nil,
                 window_title: nil, window_id: nil|
+  # Image-reading: load an existing graphic for vision analysis (no capture).
+  if path && !path.to_s.strip.empty?
+    result = CapturaVisus.read_image(path.to_s)
+    if result[:error]
+      HorologiumAeternum.screenshot_failed('file', result[:error])
+    else
+      HorologiumAeternum.screenshot_captured('file', result[:path], result[:bytes], execution_time: 0.0)
+    end
+    next result
+  end
+
+  mode ||= 'screen'
   start = Time.now
   result = CapturaVisus.capture(mode:, display:, x:, y:, width:, height:,
                                 format:, delay:, cursor:, shadow:, output:,

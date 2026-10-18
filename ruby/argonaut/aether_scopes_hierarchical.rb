@@ -1014,29 +1014,53 @@ module AetherScopesHierarchical
     # Get all notes related to this file
     notes = Mnemosyne.recall_notes file_path, limit: 50
 
-    # Generate tag cloud and file cloud from notes instead of full note content
-    tag_cloud = generate_tag_cloud notes
-    file_cloud = generate_file_cloud notes
-    
+    # Slim bounds: the clouds are navigational hints, not full inventories.
+    sc = scaling_for_file_overview
+    tag_cloud = generate_tag_cloud(notes).first(sc[:tag_cloud_limit])
+    file_cloud = generate_file_cloud(notes).first(sc[:file_cloud_limit])
+
     # Generate hermetic symbolic overview using LexiconResonantia
     symbolic_overview = LexiconResonantia.generate_from_notes(notes)
 
     # Format for AI consumption - enhanced with hierarchical data
     {
-      language:               overview[:language],
-      structural_summary:     overview[:summary],
-      hierarchy:              overview[:hierarchy],
-      imports:                overview[:imports],
-      exports:                overview[:exports],
-      navigation_hints:       overview[:navigation_hints],
-      significant_lines:      (overview[:line_hints] || {}).keys.map(&:to_i).sort,
+      language:                overview[:language],
+      structural_summary:      overview[:summary],
+      structural_summary_text: format_structural_summary(overview[:summary]),
+      hierarchy:               overview[:hierarchy],
+      imports:                 overview[:imports],
+      exports:                 overview[:exports],
+      navigation_hints:        overview[:navigation_hints],
+      significant_lines:       (overview[:line_hints] || {}).keys.map(&:to_i).sort,
       tag_cloud:,
       file_cloud:,
-      tag_cloud_text:         tag_cloud.map { |tag| "#{tag[0]}: #{tag[1]}" }.join("\n"),
-      file_cloud_text:        file_cloud.map { |tag| "#{tag[0]}: #{tag[1]}" }.join("\n"),
-      symbolic_overview_text: generate_symbolic_overview_text(overview),
-      hermetic_overview:      symbolic_overview.join("\n")
+      tag_cloud_text:          tag_cloud.map { |tag| "#{tag[0]}: #{tag[1]}" }.join("\n"),
+      file_cloud_text:         file_cloud.map { |tag| "#{tag[0]}: #{tag[1]}" }.join("\n"),
+      symbolic_overview_text:  generate_symbolic_overview_text(overview),
+      hermetic_overview:       symbolic_overview.join("\n")
     }
+  end
+
+  # `scaling.file_overview` with hard slim fallbacks, so the clouds stay bounded
+  # even before CONFIG is wired (e.g. during boot).
+  def self.scaling_for_file_overview
+    sc = defined?(CONFIG) && CONFIG.respond_to?(:scaling) ? CONFIG.scaling : {}
+    (sc[:file_overview] || {}).merge(tag_cloud_limit: 12, file_cloud_limit: 10) { |_k, v, _d| v }
+  end
+
+  # Compact structural digest: "ruby · 1 container · 19 members · 14 imports ·
+  # 1 export · 134 symbols" — one line instead of a Ruby Hash#inspect.
+  def self.format_structural_summary(summary)
+    return '' unless summary.is_a?(Hash)
+
+    parts = []
+    parts << summary[:language].to_s unless summary[:language].nil?
+    parts << "#{summary[:containers]} containers" if summary[:containers]
+    parts << "#{summary[:members]} members" if summary[:members]
+    parts << "#{summary[:imports]} imports" if summary[:imports]
+    parts << "#{summary[:exports]} exports" if summary[:exports]
+    parts << "#{summary[:total_symbols]} symbols" if summary[:total_symbols]
+    parts.join(' · ')
   end
 
 

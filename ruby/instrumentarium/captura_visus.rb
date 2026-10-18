@@ -17,6 +17,7 @@ module CapturaVisus
   CAPTURE_BIN       = '/usr/sbin/screencapture'
   WINDOWLIST_SRC    = File.join(__dir__, 'aether_windowlist.swift')
   WINDOWLIST_BIN    = File.join(DEFAULT_DIR, 'aether_windowlist')
+  IMAGE_EXTS        = %w[png jpg jpeg webp].freeze
 
   # ── Public API ────────────────────────────────────────────────────────────
 
@@ -73,6 +74,26 @@ module CapturaVisus
     result = { path:, bytes: File.size(path), format:, mode: actual_mode }
     result[:tcc_warning] = tcc_warning if tcc_warning
     result
+  rescue StandardError => e
+    { error: e.message }
+  end
+
+  # Read an existing image file for vision analysis (no capture). Validates the
+  # path + format, then returns the same result shape as `capture` so the
+  # downstream vision pipeline (VisionCoordinator) encodes and attaches it.
+  def self.read_image(path)
+    p = File.expand_path(path.to_s)
+    return { error: "no such image file: #{path}" } unless File.exist?(p) && File.file?(p)
+
+    ext = File.extname(p).delete('.').downcase
+    unless IMAGE_EXTS.include?(ext)
+      return { error: "unsupported image format: .#{ext} (expected png/jpg/jpeg/webp)" }
+    end
+
+    bytes = File.size(p)
+    return { error: "empty image file: #{p}" } if bytes.zero?
+
+    { path: p, bytes: bytes, format: ext, mode: 'file' }
   rescue StandardError => e
     { error: e.message }
   end
@@ -615,8 +636,8 @@ module CapturaVisus
 
   def self.generate_suggestions
     [
-      'Use take_screenshot(mode: "area", x: 100, y: 100, width: 800, height: 600) for specific regions',
-      'Use take_screenshot(mode: "window") for frontmost window only',
+      'Use captura_visus(mode: "area", x: 100, y: 100, width: 800, height: 600) for specific regions',
+      'Use captura_visus(mode: "window") for frontmost window only',
       'Use format: "jpg" for smaller files than png',
       'Full screen: mode: "screen", Single display: mode: "display", Active app: mode: "active-app"',
       'Use delay: 2 to wait for UI changes before capture',

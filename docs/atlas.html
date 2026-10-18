@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ÆtherOracle — Atlas</title>
+  <meta name="description" content="Atlas, the cartographer: complete project mapping, delta memory, cross-worker whispers — the living map of your project woven into Mnemosyne.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400..800&family=Syne+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand"><a href="index.html"><span class="sigil">Æ</span><span class="brand-name">ÆtherOracle</span><span class="brand-sub">core</span></a></div>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <div class="nav-group">
+          <span class="group-label on">Systems <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="mnemosyne.html">✶ Mnemosyne <span class="dsub">memory</span></a>
+            <a href="aegis.html">◇ Ægis <span class="dsub">orientation</span></a>
+            <a href="atlas.html" class="active">⬡ Atlas <span class="dsub">cartography</span></a>
+            <a href="ouroboros.html">⌁ Ouroboros <span class="dsub">the ladder</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">The Work <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="magnum-opus.html">▲ Magnum Opus <span class="dsub">engine</span></a>
+            <a href="metempsychosis.html">↯ Metempsychosis <span class="dsub">transmigration</span></a>
+            <a href="companions.html">⚚ Companions <span class="dsub">pantheon</span></a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <span class="group-label">Reference <span class="caret">▼</span></span>
+          <div class="nav-drop">
+            <a href="cli.html">$ Pythia CLI</a>
+            <a href="methods.html">⌘ Methods</a>
+            <a href="config.html">⚙ Configuration</a>
+            <a href="architecture.html">▚ Architecture</a>
+            <a href="aetherverse.html">✧ Ætherverse</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero wrap">
+    <div class="eyebrow">~/aetherverse/core ▸ atlas — cartography</div>
+    <h1>Atlas.<br><span class="thin">The Titan who carries the map.</span></h1>
+    <p class="lede">
+      Complete project mapping, woven into living memory. A project is read once, kept alive by delta
+      memory, and every change glows in the transient cascade — while sibling workers whisper their
+      deltas to each other through the shared æther.
+    </p>
+    <pre class="term" data-title="~/aetheroracle --atlas"><code><span class="t-cmd">$</span> aetheroracle --atlas
+<span class="t-out">⬡ Atlas map (aetheroracle): 350 files, 33 180 symbols, 8 territories</span>
+<span class="t-out">⬡ ruby/  — the brain tier: mnemosyne · oracle · instrumentarium …</span>
+<span class="t-out">⬡ docs/  — the website: architecture, configuration, the rites …</span>
+<span class="t-cmd">$</span> echo "read the map first, then dive"</code></pre>
+  </header>
+
+  <section class="section">
+    <div class="wrap">
+      <h2><span class="hsig">⬡</span> The map at a glance</h2>
+      <p class="sub">
+        After every sounding and sync, Atlas (re-)mints compact durable notes under the <code>map</code>
+        tag: one overview plus one note per territory — files, symbols, sample paths, and a one-line
+        description written by the <em>kopist</em> (fast model) when a distinct fast model exists, else a
+        heuristic. The map is the landing strip for recall: <code>atlas_map</code> reads it in one pure
+        query, no DB writes — then recall dives into the territory that matters.
+      </p>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2><span class="hsig">⋈</span> Three rites of reading</h2>
+      <p class="sub">How a project enters memory, and how it stays alive.</p>
+      <div class="ledger">
+        <div class="row">
+          <span class="glyph">⋈</span>
+          <div><h3>corpus_sound — the first contact</h3><p>A full Argonaut sounding scans every source file into <code>corpus_nodes</code> (files + symbols) and <code>corpus_edges</code> (imports · nesting · defines), indexes the token substrate, then Atlas weaves the map. Idempotent — wipes and rebuilds.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+        <div class="row">
+          <span class="glyph">⇄</span>
+          <div><h3>project_sync — the incremental rite</h3><p>Unions <code>git status --porcelain</code> with the <code>mtime:size</code> fingerprints of the delta memory — catching edits invisible to fingerprints, e.g. same-size same-second writes or concurrent workers. Re-sounds only what moved, excises what vanished. First run falls back to a full sounding.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+        <div class="row">
+          <span class="glyph">⎇</span>
+          <div><h3>auto-observe — memory in the act</h3><p>Edits the oracle makes itself (<code>create_file</code>, <code>patch_file</code>, <code>rename_file</code>) re-sight the path the moment the tool succeeds — the memory is minted in the act. <code>mnemosyne_observe</code> covers host-editor edits. Sync is then rarely needed.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2><span class="hsig">⋄</span> The weaving — fused with the cascade</h2>
+      <p class="sub">The transient Mnemosyne cascade mirrors the project's living change.</p>
+      <div class="ledger">
+        <div class="row">
+          <span class="glyph">⋄</span>
+          <div><h3>corpus-delta fragments</h3><p>Every touched file mints a transient fragment (<code>Δ added/changed/removed …</code>, TTL 3600 s). The change <em>glows</em> fresh in recall and decays into the substrate — a working thought of the project.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+        <div class="row">
+          <span class="glyph">⇄</span>
+          <div><h3>sync-marker — the cross-worker whisper</h3><p>Every sync with a delta mints one marker fragment (<code>sync-marker GAMAYUN-WIN:39544 @ 22:00: +0 a, 24 c, -1 r</code>). Sibling workers sharing the memory db feel it through normal fragment recall — no polling, no re-scan. <code>busy_timeout = 5000</code> keeps concurrent writers polite.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+        <div class="row">
+          <span class="glyph">⌁</span>
+          <div><h3>promotion hook</h3><p>After every sync the ladder checks in with <a href="ouroboros.html">Ouroboros</a>: paths glowing repeatedly are lifted into durable structure notes — the fragment becomes a note.</p></div>
+          <span class="arrow">◈</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2><span class="hsig">⌘</span> The instruments</h2>
+      <p class="sub">Every cartography tool, in one table.</p>
+      <table>
+        <tr><th>tool</th><th>rite</th><th>what it does</th></tr>
+        <tr><td><code>corpus_sound</code></td><td>full</td><td>Complete re-sounding: graph, token substrate, map. Idempotent.</td></tr>
+        <tr><td><code>project_sync</code></td><td>incremental</td><td>Delta read via fingerprints + git union; re-sounds only what moved.</td></tr>
+        <tr><td><code>project_map</code></td><td>re-mint</td><td>Re-mints the map notes from the current corpus graph.</td></tr>
+        <tr><td><code>atlas_map</code></td><td>read</td><td>Reads the living map — overview + territories. Pure read, no writes.</td></tr>
+        <tr><td><code>mnemosyne_observe</code></td><td>micro</td><td>Re-sights one edited file (host editor, sibling worker).</td></tr>
+        <tr><td><code>recall_corpus</code></td><td>recall</td><td>Channel-blended recall of corpus nodes — the substrate speaks.</td></tr>
+        <tr><td><code>mnemosyne_promote</code></td><td>ladder</td><td>Forces a promotion-ladder pass (runs automatically after sync).</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2><span class="hsig">⚙</span> Configuration</h2>
+      <p class="sub">The <code>cartography:</code> section of <code>.aethercodex</code> — all defaults on, flip per project.</p>
+      <pre><code># .aethercodex — cartography (Atlas)
+cartography:
+  auto-map: true           # re-mint map notes after every sound/sync
+  delta-fragments: true    # glow fragments for touched files
+  fragment-ttl: 3600       # half-life of the glow (s)
+  map-flash: true          # kopist writes one-liners (distinct fast model)
+  git-track: true          # union git status with the fingerprints
+  observe-edits: true      # auto re-sight after agent tool writes
+  sync-marker: true        # cross-worker whisper fragment</code></pre>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="motto">There is one oracle; Pythia is its voice.</div>
+      <div>The æther is everywhere. ÆtherOracle — the shared core of the Ætherverse.</div>
+    </div>
+  </footer>
+</body>
+</html>

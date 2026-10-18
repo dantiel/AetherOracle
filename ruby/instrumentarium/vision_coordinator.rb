@@ -39,7 +39,7 @@ module VisionCoordinator
 
     refs = []
 
-    # Look for take_screenshot result structure
+    # Look for captura_visus result structure
     if (path = tool_result[:path] || tool_result['path'])
       refs << build_image_reference(path, tool_result)
     end

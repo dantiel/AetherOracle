@@ -10,6 +10,7 @@ require_relative '../instrumentarium/scriptorium'
 require_relative '../mnemosyne/mnemosyne'
 require_relative 'error_handler'
 require_relative 'conduit_anthropic_helper'
+require_relative 'token_ledger'
 using TokenExtensions
 
 
@@ -546,8 +547,8 @@ class Conduit
     # Builds a helpful notice message for the agent explaining what happened
     def build_payload_notice(removed_count, final_size)
       tips = [
-        "Use smaller area: take_screenshot(mode: 'area', x: 0, y: 0, width: 800, height: 600)",
-        "Use JPG format: take_screenshot(format: 'jpg')",
+        "Use smaller area: captura_visus(mode: 'area', x: 0, y: 0, width: 800, height: 600)",
+        "Use JPG format: captura_visus(format: 'jpg')",
         "Capture only relevant region instead of full screen",
       ]
 
@@ -1040,6 +1041,31 @@ class Conduit
       ''
     end
 
+    # Hermetic flash conjuration: a minimal one-shot on the fast model for
+    # digesting, summarizing and classifying — the kopist writes, the master
+    # interprets. No tools, low temperature, tight budget. Best-effort: returns
+    # the text or nil, and never breaks the divination. The fast model is
+    # selected by temporarily lowering the Aegis thinking level, mirroring the
+    # one-shot flash override used in `Oracle.divination`.
+    def flash(messages, max_tokens: 1024, temperature: 0.2)
+      previous = Mnemosyne.aegis[:thinking]
+      Mnemosyne.aegis[:thinking] = 'fast'
+      body = build_body_with_messages_and_tools(messages, tools: nil, reasoning: false,
+                                                temperature: temperature)
+      body[:max_tokens] = max_tokens
+      raw = post(body, 30)
+      json = ensure_json raw
+      json = parse_anthropic_response_to_openai_format(json) if :anthropic == CONFIG::CFG[:api_type]&.to_sym
+      json = parse_gemini_response_to_openai_format(json) if :gemini == CONFIG::CFG[:api_type]&.to_sym
+      stream_token_usage(json, body[:model])
+      (json['choices'] || []).first&.dig('message', 'content').to_s
+    rescue StandardError => e
+      HorologiumAeternum.system_error "Flash conjuration failed: #{e.message.truncate 100}"
+      nil
+    ensure
+      Mnemosyne.aegis[:thinking] = previous
+    end
+
 
     def generate_ai_response(messages, tools, reasoning, set_temperature, attachments = nil)
       # Handle nil tools case - use empty array for instrumenta_schema
@@ -1079,7 +1105,7 @@ class Conduit
           execution_time = Time.now - start_time
           puts "[CONDUIT][GENERATE_AI_RESPONSE]: response after #{execution_time.round 2}s"
 
-          stream_token_usage json
+          stream_token_usage json, body[:model]
 
           log_json(json: json.transform_values do |v|
             v.to_s.truncate 200
@@ -1090,7 +1116,7 @@ class Conduit
     end
 
 
-    def stream_token_usage(json)
+    def stream_token_usage(json, model = nil)
       usage = json.is_a?(Hash) ? (json['usage'] || json[:usage]) : nil
       return unless usage.is_a?(Hash)
 
@@ -1099,10 +1125,17 @@ class Conduit
       total = usage['total_tokens'] || usage[:total_tokens]
       total ||= (prompt.to_i + completion.to_i) if prompt || completion
 
+      model = json['model'] || json[:model] || json['modelVersion'] || json[:modelVersion] if model.to_s.strip.empty?
+      model = CONFIG.model if model.to_s.strip.empty?
+
+      ledger = TokenLedger.record!(model, prompt, completion)
+
       HorologiumAeternum.send_status('token_usage', {
                                        total_tokens: total,
                                        prompt_tokens: prompt,
                                        completion_tokens: completion,
+                                       cost_usd: ledger[:cost],
+                                       model: model,
                                      })
     rescue StandardError => e
       # Token stats are best-effort; never let them break the divination.

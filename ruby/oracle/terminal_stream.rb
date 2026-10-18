@@ -5,6 +5,7 @@ require 'json'
 require_relative '../instrumentarium/horologium_aeternum'
 require_relative 'terminal_markdown'
 require_relative 'instrumentum_renderer'
+require_relative 'token_ledger'
 
 # TerminalStream — Hermetic output adapter for the terminal.
 # Implements the same event interface as HorologiumAeternum but writes to STDOUT
@@ -90,9 +91,9 @@ class TerminalStream
       thinking_time = data[:thinking_time]
       puts "\e[2m  > Thought for #{thinking_time}s\e[0m"
     when 'oracle_revelation'
-      render_markdown_event(data, keys: %i[raw_content content], block: true)
+      render_markdown_event(data, keys: %i[raw_content content message], block: true)
     when 'oracle_conjuration_revelation'
-      render_markdown_event(data, keys: %i[raw_content content], block: true)
+      render_markdown_event(data, keys: %i[raw_content content message], block: true)
     when 'file_reading'
       puts "  \e[34m-> #{data[:message]}\e[0m"
     when 'file_read_complete'
@@ -229,12 +230,16 @@ class TerminalStream
     total = data[:total_tokens] || data['total_tokens']
     prompt = data[:prompt_tokens] || data['prompt_tokens']
     completion = data[:completion_tokens] || data['completion_tokens']
+    cost = data[:cost_usd] || data['cost_usd']
+    model = data[:model] || data['model']
     return if total.nil? && prompt.nil? && completion.nil?
 
     parts = []
     parts << "prompt #{prompt}" if prompt
     parts << "completion #{completion}" if completion
     parts << "total #{total}" if total
+    parts << "≈ #{TokenLedger.format_usd(cost)}" unless cost.nil?
+    parts << model.to_s unless model.to_s.strip.empty?
     puts "  \e[2m:: tokens: #{parts.join(' - ')}\e[0m"
   end
 
