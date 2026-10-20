@@ -514,12 +514,17 @@ class PrimaMateria
 
     # Log tool execution with truncated arguments to avoid bloat
     truncated_args = args.transform_values { |v| v.to_s.truncate 200 }
-    puts "[PRIMA_MATERIA][HANDLE][#{tool.upcase.gsub '_', '_'}]: args: "\
+    puts "[PRIMA_MATERIA][HANDLE][#{tool.upcase.gsub '_', '_'}]: args: " \
          "#{truncated_args.inspect} (timeout: #{tool_timeout})"
 
     out = if @tools.key? tool.to_sym
-            HermeticExecutionDomain.execute timeout: tool_timeout do
-              send(tool.to_sym, **args)
+            unless respond_to?(tool.to_sym)
+              HorologiumAeternum.system_error("Unimplemented tool #{tool}", message: 'registered but no dispatch method exists')
+              { error: "Tool #{tool} is registered but has no dispatch method", tool: tool }
+            else
+              HermeticExecutionDomain.execute timeout: tool_timeout do
+                send(tool.to_sym, **args)
+              end
             end
           else
             HorologiumAeternum.system_error("Unknown tool #{tool}")
@@ -527,11 +532,13 @@ class PrimaMateria
           end
 
     out = truncate_tool_output(tool, out)
+    out = guard_output(tool, out)
     observe_write(tool, args, out)
+    out
   rescue Oracle::StepTerminationException => e
     # Step completion is expected termination - handle differently based on context
     puts "[PRIMA_MATERIA][STEP_COMPLETE]: #{tool}: #{e.message.truncate(100)}"
-    
+
     # For task step completion/rejection tools, return success instead of re-raising
     # This prevents "Hermetic execution failed" errors for expected step termination
     if tool.to_s.include?('task_') || tool.to_s.include?('complete_step') || tool.to_s.include?('reject_step')
@@ -549,15 +556,63 @@ class PrimaMateria
     out = { error: "Bad args for #{tool}: #{e.message}", got: args }
   rescue StandardError => e
     puts "[PRIMA_MATERIA][ERROR]: #{e.class}: #{e.message.truncate 200}"
-    out = {}
+    HorologiumAeternum.system_error("Unexpected failure in #{tool}", message: "#{e.class}: #{e.message}".truncate(300))
+    out = { error: "#{tool} failed: #{e.class}: #{e.message}".truncate(500), tool: tool }
   ensure
     truncated_result = case out
                        when Hash then out.transform_values { |v| v.to_s.truncate 300 }
                        when String then out.truncate 300
                        else out.inspect
                        end
-    puts "[PRIMA_MATERIA][HANDLE][#{tool.upcase.gsub '_', '_'}][RESULT]: "\
+    puts "[PRIMA_MATERIA][HANDLE][#{tool.upcase.gsub '_', '_'}][RESULT]: " \
          "#{truncated_result.inspect}"
+  end
+
+
+  # Postcondition on every instrument result: a nil return is always a defect
+  # (the model would otherwise receive `null` and report "no output"), and an
+  # empty hash is flagged loudly so a silently-failing instrument cannot pass as
+  # a clean no-op. This is the æther's first line of self-diagnosis.
+  def guard_output(tool, out)
+    if out.nil?
+      HorologiumAeternum.system_error('Empty instrument output', message: "#{tool} returned nil")
+      return { error: "#{tool} returned no output (nil)", tool: tool }
+    end
+
+    if out.respond_to?(:empty?) && out.empty?
+      puts "[PRIMA_MATERIA][EMPTY] #{tool} returned an empty #{out.class} — possible silent failure"
+    end
+
+    out
+  end
+
+
+  # Self-diagnostic: scan the instrumentarium for structural defects that would
+  # otherwise surface only as a silent runtime failure. Never raises — returns a
+  # structured report for `veil --check` / the daemon to prove the core is sound
+  # before the first instrument is dispatched.
+  def audit
+    problems = []
+
+    @tools.each do |name, spec|
+      problems << "#{name}: no dispatch method" unless respond_to?(name)
+      problems << "#{name}: missing implementation" if spec.implementation.nil?
+    end
+
+    if defined?(CONFIG)
+      %i[pid_file_path memory_db_path tm_ai_dir log_file_path api_key api_url
+         model fast_model api_type port scaling project_root].each do |m|
+        problems << "CONFIG.#{m} missing" unless CONFIG.respond_to?(m)
+      end
+    else
+      problems << 'CONFIG not defined'
+    end
+
+    {
+      tools: @tools.size,
+      healthy: problems.empty?,
+      problems: problems
+    }
   end
 
 
