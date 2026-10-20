@@ -33,7 +33,9 @@ require_relative 'flash_aegis'
 require_relative 'atlas'
 
 class Mnemosyne
-  DB_VERSION = 15
+  # The migration cascade below stamps `meta.db_version` up to 16; keep the
+  # constant in agreement so "is the schema current?" checks stay truthful.
+  DB_VERSION = 16
 
   # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
   # task runners each drive their own engine thread; the connection is shared, so
@@ -41,6 +43,14 @@ class Mnemosyne
   # same monitor. Network/oracle time happens *outside* this lock — only the fast
   # db I/O is serialized, so parallel tasks still overlap their oracle turns.
   DB_LOCK = Monitor.new
+
+  # Cross-process contention budget. A sibling AetherOracle process (another
+  # shell in the same context, the daemon, a task runner) may hold the write
+  # lock briefly; wait, then retry with backoff before declaring the database
+  # unwritable. Budget: 5s hold-off + ~13s of retries.
+  BUSY_TIMEOUT_MS = 5000
+  BUSY_RETRIES    = 12
+  BUSY_BACKOFF    = 0.05
   STOP_WORDS = Set.new %w[
     the a an and of in to with on for is are am be was were it this that
     at by from as if or but so not into out about then
@@ -179,29 +189,83 @@ class Mnemosyne
         # Concurrent AetherOracle workers share this db; wait politely instead
         # of dying on SQLITE_BUSY when a sibling instance writes at the same
         # moment (sync markers, delta fragments, notes).
-        db.busy_timeout = 5000
-        migrate db
+        db.busy_timeout = BUSY_TIMEOUT_MS
+        configure_concurrency db
+        migrate_guarded db
         restore_aegis db
         guard_sqlite_connection(db)
       end
     end
 
+    # Cross-process coherence floor. WAL lets sibling reader processes
+    # (recall, atlas_map, veil) see the last committed snapshot while another
+    # process writes, instead of queueing behind the rollback journal. The
+    # setting is persistent in the database file, so a single successful
+    # conversion serves every future process; when a sibling happens to hold
+    # the file, we shrug and keep working in whatever mode is active.
+    def configure_concurrency(db)
+      mode = db.get_first_value('PRAGMA journal_mode=WAL').to_s.downcase
+      # synchronous=NORMAL is the crash-safe sweet spot under WAL: a commit is
+      # durable against process death, only an OS crash may lose the tail.
+      db.execute('PRAGMA synchronous=NORMAL') if mode == 'wal'
+      mode
+    rescue SQLite3::Exception
+      nil
+    end
+
+    # Mutations were historically fire-and-forget against a shared file. A
+    # sibling process writing at the same instant now costs a retry instead of
+    # a dead tool call: SQLITE_BUSY is transient by definition -- nothing was
+    # written, so replaying the statement (or the whole block) is safe.
+    def with_busy_retry(attempts: BUSY_RETRIES, base: BUSY_BACKOFF)
+      tries = 0
+      begin
+        yield
+      rescue SQLite3::BusyException
+        tries += 1
+        raise if tries >= attempts
+        sleep([base * (2**(tries - 1)), 1.0].min)
+        retry
+      end
+    end
+
     # Wrap the shared connection's statement methods in DB_LOCK so concurrent
     # task threads never interleave SQLite I/O on the single connection. Uses a
-    # Monitor (reentrant) — a `transaction` block nests `execute` calls and must
+    # Monitor (reentrant) -- a `transaction` block nests `execute` calls and must
     # re-acquire the same lock without deadlocking.
     def guard_sqlite_connection(db)
       lock = DB_LOCK
-      %i[execute execute_batch get_first_row get_first_value last_insert_row_id changes transaction].each do |meth|
+      %i[execute execute_batch get_first_row get_first_value last_insert_row_id changes].each do |meth|
         next unless db.respond_to?(meth)
 
         unguarded = :"__mnemosyne_unguarded_#{meth}"
         db.singleton_class.send(:alias_method, unguarded, meth)
         db.singleton_class.send(:define_method, meth) do |*args, &blk|
-          lock.synchronize { send(unguarded, *args, &blk) }
+          lock.synchronize { Mnemosyne.with_busy_retry { send(unguarded, *args, &blk) } }
+        end
+      end
+
+      # Transactions default to IMMEDIATE. A deferred BEGIN that reads before it
+      # writes takes SHARED first and must upgrade; when a sibling process holds
+      # RESERVED the upgrade fails instantly with SQLITE_BUSY and busy_timeout is
+      # *not* consulted. BEGIN IMMEDIATE takes the write lock up front, where the
+      # busy handler does apply -- parallel contexts queue instead of dying.
+      # Callers that pass an explicit mode keep it.
+      unguarded_tx = :__mnemosyne_unguarded_transaction
+      if db.respond_to?(:transaction)
+        db.singleton_class.send(:alias_method, unguarded_tx, :transaction)
+        db.singleton_class.send(:define_method, :transaction) do |mode = :immediate, &blk|
+          lock.synchronize { Mnemosyne.with_busy_retry { send(unguarded_tx, mode, &blk) } }
         end
       end
       db
+    end
+
+    # Schema work runs in an IMMEDIATE transaction so two processes booting into
+    # the same context cannot interleave the DDL cascade (symptoms: "duplicate
+    # column name" on ALTER TABLE, or a half-applied db_version).
+    def migrate_guarded(db)
+      db.transaction(:immediate) { migrate db }
     end
 
     # Re-open the memory db at the (possibly changed) CONFIG.memory_db_path and
@@ -540,6 +604,72 @@ end
           );
         SQL
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '16')"
+      end
+
+      # Self-healing aegis_state. The Aegis orientation always reads/writes the
+      # canonical append-only shape below, independent of the stamped
+      # db_version. A divergent fork — notably the Swift port, which mints a
+      # *singleton* table (`id INTEGER PRIMARY KEY CHECK (id = 1)`) with an
+      # epoch `updated_at` and no `temperature`/`created_at` — stamps its own
+      # meta version at or above every gate, so the guarded steps above never
+      # fire. Detect that shape structurally and rebuild the table to the
+      # canonical form, carrying any existing state rows over.
+      aegis_table = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='aegis_state'").first
+      aegis_sql = aegis_table && aegis_table['sql'].to_s
+      aegis_columns = db.execute('PRAGMA table_info(aegis_state)').map { |col| col['name'] }
+      canonical_columns = %w[id tags summary temperature created_at working_dir thinking reasoning_effort model thinking_str]
+      singleton = aegis_sql.include?('CHECK (id = 1)') || aegis_sql.include?('CHECK(id=1)')
+      missing = %w[tags summary temperature created_at working_dir thinking_str] - aegis_columns
+
+      if aegis_table.nil?
+        db.execute <<~SQL
+          CREATE TABLE aegis_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tags TEXT,
+            summary TEXT,
+            temperature REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            working_dir TEXT,
+            thinking INTEGER,
+            reasoning_effort TEXT,
+            model TEXT,
+            thinking_str TEXT
+          );
+        SQL
+      elsif singleton || missing.any?
+        db.execute 'ALTER TABLE aegis_state RENAME TO aegis_state_legacy'
+        db.execute <<~SQL
+          CREATE TABLE aegis_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tags TEXT,
+            summary TEXT,
+            temperature REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            working_dir TEXT,
+            thinking INTEGER,
+            reasoning_effort TEXT,
+            model TEXT,
+            thinking_str TEXT
+          );
+        SQL
+        legacy_columns = db.execute('PRAGMA table_info(aegis_state_legacy)').map { |col| col['name'] }
+        temperature_expr = legacy_columns.include?('temperature') ? 'temperature' : '1.0'
+        created_at_expr = if legacy_columns.include?('created_at')
+                            'created_at'
+                          elsif legacy_columns.include?('updated_at')
+                            "datetime(updated_at, 'unixepoch')"
+                          else
+                            'CURRENT_TIMESTAMP'
+                          end
+        selects = canonical_columns[1..].map do |col|
+          case col
+          when 'temperature' then temperature_expr
+          when 'created_at' then created_at_expr
+          else legacy_columns.include?(col) ? col : 'NULL'
+          end
+        end
+        db.execute "INSERT INTO aegis_state (#{canonical_columns[1..].join(', ')}) SELECT #{selects.join(', ')} FROM aegis_state_legacy"
+        db.execute 'DROP TABLE aegis_state_legacy'
       end
     end
 
