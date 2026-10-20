@@ -26,15 +26,17 @@ module AetherOracle
     end
 
     def self.run_brain(argv)
+      # htmldiff is vendored because its source is not represented by the gemspec.
+      # It must precede the veil branch: `veil --check` probes the full
+      # instrumentarium, which requires Scriptorium → htmldiff.
+      vendor = File.expand_path('../../ruby/vendored/htmldiff', __dir__)
+      $LOAD_PATH.unshift(vendor) unless $LOAD_PATH.include?(vendor)
+
       if argv.first == 'veil'
         require_relative '../../ruby/config'
         require_relative '../../ruby/aether_veil'
         return AetherVeil.run(argv.drop(1))
       end
-
-      # htmldiff is vendored because its source is not represented by the gemspec.
-      vendor = File.expand_path('../../ruby/vendored/htmldiff', __dir__)
-      $LOAD_PATH.unshift(vendor) unless $LOAD_PATH.include?(vendor)
 
       require_relative '../../ruby/cli'
       ARGV.replace(argv.dup)

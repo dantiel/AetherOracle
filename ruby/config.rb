@@ -555,6 +555,15 @@ end
   def self.log_file_path
     File.join(tm_ai_dir, 'limen.log')
   end
+
+
+  # Daemon PID file: `<context>/.aether/aetheroracle.pid`. limen.rb writes its
+  # PID here on boot and deletes it on exit; boot.rb reuses the same path. The
+  # æther's daemon harness depends on this helper — remove it and both raise a
+  # NoMethodError on every boot.
+  def self.pid_file_path
+    File.join(tm_ai_dir, 'aetheroracle.pid')
+  end
   
   
   # Re-read the hierarchical config in place from the current working directory.

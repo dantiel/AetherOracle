@@ -58,7 +58,9 @@ module AetherVeil
 
       report = diagnose
       print_report(report)
-      return report[:ready] ? 0 : 1 if options[:check]
+      return (report[:ready] && report[:db_ok] && instruments_ok?(report[:instruments])) ? 0 : 1 if options[:check]
+
+      repair_db if options[:repair]
 
       fresh = !report[:config_exists]
       needs_setup = fresh || !report[:key_present] || options[:repair]
@@ -86,8 +88,8 @@ module AetherVeil
 
     def print_usage
       puts 'Usage: aether veil [--check | --repair | --default | --edit]'
-      puts '  --check    inspect system and configuration without changing files'
-      puts '  --repair   review model and repair a damaged config (with backup)'
+      puts '  --check    inspect system, configuration and memory DB (no writes)'
+      puts '  --repair   review model, repair config and migrate the memory DB'
       puts '  --default  write a documented default ~/.aethercodex (never overwrites)'
       puts '  --edit     write the default if missing, then open it in your editor'
     end
@@ -118,6 +120,8 @@ module AetherVeil
 
     def diagnose
       endpoint = CONFIG.api_url
+      db = db_status
+      instruments = instrument_status
       {
         ruby_ok: Gem::Version.new(RUBY_VERSION) >= MINIMUM_RUBY,
         ruby_version: RUBY_VERSION,
@@ -130,6 +134,14 @@ module AetherVeil
         fast_model: CONFIG.fast_model,
         endpoint: endpoint,
         endpoint_valid: valid_url?(endpoint),
+        db_path: db[:path],
+        db_exists: db[:exists],
+        db_version: db[:version],
+        db_missing: db[:missing],
+        db_singleton: db[:singleton],
+        db_error: db[:error],
+        db_ok: db[:ok],
+        instruments: instruments,
         ready: Gem::Version.new(RUBY_VERSION) >= MINIMUM_RUBY &&
           !CONFIG.api_key.to_s.strip.empty? && valid_url?(endpoint)
       }
@@ -144,7 +156,119 @@ module AetherVeil
       puts "  API endpoint: #{report[:endpoint_valid] ? 'OK' : 'invalid or missing'}"
       puts "  API key: #{report[:key_present] ? 'configured' : 'missing'}"
       puts "  User config: #{report[:config_path]}"
+      puts "  Memory DB: #{report[:db_path]}"
+      if report[:db_error]
+        puts "  Memory schema: unreadable (#{report[:db_error]})"
+      elsif !report[:db_exists]
+        puts '  Memory schema: not created yet (initializes on first run)'
+      else
+        problems = []
+        problems << "missing #{report[:db_missing].join(', ')}" unless report[:db_missing].empty?
+        problems << 'singleton schema' if report[:db_singleton]
+        state = report[:db_ok] ? 'OK' : "outdated — #{problems.join('; ')}"
+        puts "  Memory schema: v#{report[:db_version] || '?'} (#{state})"
+      end
+      print_instruments(report[:instruments])
       puts '  Provider connection: not tested (no request sent)'
+    end
+
+    def print_instruments(inst)
+      if inst.nil?
+        puts '  Instruments: not probed'
+      elsif inst[:loaded]
+        state = inst[:healthy] ? 'OK' : "problems — #{inst[:problems].join('; ')}"
+        puts "  Instruments: #{inst[:tools]} tools (#{state})"
+      else
+        puts "  Instruments: unavailable (#{inst[:error]})"
+      end
+    end
+
+    # `--check` must fail when the instrumentarium is loadable but structurally
+    # broken; an unloadable one is reported but not treated as a hard failure
+    # (it may simply be a minimal install without the full brain tier).
+    def instruments_ok?(inst)
+      return true if inst.nil? || !inst[:loaded]
+      inst[:healthy]
+    end
+
+    # Guarded instrumentarium probe: load the full tool set and run the
+    # PrimaMateria audit. Heavy (pulls the oracle stack), so any failure is
+    # reported as a diagnosed problem instead of aborting `veil --check`.
+    def instrument_status
+      require_relative 'instrumentarium/instrumenta'
+      audit = Instrumenta::PRIMA_MATERIA.audit
+      { loaded: true, tools: audit[:tools], healthy: audit[:healthy], problems: audit[:problems] }
+    rescue LoadError => e
+      { loaded: false, error: "cannot load instrumentarium: #{e.message}" }
+    rescue StandardError => e
+      { loaded: false, error: "#{e.class}: #{e.message}" }
+    end
+
+    # Path of the unified Mnemosyne database for the current context. Prefers
+    # CONFIG's context-scoped location and falls back to the home default.
+    def memory_db_path
+      CONFIG.memory_db_path
+    rescue StandardError
+      File.expand_path('~/.aether/mnemosyne.db')
+    end
+
+    # Read-only probe of the Mnemosyne DB: schema version and whether the
+    # `aegis_state` table exposes every column the Aegis orientation writes.
+    # Never mutates the file, so `--check` stays side-effect free.
+    def db_status
+      path = memory_db_path
+      exists = File.file?(path)
+      status = { path: path, exists: exists, version: nil, missing: [], singleton: false, ok: true, error: nil }
+
+      begin
+        require 'sqlite3'
+      rescue LoadError => e
+        status[:ok] = false
+        status[:error] = "sqlite3 unavailable: #{e.message}"
+        return status
+      end
+
+      return status unless exists
+
+      begin
+        SQLite3::Database.new(path) do |db|
+          db.results_as_hash = true
+          # Sibling processes may be mid-write; a read-only probe should wait
+          # rather than report a false "database is locked" verdict.
+          db.busy_timeout = 5000
+          row = db.execute("SELECT value FROM meta WHERE key='db_version'").first
+          status[:version] = row && row['value']
+          cols = db.execute('PRAGMA table_info(aegis_state)').map { |c| c['name'] }
+          status[:missing] = %w[temperature created_at working_dir thinking_str].reject { |c| cols.include?(c) }
+          table = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='aegis_state'").first
+          sql = (table && table['sql']).to_s
+          status[:singleton] = sql.include?('CHECK (id = 1)') || sql.include?('CHECK(id=1)')
+        end
+        status[:ok] = status[:missing].empty? && !status[:singleton]
+      rescue StandardError => e
+        status[:ok] = false
+        status[:error] = "#{e.class}: #{e.message}"
+      end
+      status
+    end
+
+    # Canonical repair: load Mnemosyne and open the connection — `Mnemosyne.db`
+    # runs the full migration cascade plus the idempotent aegis_state self-heal,
+    # so a divergent/outdated schema converges without duplicating DDL here.
+    def repair_db
+      path = memory_db_path
+      require 'sqlite3'
+      require_relative 'mnemosyne/mnemosyne'
+      Mnemosyne.db
+      version = Mnemosyne.db.execute("SELECT value FROM meta WHERE key='db_version'").first&.[]('value')
+      puts "  Memory DB migrated: #{path} (schema v#{version || '?'})"
+      true
+    rescue LoadError => e
+      warn "  Memory DB repair skipped: #{e.message}"
+      false
+    rescue StandardError => e
+      warn "  Memory DB repair failed: #{e.class}: #{e.message}"
+      false
     end
 
     def configure(review, report)
