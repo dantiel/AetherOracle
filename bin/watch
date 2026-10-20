@@ -40,7 +40,7 @@ def spawn_child(args)
     if WINDOWS
       ['cmd', '/c', File.join(ROOT, 'bin', 'aetheroracle.cmd'), *args]
     else
-      ['ruby', File.join(ROOT, 'bin', 'aetheroracle'), *args]
+      [File.join(ROOT, 'bin', 'aetheroracle.sh'), *args]
     end
   spawn(*argv)
 end
