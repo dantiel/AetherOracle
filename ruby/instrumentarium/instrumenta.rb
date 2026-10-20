@@ -1762,6 +1762,9 @@ if CONFIG.dev_mode?
   end
 end
 
+# ── Live web grounding: DeepSeek Search & Fetch instruments. ──
+require_relative 'web_search'
+
 # ── Project-context instruments: load every `.aether/*.rb` at boot so a
 # project may define its own tools (Unreal build/run, bespoke automation …)
 # without touching the core instrumentarium. See aether_instrumenta.rb.
