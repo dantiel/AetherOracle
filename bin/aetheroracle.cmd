@@ -36,7 +36,7 @@ set "CMD=%~1"
 set "BRAIN=0"
 rem No subcommand -> enter the Dialog-Kammer (brain tier).
 if "%CMD%"=="" set "BRAIN=1"
-for %%C in (ask chamber dialog talk server config context task logs repl veil read cat inspect ov write new mv rename files ast grep notes mem note history hist search find aegis seal seals) do if /i "%CMD%"=="%%C" set "BRAIN=1"
+for %%C in (ask chamber dialog talk server config context task logs repl veil hydra read cat inspect ov write new mv rename files ast grep notes mem note history hist search find aegis seal seals) do if /i "%CMD%"=="%%C" set "BRAIN=1"
 
 if "%BRAIN%"=="1" goto :brain
 

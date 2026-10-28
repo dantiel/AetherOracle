@@ -10,6 +10,7 @@ require_relative 'theme'
 require_relative 'instrumentum_renderer'
 require_relative 'token_ledger'
 require_relative 'ui'
+require_relative 'shell'
 begin
   require 'tty-reader'
   HAVE_TTY_READER = true
@@ -155,6 +156,7 @@ class ÆtherChamber
     @working_overlay_lines = 0
     @console_mutex = Mutex.new
     @quit = false
+    @pending_turn = nil
   end
 
   # ------------------------------------------------------------------ run --
@@ -179,6 +181,11 @@ class ÆtherChamber
       break if %w[exit quit].include?(input)
       next if input.empty?
 
+      if input.start_with?('$')
+        enter_shell(input)
+        next
+      end
+
       if input.start_with?('/')
         handle_slash(input)
         break if @quit
@@ -197,16 +204,33 @@ class ÆtherChamber
   # ------------------------------------------------------------- dialogue --
 
   def conjure(input)
+    persona = nil
     input, companions = compose_input(input)
-    persona = current_persona_prompt
-    unless companions.empty?
-      glyphs = (@veiled + companions).uniq
-      persona = if glyphs.one?
-                  CompanionPrograms.build_system_prompt(glyphs.first, COMPANION_PERSONALITIES[glyphs.first][:system_prompt])
-                else
-                  CompanionPrograms.build_multi_prompt(glyphs)
-                end
+    persona = build_persona(companions)
+    perform_turn(input, persona)
+  rescue StandardError => e
+    @pending_turn = { prompt: input, persona: persona, error: e }
+    warn "\e[31m!! #{e.class}: #{e.message}\e[0m"
+    puts @palette.dim('  Zug abgebrochen — /continue setzt fort.')
+  end
+
+  # Compose the active persona from the permanently veiled companions plus any
+  # single-turn @-mentions resolved by compose_input.
+  def build_persona(companions)
+    return current_persona_prompt if companions.empty?
+
+    glyphs = (@veiled + companions).uniq
+    if glyphs.one?
+      CompanionPrograms.build_system_prompt(glyphs.first, COMPANION_PERSONALITIES[glyphs.first][:system_prompt])
+    else
+      CompanionPrograms.build_multi_prompt(glyphs)
     end
+  end
+
+  # Run one full turn. Returns true on success, false when the turn produced no
+  # answer (the practitioner can /continue). Any exception raised here in the
+  # main thread propagates to the caller, which records it as @pending_turn.
+  def perform_turn(input, persona)
     flash_aegis_intent(input)
     context = Coniunctio.build(history: @history, temperature: current_temperature)
 
@@ -220,8 +244,20 @@ class ÆtherChamber
 
     answer = result[:answer]
     tool_results = result[:tool_results]
-    return if answer.nil?
 
+    if answer.nil?
+      err = result[:error]
+      @pending_turn = { prompt: input, persona: persona, error: err }
+      if err
+        warn "\e[31m!! #{err.class}: #{err.message}\e[0m"
+      else
+        warn "\e[31m!! Zug lieferte keine Antwort\e[0m"
+      end
+      puts @palette.dim('  /continue wiederholt den Zug.')
+      return false
+    end
+
+    @pending_turn = nil
     answer, text_suggestions = CompanionPrograms.extract_companion_suggestions(answer)
     emit_answer(answer)
     @history << { prompt: input, answer: answer, tool_calls: tool_results, created_at: Time.now }
@@ -231,8 +267,25 @@ class ÆtherChamber
     emit_companion_interactions(tool_results)
     text_suggestions.each { |s| enqueue_text_suggestion(s) }
     collect_focusables(answer, tool_results: tool_results)
+    true
+  end
+
+  # Re-run the most recent turn that finished prematurely (worker error, empty
+  # answer, or main-thread failure). Continues with the same prompt and persona,
+  # rebuilding the context from the current @history so the retry sees the exact
+  # same conversation state as the failed attempt.
+  def continue_turn
+    turn = @pending_turn
+    if turn.nil? || turn[:prompt].to_s.strip.empty?
+      puts 'Kein unvollendeter Zug zum Fortsetzen.'
+      return
+    end
+    puts @palette.dim("  → Fortsetzen: #{turn[:prompt].to_s.strip[0, 60]}")
+    perform_turn(turn[:prompt], turn[:persona])
   rescue StandardError => e
+    @pending_turn = turn.merge(error: e)
     warn "\e[31m!! #{e.class}: #{e.message}\e[0m"
+    puts @palette.dim('  /continue erneut versuchen.')
   end
 
   # Inscribe the completed turn into Mnemosyne's persistent Chronicle. The
@@ -292,6 +345,8 @@ class ÆtherChamber
       end
       result[:answer] = answer
       result[:tool_results] = tool_results
+    rescue StandardError => e
+      result[:error] = e
     ensure
       $stdout.close if $stdout != original_stdout
       $stdout = original_stdout
@@ -913,6 +968,17 @@ class ÆtherChamber
     "#{active_glyphs_display} \e[36mπ\e[0m "
   end
 
+  # ---------------------------------------------------------------- shell --
+
+  # The `$` prefix transmorphs the π-prompt into ÆtherShell: a Nushell-like,
+  # structured-data CLI. The single `@shell` instance persists across entries so
+  # cwd, variables and history survive the round-trip back to the oracle.
+  def enter_shell(initial_input)
+    shell_input = initial_input[1..].to_s.strip
+    @shell ||= ÆtherShell.new(palette: @palette)
+    @shell.run(shell_input.empty? ? nil : shell_input)
+  end
+
   def read_prompt
     return read_prompt_inline if inline_tab_available?
 
@@ -955,7 +1021,14 @@ class ÆtherChamber
     STDOUT.puts "  #{@palette.accent('?')} #{message}"
 
     case type
-    when 'confirm', 'select'
+    when 'confirm'
+      return { response: opts.first } if opts.size <= 1
+
+      choice = interactive_select_menu(opts, allow_custom: false, single_key: true)
+      return { error: 'No selection' } if choice.nil?
+
+      { response: choice }
+    when 'select'
       return { response: opts.first } if opts.size <= 1
 
       choice = interactive_select_menu(opts)
@@ -973,8 +1046,8 @@ class ÆtherChamber
   # printable character opens a free-text "other" line so the practitioner may
   # specify a value beyond the offered options; Enter confirms it, Esc returns
   # to the menu.
-  def interactive_select_menu(options)
-    return read_select_plain(options) unless $stdin.tty?
+  def interactive_select_menu(options, allow_custom: true, single_key: false)
+    return read_select_plain(options, allow_custom:, single_key:) unless $stdin.tty?
 
     idx = 0
     custom = nil
@@ -991,7 +1064,7 @@ class ÆtherChamber
 
     begin
       loop do
-        custom.nil? ? redraw_select_menu(options, idx) : redraw_select_custom(options, custom)
+        custom.nil? ? redraw_select_menu(options, idx, allow_custom:, single_key:) : redraw_select_custom(options, custom)
         input = use_win ? ÆtherWinConsole.next_input : tty_editor_input
         return nil if input.nil?
         next unless input.is_a?(Hash)
@@ -1011,7 +1084,9 @@ class ÆtherChamber
               if ch.match?(/\A[1-9]\z/)
                 n = ch.to_i - 1
                 return confirm_select_choice(options[n]) if n < options.size
-              elsif ch.match?(/\A[[:graph:]]\z/)
+              elsif single_key && (match = single_key_match(options, ch))
+                return confirm_select_choice(match)
+              elsif allow_custom && ch.match?(/\A[[:graph:]]\z/)
                 custom = +ch
               end
             end
@@ -1020,7 +1095,9 @@ class ÆtherChamber
             next if text.empty?
             if text.match?(/\A[1-9]\z/) && text.to_i <= options.size
               return confirm_select_choice(options[text.to_i - 1])
-            else
+            elsif single_key && (match = single_key_match(options, text))
+              return confirm_select_choice(match)
+            elsif allow_custom
               custom = text
             end
           end
@@ -1051,7 +1128,7 @@ class ÆtherChamber
       ÆtherWinConsole.disable!
       use_win = false
       ÆtherWinConsole.end_raw_input
-      return read_select_plain(options)
+      return read_select_plain(options, allow_custom:, single_key:)
     ensure
       ÆtherWinConsole.end_raw_input if use_win
     end
@@ -1080,12 +1157,27 @@ class ÆtherChamber
     choice
   end
 
+  # Map a single keystroke to an option by its first letter (case-insensitive).
+  # Returns nil unless exactly one option matches, so ambiguous labels never
+  # trigger an accidental jump.
+  def single_key_match(options, ch)
+    return nil if ch.nil? || ch.empty?
+    down = ch[0].downcase
+    matches = options.select { |o| !o.empty? && o[0].downcase == down }
+    matches.size == 1 ? matches.first : nil
+  end
+
   # Numbered fallback for a piped/non-TTY session where arrow keys are
   # meaningless: list the options and read one line. A number picks the option,
   # anything else is returned verbatim as the practitioner's custom answer.
-  def read_select_plain(options)
+  def read_select_plain(options, allow_custom: true, single_key: false)
     options.each_with_index { |opt, i| STDOUT.puts "  #{i + 1}. #{opt}" }
-    STDOUT.puts @palette.dim('  (number to select, or type your own)')
+    if single_key
+      letters = options.map { |o| o[0]&.downcase }.compact
+      STDOUT.puts @palette.dim("  (number or #{letters.join('/')} to select)")
+    else
+      STDOUT.puts @palette.dim('  (number to select, or type your own)')
+    end
     STDOUT.print "  #{@palette.accent('>')} "
     STDOUT.flush
     line = $stdin.gets&.strip
@@ -1094,10 +1186,12 @@ class ÆtherChamber
     n = line.to_i
     return options[n - 1] if n.between?(1, options.size)
 
-    options.find { |o| o.casecmp?(line) } || line
+    return single_key_match(options, line) if single_key
+
+    options.find { |o| o.casecmp?(line) } || (allow_custom ? line : nil)
   end
 
-  def redraw_select_menu(options, idx)
+  def redraw_select_menu(options, idx, allow_custom: true, single_key: false)
     n = @select_menu_lines
     STDOUT.print "\e[#{n}A" if n.positive?
     STDOUT.print "\r\e[J"
@@ -1107,11 +1201,23 @@ class ÆtherChamber
       label = i == idx ? opt : @palette.dim(opt)
       "   #{marker} #{label}"
     end
-    rows << @palette.dim('  ^/v choose - enter confirm - type for other - esc cancel')
+    rows << @palette.dim(select_menu_hint(options, allow_custom:, single_key:))
     @select_menu_lines = rows.size
     STDOUT.print rows.join("\n")
     STDOUT.print "\n"
     STDOUT.flush
+  end
+
+  def select_menu_hint(options, allow_custom:, single_key:)
+    parts = ['^/v choose', 'enter confirm']
+    if single_key
+      letters = options.map { |o| o[0]&.downcase }.compact
+      parts << "#{letters.join('/')} shortcut" unless letters.empty?
+    elsif allow_custom
+      parts << 'type for other'
+    end
+    parts << 'esc cancel'
+    parts.join(' - ')
   end
 
   def interactive_line_read
@@ -2423,7 +2529,7 @@ class ÆtherChamber
 
   def slash_commands
     %w[/help /morph /unmorph /personae /file /clear /history /config /context /tools
-       /tool /markdown /highlight /theme /cost /mouse /exit]
+       /tool /markdown /highlight /theme /cost /mouse /continue /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -2439,6 +2545,7 @@ class ÆtherChamber
     when '/personae', '/companions' then list_personae
     when '/file'                    then attach_file(arg)
     when '/clear'                   then clear_history
+    when '/continue'                then continue_turn
     when '/history'                 then show_history(arg)
     when '/config'                  then config_summary
     when '/context'                 then context_summary
@@ -2469,6 +2576,7 @@ class ÆtherChamber
       ['/',                  'Befehls-Picker öffnen'],
       ['Tab / Shift-Tab',    'Fokus-Positionen durchlaufen'],
       ['/clear',             'Gesprächsverlauf löschen'],
+      ['/continue',          'Abgebrochenen Zug wiederholen'],
       ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
       ['/config',            'Konfiguration zeigen'],
       ['/context',           'Abgeleiteten Kontext zeigen'],
@@ -2478,6 +2586,7 @@ class ÆtherChamber
       ['/mouse',             'Maus-Klicksteuerung an/aus'],
       ['/theme <name>',      'Highlight-Theme wählen'],
       ['/cost',              'Token-Kosten der Sitzung zeigen'],
+      ['$',                  'π → ÆtherShell: Nushell-artige Daten-Pipelines (exit zurück)'],
       ['/exit, exit',        'Die Kammer verlassen']
     ]
     puts
@@ -2514,6 +2623,7 @@ class ÆtherChamber
 
   def clear_history
     @history.clear
+    @pending_turn = nil
     Readline::HISTORY.clear if HAVE_READLINE
     puts 'Gesprächsverlauf gelöscht.'
   end
@@ -2833,7 +2943,8 @@ class ÆtherChamber
     glyph = @veiled.empty? ? '*' : active_glyphs_display
     rows = [
       "  #{glyph}  Der Kristall ist gestimmt; zwölf Stimmen harren.",
-      '  /morph ruft sie · /unmorph entlässt sie · exit geht.'
+      '  /morph ruft sie — /unmorph entlässt sie — exit geht.',
+      '  $ transmorphiert die π-Prompterei in die ÆtherShell (exit kehrt zurück).'
     ]
     puts AthanorUI.box('Dialog-Kammer · ÆtherCodex', rows, width: [terminal_width, 80].min, palette: @palette)
     puts

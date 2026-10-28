@@ -49,6 +49,16 @@ module ÆtherWinConsole
   ENABLE_QUICK_EDIT_MODE = 0x0040
   ENABLE_EXTENDED_FLAGS  = 0x0080
 
+  # Console output-mode bits for ANSI/VT escape-sequence rendering. The classic
+  # conhost.exe host ignores `\e[2J`, `\e[H`, `\e[?25l` etc. unless
+  # ENABLE_VIRTUAL_TERMINAL_PROCESSING is set on the OUTPUT handle — without it,
+  # Hydra's fullscreen split-pane grid collapses into a scrolled stream of box
+  # glyphs. (Windows Terminal / ConPTY enables this implicitly; cmd.exe does not.)
+  ENABLE_PROCESSED_OUTPUT            = 0x0001
+  ENABLE_WRAP_AT_EOL_OUTPUT          = 0x0002
+  ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+  OUTPUT_MASK = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
   # Virtual-key codes we interpret
   VK_BACK    = 0x08
   VK_TAB     = 0x09
@@ -92,6 +102,7 @@ module ÆtherWinConsole
   # Ctrl+<letter> editing shortcuts (chamber-style, complementing Ctrl+C/D).
   CTRL_ACTIONS = {
     0x41 => :ctrl_a, # Ctrl+A → start of line
+    0x42 => :ctrl_b, # Ctrl+B → Hydra prefix
     0x43 => :ctrl_c, # Ctrl+C → clear line
     0x44 => :ctrl_d, # Ctrl+D → delete char / EOF on empty
     0x45 => :ctrl_e, # Ctrl+E → end of line
@@ -149,6 +160,12 @@ module ÆtherWinConsole
   class << self
     def console_handle
       @console_handle ||= GetStdHandle(-10).to_i # STD_INPUT_HANDLE, as an address
+    end
+
+    # STD_OUTPUT_HANDLE — the screen, where ANSI/VT escape sequences must be
+    # switched on for fullscreen redraws to be interpreted (see enable_virtual_terminal!).
+    def output_handle
+      @output_handle ||= GetStdHandle(-11).to_i
     end
 
     # One byte from msvcrt `_getch` (0..255). Used to complete a truncated
@@ -230,6 +247,21 @@ module ÆtherWinConsole
 
     def set_mode(handle, mode)
       SetConsoleMode(handle, mode)
+    end
+
+    # Turn on ANSI/VT escape-sequence processing on the output handle. Idempotent
+    # and non-fatal: on hosts that already support VT (Windows Terminal / ConPTY)
+    # the mode bits are already set and this just ORs them in again; on pipes or
+    # exotic hosts it returns false and the caller can degrade gracefully.
+    def enable_virtual_terminal!
+      h = output_handle
+      return false if h.nil? || h.zero?
+
+      mode = get_mode(h)
+      set_mode(h, mode | OUTPUT_MASK)
+      true
+    rescue StandardError
+      false
     end
 
     # Absolute console cursor position [x, y] in 0-based character cells.

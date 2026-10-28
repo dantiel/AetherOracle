@@ -3,6 +3,14 @@
 require 'redcarpet'
 require 'rouge'
 require 'diffy'
+
+# htmldiff is vendored (ruby/vendored/htmldiff) because its source is not
+# represented by the gemspec. Seed the load path here so the CLI works whether
+# it is entered via the gem executable (lib/aetheroracle/cli.rb) or directly
+# as `ruby ruby/cli.rb hydra`.
+htmldiff_vendor = File.expand_path('../vendored/htmldiff', __dir__)
+$LOAD_PATH.unshift(htmldiff_vendor) unless $LOAD_PATH.include?(htmldiff_vendor)
+
 require 'htmldiff'
 require 'cgi'
 
