@@ -23,6 +23,10 @@ ruby/.portable/
 # Temp probes / scratch scripts (never committed)
 _daemon_probe.rb
 *_probe*.rb
+tmp_shell_smoke.rb
+
+# Scratch artifacts (stray shell-redirect outputs)
+/1000
 
 # OS cruft
 .DS_Store

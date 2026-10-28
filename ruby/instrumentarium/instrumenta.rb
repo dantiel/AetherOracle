@@ -244,13 +244,20 @@ instrument :run_command,
 
   if !command_allowed || command_blocked
     $stderr.puts "[AEGIS] run_command blocked: cmd=#{cmd.inspect} wildcard=#{wildcard_active} allowed=#{command_allowed} blocked=#{command_blocked} allow_list=#{allowed_commands.inspect} block_list=#{blocked_commands.inspect}"
-    ask_uuid = SecureRandom.uuid
-    HorologiumAeternum.send_status('ask_user', {
-                                     type: 'confirm',
-                                     message: "Blocked command: #{cmd}\nAllow execution?",
-                                     options: %w[Allow Block]
-                                   }, uuid: ask_uuid)
-    result = HorologiumAeternum.await_user_response(ask_uuid)
+    terminal = Thread.current[:aether_terminal_stream]
+    result = if terminal
+               terminal.ask_user(type: 'confirm',
+                                 message: "Blocked command: #{cmd}\nAllow execution?",
+                                 options: %w[Allow Block])
+             else
+               ask_uuid = SecureRandom.uuid
+               HorologiumAeternum.send_status('ask_user', {
+                                                type: 'confirm',
+                                                message: "Blocked command: #{cmd}\nAllow execution?",
+                                                options: %w[Allow Block]
+                                              }, uuid: ask_uuid)
+               HorologiumAeternum.await_user_response(ask_uuid)
+             end
     raise "🚫 Blocked command: `#{cmd}`" unless result[:response]&.downcase == 'allow'
   end
 
@@ -321,12 +328,19 @@ instrument :create_file,
   full = File.join Argonaut.project_root, path
 
   if File.exist?(full) && !overwrite
-    HorologiumAeternum.send_status('ask_user', {
-                                     type: 'confirm',
-                                     message: "File already exists: #{path}\nOverwrite?",
-                                     options: %w[Overwrite Cancel]
-                                   }, uuid:)
-    result = HorologiumAeternum.await_user_response(uuid)
+    terminal = Thread.current[:aether_terminal_stream]
+    result = if terminal
+               terminal.ask_user(type: 'confirm',
+                                 message: "File already exists: #{path}\nOverwrite?",
+                                 options: %w[Overwrite Cancel])
+             else
+               HorologiumAeternum.send_status('ask_user', {
+                                                type: 'confirm',
+                                                message: "File already exists: #{path}\nOverwrite?",
+                                                options: %w[Overwrite Cancel]
+                                              }, uuid:)
+               HorologiumAeternum.await_user_response(uuid)
+             end
     next { error: "File exists: #{path} (user cancelled)" } unless result[:response]&.downcase == 'overwrite'
   end
 

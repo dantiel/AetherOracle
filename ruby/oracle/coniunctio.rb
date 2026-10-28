@@ -139,7 +139,13 @@ module Coniunctio
                           ].join("\n\n") }
                       end
 
-      [assistant_message, tools_message, user_message].compact
+      # A freshly-submitted prompt carries answer:nil — it must not become an
+      # assistant turn with no content (DeepSeek rejects content-less messages).
+      messages = []
+      messages << assistant_message if entry[:answer].present?
+      messages << tools_message if tools_message
+      messages << user_message
+      messages
     end
 
 

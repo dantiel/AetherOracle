@@ -48,6 +48,7 @@ class ÆtherCodexCLI
     when 'logs'                        then logs_mode
     when 'repl'                        then chamber_mode
     when 'veil'                        then veil_mode
+    when 'hydra'                       then hydra_mode
     when 'read', 'cat', 'inspect', 'ov', 'write', 'new', 'mv', 'rename',
          'files', 'ast', 'grep', 'notes', 'mem', 'note', 'history', 'hist',
          'search', 'find', 'aegis', 'seal', 'seals'
@@ -433,6 +434,7 @@ class ÆtherCodexCLI
     puts "  logs             Tail the tagged log stream (colored, toggleable)"
     puts "  logs tags        Configure tags: colors + enable/disable"
     puts "  veil             Check, configure, and repair Aether setup"
+    puts "  hydra            Multi-headed parallel-worker terminal (tmux-style)"
     puts "  config           Show configuration"
     puts "  context          Show the derived context (root, config, memory DB)"
     puts "  context init     Materialize a .aethercodex config here"
@@ -466,6 +468,11 @@ class ÆtherCodexCLI
     puts "  ÆtherCodex ask \"What is the meaning of life?\""
     puts "  echo \"explain this code\" | ÆtherCodex ask"
     puts "  ÆtherCodex ask --file app.rb \"Refactor this\""
+  end
+
+  def hydra_mode
+    require_relative 'oracle/hydra'
+    Hydra.start
   end
 
   def chamber_mode
