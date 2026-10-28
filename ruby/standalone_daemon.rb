@@ -380,7 +380,7 @@ class StandaloneDaemon
   # wait behind a running computation: the UI's confirm has to answer at once.
   CONTROL_COMMANDS = %w[
     ping activate_context interrupt pause_turn resume_turn weave_turn
-    aegis history get_note remove_note
+    aegis history get_note remove_note usage
     list_tasks create_task remove_task recall user_response
     seal_create seal_list seal_status seal_delegate
     task_detail tokenize
@@ -401,19 +401,24 @@ class StandaloneDaemon
     @stream = PipeStream.new
     HorologiumAeternum.set_websocket(@stream)
     @engine = MagnumOpusEngine.new(mnemosyne: Mnemosyne, aetherflux: Aetherflux)
-    @queue = Queue.new
-    @worker_thread = nil
     @shell = ShellSession.new($project_root)
     # The agent's run_command instrument resolves its cwd through this handle,
     # coupling the user's CLI and the model's shell into one filesystem truth.
     $aether_shell = @shell
     @running = true
-    # The LAN æther: whether a turn is in flight (busy) and the HTTP port the
-    # iOS companion reaches. `@busy` is written by the single worker, read by
-    # the heartbeat + invoke endpoints.
-    @busy = false
+    # Thread-per-flow: every heavy turn (oracle/chat/companion/conjuration/task)
+    # runs on its own thread so flows proceed independently. `@flow_threads`
+    # tracks the live set for fan-out (pause/interrupt/shutdown); `@active_flows`
+    # is the real busy signal; `@gates` maps flow_id → {gate, kind} so ⏸/▶/weave
+    # can still reach the main conversation turn; `@shell_epoch` guards the trunk
+    # shell against stale branch merges across a context switch.
+    @flow_threads = []
+    @flow_mutex = Mutex.new
+    @active_flows = 0
+    @gates = {}
+    @shell_epoch = 0
+    # The LAN æther: the HTTP port the iOS companion reaches.
     @http_port = nil
-    start_worker
   end
 
   def emit(obj)
@@ -454,108 +459,142 @@ class StandaloneDaemon
     end
   end
 
-  # Single worker consumes heavy requests serially (FIFO). No parallel network
-  # calls, no competing SQLite writes, no $project_root races — linear history.
-  # Each turn breathes its own ShellSession branch, forked from the merged cwd;
-  # the agent's run_command mutates that branch and it merges back on completion.
-  def start_worker
-    @worker_thread = Thread.new do
+  # Thread-per-flow executor: every heavy turn (oracle/chat/companion/conjuration/
+  # task) runs on its own thread so flows proceed independently instead of
+  # queueing behind one serial worker. No SQLite race (Mnemosyne serializes
+  # behind DB_LOCK), no shell race (each flow branches its own ShellSession and
+  # merges back under @flow_mutex, guarded by @shell_epoch so a context switch
+  # never gets clobbered by a stale branch). The wire is already thread-local —
+  # `emit` and PipeStream carry aether_sink/aether_request_id per thread and
+  # FRAME_MUTEX serializes writes — so concurrent frames interleave without
+  # tearing, and the Swift reader can demux them by request_id.
+  def spawn_flow(request, request_id, sink)
+    flow_id = request_id || "req_#{SecureRandom.hex(6)}"
+    meta = flow_metadata(request)
+    thread = Thread.new do
       Thread.current.report_on_exception = true
+      run_flow(request, request_id, sink, flow_id, meta)
+    ensure
+      @flow_mutex.synchronize { @flow_threads.delete(Thread.current) }
+    end
+    @flow_mutex.synchronize { @flow_threads << thread }
+    thread
+  end
+
+  # One flow's full lifecycle, on its own thread. A flow death is isolated — it
+  # never takes the daemon down (unlike the old single worker, whose death made
+  # queued turns hang forever).
+  def run_flow(request, request_id, sink, flow_id, meta)
+    answered = false
+    Thread.current[:paused] = false
+    Thread.current[:aether_request_id] = request_id
+    Thread.current[:aether_sink] = sink
+    # A fresh gate per turn: ⏸ holds *this* chapter, ▶ releases it, ⏹ tears it.
+    gate = TurnGate.new(beat: TURN_HEARTBEAT)
+    Thread.current[:pause_gate] = gate
+    @flow_mutex.synchronize { @gates[flow_id] = { gate: gate, kind: meta[:kind] } }
+
+    # Gist Bus: register this turn as a live flow so sibling flows see its
+    # public silhouette (who + when + Aegis summary, never its reasoning or
+    # tool bodies). The thread-local carries the flow's identity into the
+    # conduit build so the turn can exclude itself and filter broadcasts.
+    GistBus.begin_flow(id: flow_id, kind: meta[:kind], label: meta[:label],
+                       companion: meta[:companion], project: $project_root)
+    GistBus.set_aegis(flow_id, (Mnemosyne.aegis || {})[:summary].to_s)
+    Thread.current[:aether_flow] = {
+      id: flow_id, kind: meta[:kind], label: meta[:label],
+      companion: meta[:companion], project: $project_root
+    }
+
+    heartbeat = nil
+    turn_shell = nil
+    epoch = nil
+    incr = false
+    begin
+      turn_shell, epoch = @flow_mutex.synchronize { [@shell.branch, @shell_epoch] }
+      Thread.current[:aether_shell] = turn_shell
+      @flow_mutex.synchronize { @active_flows += 1 }
+      incr = true
+      heartbeat = start_heartbeat
+      result = dispatch(request['command'], request['arguments'] || {})
+      answered = true
+      emit(type: 'result', request_id: request_id, success: true, result: result)
+    rescue Exception => e
+      # Purificatio: StandardError misses SyntaxError/LoadError/NoMemoryError
+      # & co. — a SyntaxError from eval'd tooling would otherwise kill the
+      # flow silently (no result, no recover) and hang Swift until its lease.
+      # Fatal shutdown signals still propagate so the daemon can exit.
+      raise if e.is_a?(SystemExit) || e.is_a?(SignalException)
+
+      answered = true
+      emit(type: 'result', request_id: request_id, success: false,
+           error: "#{e.class}: #{e.message}")
+      # Riss §7: when a turn breaks (lease expiry / error), the companion
+      # becomes the next chapter's beginning — surface a one-click recovery
+      # macro instead of a dead end. The last intention lives in Aegis.
       begin
-        loop do
-          request, request_id, sink = @queue.pop
-          break if request == :shutdown
-
-        Thread.current[:paused] = false
-        Thread.current[:aether_request_id] = request_id
-        Thread.current[:aether_sink] = sink
-        # A fresh gate per turn: ⏸ holds *this* chapter, ▶ releases it, ⏹ tears it.
-        Thread.current[:pause_gate] = @worker_gate = TurnGate.new(beat: TURN_HEARTBEAT)
-
-        # Gist Bus: register this turn as a live flow so sibling flows see its
-        # public silhouette (who + when + Aegis summary, never its reasoning or
-        # tool bodies). The thread-local carries the flow's identity into the
-        # conduit build so the turn can exclude itself and filter broadcasts.
-        flow_id = request_id || "req_#{SecureRandom.hex(6)}"
-        meta = flow_metadata(request)
-        GistBus.begin_flow(id: flow_id, kind: meta[:kind], label: meta[:label],
-                           companion: meta[:companion], project: $project_root)
-        GistBus.set_aegis(flow_id, (Mnemosyne.aegis || {})[:summary].to_s)
-        Thread.current[:aether_flow] = {
-          id: flow_id, kind: meta[:kind], label: meta[:label],
-          companion: meta[:companion], project: $project_root
-        }
-
-        turn_shell = @shell.branch
-        $aether_shell = turn_shell
-        @busy = true
-
-        heartbeat = nil
-        begin
-          heartbeat = start_heartbeat
-          result = dispatch(request['command'], request['arguments'] || {})
-          emit(type: 'result', request_id: request_id, success: true, result: result)
-        rescue Exception => e
-          # Purificatio: StandardError misses SyntaxError/LoadError/NoMemoryError
-          # & co. — a SyntaxError from eval'd tooling would otherwise kill the
-          # worker silently (no result, no recover) and hang Swift until its
-          # lease. Fatal shutdown signals still propagate so the daemon can exit.
-          raise if e.is_a?(SystemExit) || e.is_a?(SignalException)
-
-          emit(type: 'result', request_id: request_id, success: false,
-               error: "#{e.class}: #{e.message}")
-          # Riss §7: when a turn breaks (lease expiry / error), the companion
-          # becomes the next chapter's beginning — surface a one-click recovery
-          # macro instead of a dead end. The last intention lives in Aegis.
-          begin
-            last_intent = (Mnemosyne.aegis || {})[:summary].to_s
-            # The riss becomes an intention in Pythia's agenda (aspect: phoenix,
-            # the facet that rises from failure) — recovery is not a dead end but
-            # the next chapter already signed into the manifest.
-            intent = begin
-              Mnemosyne::AethernautManifest.enqueue(
-                kind: :recovery, aspect: :phoenix, source: 'riss',
-                title: 'Hier riss der Faden — weiterweben?',
-                body: last_intent[0, 400], action: 'recover_last_intent'
-              )
-            rescue Exception
-              nil
-            end
-            emit(type: 'recover_suggestion',
-                 request_id: request_id,
-                 glyph: '🦊',
-                 prompt: 'Hier riss der Faden — weiterweben?',
-                 action: 'recover_last_intent',
-                 intent_id: intent && intent[:id],
-                 last_intent: last_intent[0, 400])
-          rescue Exception
-            nil
-          end
-        ensure
-          @busy = false
-          heartbeat&.kill
-          # Merge the turn's branch back into the trunk unless a context switch
-          # replaced it mid-flight (activate_context re-points @shell to the new
-          # project's cwd; the stale branch must not clobber it).
-          @shell.merge_from(turn_shell) if $aether_shell.equal?(turn_shell)
-          $aether_shell = @shell
-          GistBus.end_flow(flow_id)
-          Thread.current[:aether_flow] = nil
-          Thread.current[:paused] = false
-          Thread.current[:pause_gate] = nil
-          @worker_gate = nil
-          Thread.current[:aether_request_id] = nil
+        last_intent = (Mnemosyne.aegis || {})[:summary].to_s
+        # The riss becomes an intention in Pythia's agenda (aspect: phoenix,
+        # the facet that rises from failure) — recovery is not a dead end but
+        # the next chapter already signed into the manifest.
+        intent = begin
+          Mnemosyne::AethernautManifest.enqueue(
+            kind: :recovery, aspect: :phoenix, source: 'riss',
+            title: 'Hier riss der Faden — weiterweben?',
+            body: last_intent[0, 400], action: 'recover_last_intent'
+          )
+        rescue Exception
+          nil
         end
+        emit(type: 'recover_suggestion',
+             request_id: request_id,
+             glyph: '🦊',
+             prompt: 'Hier riss der Faden — weiterweben?',
+             action: 'recover_last_intent',
+             intent_id: intent && intent[:id],
+             last_intent: last_intent[0, 400])
+      rescue Exception
+        nil
       end
-      rescue Exception => e
-        warn "[AETHER-DAEMON] worker died: #{e.class}: #{e.message}"
-        warn(e.backtrace.join("\n")) if e.backtrace
-        # A dead worker = a zombie daemon (queued turns would hang forever). Exit
-        # loudly so Swift sees process death and revives with backoff instead of
-        # wedging until the request lease expires.
-        exit!(1)
+    ensure
+      @flow_mutex.synchronize { @active_flows -= 1 } if incr
+      heartbeat&.kill
+      # Merge the turn's branch back into the trunk unless a context switch
+      # replaced it mid-flight (activate_context resets @shell and bumps the
+      # epoch; a stale branch from the old project must not clobber the new cwd).
+      if turn_shell
+        @flow_mutex.synchronize { @shell.merge_from(turn_shell) if @shell_epoch == epoch }
+      end
+      Thread.current[:aether_shell] = nil
+      GistBus.end_flow(flow_id)
+      Thread.current[:aether_flow] = nil
+      Thread.current[:paused] = false
+      Thread.current[:pause_gate] = nil
+      @flow_mutex.synchronize { @gates.delete(flow_id) }
+      Thread.current[:aether_request_id] = nil
+    end
+  rescue Exception => e
+    # Setup failure (before the begin above): still answer so Swift never hangs.
+    unless answered
+      begin
+        emit(type: 'result', request_id: request_id, success: false,
+             error: "#{e.class}: #{e.message}")
+      rescue StandardError
+        nil
       end
     end
+    warn "[AETHER-DAEMON] flow #{flow_id} died: #{e.class}: #{e.message}"
+    warn(e.backtrace.join("\n")) if e.backtrace
+  end
+
+  # Whether any heavy flow is in flight — the busy gate for the LAN æther and
+  # the heartbeat payload.
+  def busy?
+    @flow_mutex.synchronize { @active_flows } > 0
+  end
+
+  def active_flow_count
+    @flow_mutex.synchronize { @active_flows }
   end
 
   # Transport dispatch: `--listen SOCKET` runs the ÆtherLimen background service
@@ -654,7 +693,7 @@ class StandaloneDaemon
              error: "#{e.class}: #{e.message}")
       end
     else
-      @queue << [request, request_id, sink]
+      spawn_flow(request, request_id, sink)
     end
   end
 
@@ -720,7 +759,7 @@ class StandaloneDaemon
     if prompt.empty? && memory.empty?
       return [400, { error: 'Missing prompt' }.to_json]
     end
-    if @busy
+    if busy?
       return [409, { error: 'busy', message: 'The oracle is mid-turn.', busy: true }.to_json]
     end
 
@@ -803,7 +842,7 @@ class StandaloneDaemon
       port: @http_port,
       capabilities: %w[metempsychosis task_spawn invoke manifest],
       version: '3.0.0',
-      busy: @busy,
+      busy: busy?,
       active_tasks: active_tasks
     }
   end
@@ -834,8 +873,8 @@ class StandaloneDaemon
       args['companion'] = voice unless voice.empty? || voice == 'pythia'
     end
 
-    @queue << [{ 'command' => 'oracle', 'arguments' => args },
-               "http_#{SecureRandom.hex(6)}", sink]
+    spawn_flow({ 'command' => 'oracle', 'arguments' => args },
+               "http_#{SecureRandom.hex(6)}", sink)
     queue.pop || {}
   end
 
@@ -844,14 +883,47 @@ class StandaloneDaemon
     @http_server&.stop
     warn "[AETHER-DAEMON] shutdown (pid #{Process.pid})"
     @running = false
-    @queue << [:shutdown, nil, nil]
-    @worker_thread&.join(2)
+    threads = @flow_mutex.synchronize { @flow_threads.dup }
+    threads.each { |t| t.join(2) }
+  end
+
+  # Snapshot of the oracle's breath: which model/thinking level is active, the
+  # current session's token + cost ledger, and the all-time totals. Pure reads —
+  # safe on the control path, so the status bar can poll it mid-computation.
+  def usage_snapshot
+    session = TokenLedger.session
+    persisted = TokenLedger.persisted
+    thinking = Mnemosyne.aegis[:thinking].to_s
+    thinking = 'normal' if thinking.empty?
+    {
+      model: CONFIG.model.to_s,
+      fast_model: CONFIG.fast_model.to_s,
+      api_type: CONFIG.api_type.to_s,
+      thinking: thinking,
+      project_root: $project_root.to_s,
+      session: {
+        prompt_tokens: session[:prompt_tokens].to_i,
+        completion_tokens: session[:completion_tokens].to_i,
+        cost: session[:cost].to_f,
+        turns: session[:turns].to_i
+      },
+      persisted: {
+        prompt_tokens: persisted[:prompt_tokens].to_i,
+        completion_tokens: persisted[:completion_tokens].to_i,
+        cost: persisted[:cost].to_f,
+        sessions: persisted[:sessions].to_i
+      }
+    }
   end
 
   def dispatch(command, args)
     case command
     when 'ping'
       { pong: true, time: Time.now.to_f, cwd: ($aether_shell || @shell).cwd }
+
+    # -- Hermetic accounting (context + token ledger + cost) --
+    when 'usage', 'ledger'
+      usage_snapshot
 
     # -- Mnemosyne --
     when 'remember'
@@ -1025,15 +1097,27 @@ class StandaloneDaemon
   # (the slow part) overlap. Telemetry flows through HorologiumAeternum's
   # PipeStream, which is mutex-guarded and thread-safe.
   def spawn_task_runner(task_id, restart: false)
-    Thread.new do
+    thread = Thread.new do
       Thread.current.report_on_exception = true
+      turn_shell = nil
+      epoch = nil
       begin
+        turn_shell, epoch = @flow_mutex.synchronize { [@shell.branch, @shell_epoch] }
+        Thread.current[:aether_shell] = turn_shell
         @engine.continue_task(task_id, restart: restart)
       rescue StandardError => e
         warn "[AETHER-DAEMON] task runner #{task_id} died: #{e.class}: #{e.message}"
         warn(e.backtrace.join("\n")) if e.backtrace
+      ensure
+        if turn_shell
+          @flow_mutex.synchronize { @shell.merge_from(turn_shell) if @shell_epoch == epoch }
+        end
+        Thread.current[:aether_shell] = nil
       end
+    ensure
+      @flow_mutex.synchronize { @flow_threads.delete(Thread.current) }
     end
+    @flow_mutex.synchronize { @flow_threads << thread }
     { ok: true, id: task_id, started: true, restart: restart }
   end
 
@@ -1055,7 +1139,10 @@ class StandaloneDaemon
     apply_project_root(root)
     CONFIG.reload! if CONFIG.respond_to?(:reload!)
     Mnemosyne.reset_connection! if Mnemosyne.respond_to?(:reset_connection!)
-    @shell&.reset($project_root)
+    @flow_mutex.synchronize do
+      @shell&.reset($project_root)
+      @shell_epoch += 1
+    end
     # Re-point the active shell handle: any in-flight turn branch is stale now,
     # so the trunk and the instrument's handle both breathe the new project.
     $aether_shell = @shell
@@ -1084,8 +1171,8 @@ class StandaloneDaemon
   # Set the worker's cooperative pause flag. The Oracle loop checks
   # Thread.current[:paused] at each boundary and returns a divine interrupt.
   def pause_worker
-    t = @worker_thread
-    t[:paused] = true if t && t.alive?
+    threads = @flow_mutex.synchronize { @flow_threads.dup.select(&:alive?) }
+    threads.each { |t| t[:paused] = true }
   end
 
   # Spawns a daemon-thread heartbeat: every HEARTBEAT_INTERVAL seconds it emits a
@@ -1130,12 +1217,12 @@ class StandaloneDaemon
   # active HorologiumAeternum token; signalling it lets the model stop cleanly
   # without killing the daemon, so the queued interjection can run next.
   def interrupt_computation
-    t = @worker_thread
-    if t && t.alive?
-      t[:paused] = true
-      { interrupted: true, queued: @queue.size }
-    else
+    threads = @flow_mutex.synchronize { @flow_threads.dup.select(&:alive?) }
+    if threads.empty?
       { interrupted: false, note: 'no in-flight computation' }
+    else
+      threads.each { |t| t[:paused] = true }
+      { interrupted: true, active_flows: threads.size }
     end
   end
 
@@ -1278,7 +1365,7 @@ class StandaloneDaemon
     return { held: false, note: 'no in-flight computation' } unless gate
 
     gate.hold
-    { held: true, queued: @queue.size }
+    { held: true, active_flows: active_flow_count }
   end
 
   # ▶ — release a held turn; the loop resumes with whatever has been woven in.
@@ -1301,15 +1388,17 @@ class StandaloneDaemon
 
     woven = gate.inject(text)
     gate.release
-    { woven: !woven.nil?, messages: woven, queued: @queue.size }
+    { woven: !woven.nil?, messages: woven, active_flows: active_flow_count }
   end
 
-  # The gate of the turn currently owned by the worker (nil between turns).
+  # The gate of the main conversation turn (nil between turns). Companion and
+  # task flows run independently beside it; ⏸/▶/weave are the user's hand on the
+  # primary oracle chapter, so we target the most recently started oracle gate.
   def current_gate
-    t = @worker_thread
-    return nil unless t && t.alive?
-
-    @worker_gate
+    mains = @flow_mutex.synchronize do
+      @gates.values.select { |g| g[:kind] == :oracle }
+    end
+    mains.last && mains.last[:gate]
   end
 
   private
@@ -1337,7 +1426,9 @@ class StandaloneDaemon
       elsif args['active_companions'].to_a.any?
         { kind: :oracle, label: 'Pythia (conclave)', companion: nil }
       else
-        { kind: :oracle, label: 'Pythia', companion: nil }
+        hydra = args['hydra'].to_s
+        label = hydra.empty? ? 'Pythia' : "Pythia·#{hydra}"
+        { kind: :oracle, label: label, companion: nil }
       end
     when 'execute_task', 'continue_task', 'evaluate_task', 'seal_run'
       { kind: :task, label: 'Magnum Opus', companion: nil }

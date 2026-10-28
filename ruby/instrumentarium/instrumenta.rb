@@ -269,8 +269,12 @@ instrument :run_command,
     # CLI. When the polymorphic ShellSession exists (the daemon always installs
     # one), route through it so a `cd` persists bidirectionally — the agent's
     # turn-branch and the user's CLI read and write the same cwd.
-    if $aether_shell
-      shell_result = $aether_shell.run(cmd, env: env_vars, timeout: timeout)
+    # Each flow sets Thread.current[:aether_shell] to its own branch; read that
+    # first so concurrent flows never cross their cd/env state. The global is
+    # the trunk shell, used by the CLI control path.
+    shell = Thread.current[:aether_shell] || $aether_shell
+    if shell
+      shell_result = shell.run(cmd, env: env_vars, timeout: timeout)
       stdout      = shell_result[:stdout].to_s
       stderr      = shell_result[:stderr].to_s
       exitstatus  = shell_result[:exit_status]

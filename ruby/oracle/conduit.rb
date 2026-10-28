@@ -689,6 +689,7 @@ class Conduit
 
     # API Communication
     def post(body, timeout = 120)
+      @connection_retries = 0
       key = extract_api_key CONFIG::CFG
       endpoint = extract_api_endpoint CONFIG::CFG
       openai_project = CONFIG::CFG[:'openai-project'] || CONFIG::CFG['openai-project']
@@ -706,9 +707,12 @@ class Conduit
     rescue Faraday::TimeoutError => e
       handle_timeout_error e, timeout
     rescue Faraday::ConnectionFailed, EOFError => e
-      if :retry == handle_connection_error(e)
+      case handle_connection_error(e)
+      when :retry
         puts 'RETRY'
         retry
+      when :give_up
+        return { 'choices' => [{ 'message' => { 'content' => "❌ Connection lost after #{CONNECTION_RETRY_MAX} retries — please try again." } }] }.to_json
       end
     rescue Faraday::UnprocessableEntityError => e
       handle_unprocessable_entity_error e
@@ -936,6 +940,21 @@ class Conduit
     # Max retries for tool_calls format errors from DeepSeek et al.
     TOOL_CALLS_RETRY_MAX = 3
 
+    # Transient connection failures worth retrying before giving up. The most
+    # common is "Connection reset by peer" (Errno::ECONNRESET), which Faraday
+    # surfaces as Faraday::ConnectionFailed wrapping an Errno — previously it
+    # hard-crashed ("Divination failed") instead of continuing.
+    CONNECTION_RETRY_MAX = 3
+    CONNECTION_RETRY_BACKOFF = 2.0
+
+    TRANSIENT_NETWORK_ERRORS = [
+      EOFError,
+      Errno::ECONNRESET, Errno::ECONNREFUSED, Errno::ECONNABORTED,
+      Errno::EPIPE, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
+      Errno::ETIMEDOUT, Errno::EHOSTDOWN, Errno::ENETDOWN,
+      Errno::EADDRNOTAVAIL
+    ].freeze
+
     # Pattern matching the DeepSeek "tool_calls must be followed by tool messages" error
     TOOL_CALLS_FORMAT_ERROR_RE = /
       tool_calls.*must\s+be\s+followed\s+by\s+tool\s+messages |
@@ -946,6 +965,7 @@ class Conduit
 
     def execute_api_request(connection, endpoint, api_key, body, timeout, headers = {})
       retries = 0
+      @connection_retries = 0
 
       begin
         json_body = body.to_json
@@ -1003,9 +1023,12 @@ class Conduit
           return { 'choices' => [{ 'message' => { 'content' => "❌ API Error: #{error_message}" } }] }.to_json
         end
       rescue Faraday::ConnectionFailed, EOFError => e
-        if :retry == handle_connection_error(e)
+        case handle_connection_error(e)
+        when :retry
           puts 'RETRY'
           retry
+        when :give_up
+          return { 'choices' => [{ 'message' => { 'content' => "❌ Connection lost after #{CONNECTION_RETRY_MAX} retries — please try again." } }] }.to_json
         end
       rescue StandardError => e
         HorologiumAeternum.system_error "Failed to execute API request: #{e.message.truncate 100}"
@@ -1185,17 +1208,54 @@ class Conduit
 
 
     def handle_connection_error(error)
-      if error.cause.is_a?(EOFError) || error.wrapped_exception.is_a?(EOFError) || error.is_a?(EOFError)
-        puts 'EOFError'
-        puts "#{error.wrapped_exception}, #{error.cause}"
-        # EOF reached - log and restart the request
-        HorologiumAeternum.system_error "EOF reached - restarting request: #{error.message.truncate 100}"
-        # Retry the entire post method
-      else
-        puts error.inspect.truncate 500
-        raise "Connection Failed: #{error.wrapped_exception}"
+      if transient_connection_error?(error)
+        @connection_retries = (@connection_retries || 0) + 1
+        label = connection_error_label(error)
+        if @connection_retries <= CONNECTION_RETRY_MAX
+          backoff = CONNECTION_RETRY_BACKOFF * (2**(@connection_retries - 1))
+          HorologiumAeternum.system_error(
+            "Connection interrupted (#{label}) — retrying in #{backoff.round(1)}s " \
+            "(#{@connection_retries}/#{CONNECTION_RETRY_MAX})"
+          )
+          sleep backoff
+          return :retry
+        end
+        HorologiumAeternum.system_error(
+          "Connection failed after #{CONNECTION_RETRY_MAX} retries (#{label}) — giving up gracefully"
+        )
+        return :give_up
       end
-      :retry
+
+      # Non-transient failure — preserve the hard error so callers surface it.
+      puts error.inspect.truncate 500
+      raise "Connection Failed: #{error.wrapped_exception || error.message}"
+    end
+
+
+    # "Connection reset by peer" (Errno::ECONNRESET) and its transient kin are
+    # worth retrying; Faraday wraps them as Faraday::ConnectionFailed, so we
+    # unwrap cause/wrapped_exception to find the real Errno underneath.
+    def transient_connection_error?(error, depth = 0)
+      return false if error.nil? || depth > 4
+      return true if TRANSIENT_NETWORK_ERRORS.any? { |klass| error.is_a?(klass) }
+
+      nested = []
+      nested << error.cause if error.respond_to?(:cause)
+      nested << error.wrapped_exception if error.respond_to?(:wrapped_exception)
+      nested.compact.any? do |e|
+        e.is_a?(Exception) && transient_connection_error?(e, depth + 1)
+      end
+    end
+
+    def connection_error_label(error, depth = 0)
+      return error.to_s if error.nil? || depth > 4
+      return "#{error.class} #{error.message.truncate(80)}" if TRANSIENT_NETWORK_ERRORS.any? { |klass| error.is_a?(klass) }
+
+      nested = []
+      nested << error.cause if error.respond_to?(:cause)
+      nested << error.wrapped_exception if error.respond_to?(:wrapped_exception)
+      nested = nested.compact.find { |e| e.is_a?(Exception) }
+      nested ? connection_error_label(nested, depth + 1) : "#{error.class} #{error.message.truncate(80)}"
     end
 
 
