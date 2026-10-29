@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'cgi'
+
 require_relative 'theme'
 
 # InstrumentumRenderer — shared tool-aware rendering for instrumenta results.
@@ -373,12 +375,12 @@ module InstrumentumRenderer
 
     Array(result[:results] || result['results']).each_with_index do |r, i|
       r = {} unless r.is_a?(Hash)
-      title   = (r[:title] || r['title']).to_s.strip
+      title   = CGI.unescapeHTML((r[:title] || r['title']).to_s).strip
       url     = (r[:url] || r['url']).to_s.strip
       site    = (r[:site_name] || r['site_name']).to_s.strip
       date    = (r[:date] || r['date']).to_s.strip
       auth    = (r[:authority] || r['authority']).to_s.strip
-      snippet = (r[:snippet] || r['snippet'] || r[:summary] || r['summary']).to_s.strip
+      snippet = CGI.unescapeHTML((r[:snippet] || r['snippet'] || r[:summary] || r['summary']).to_s).strip
 
       meta = [site, date, auth].reject(&:empty?).join(' · ')
       out << '' if out.any?

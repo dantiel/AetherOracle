@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'cgi'
+
 require_relative 'error_handler'
 require_relative '../instrumentarium/hermetic_execution_domain'
 require_relative '../instrumentarium/vision_coordinator'
@@ -597,12 +599,12 @@ class Artificer
         out << "\n\n**#{results.size} Treffer**"
         results.each_with_index do |r, i|
           r = {} unless r.is_a?(Hash)
-          title   = web_field(r, :title).to_s.strip
+          title   = CGI.unescapeHTML(web_field(r, :title).to_s).strip
           url     = web_field(r, :url).to_s.strip
           site    = web_field(r, :site_name).to_s.strip
           date    = web_field(r, :date).to_s.strip
           auth    = web_field(r, :authority).to_s.strip
-          snippet = web_field(r, :snippet, :summary).to_s.strip
+          snippet = CGI.unescapeHTML(web_field(r, :snippet, :summary).to_s).strip
 
           meta  = [site, date, auth].reject(&:empty?).join(' · ')
           label = title.empty? ? url : title
