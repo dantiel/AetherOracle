@@ -120,6 +120,62 @@ statt fünf getrennter Wahrheiten.
 
 ---
 
+## 2b. Die Aegis-Koordinations-Doktrin (Herz der Hydras)
+
+Vor jeder Implementierung gilt die Rollen-Korrektur — sie ist die eigentliche Antwort
+auf „concurrent flow ist nicht gleichzeitige Aktivität, sondern gleichzeitige Richtung
+und Funktion":
+
+### Rollen (korrigiert)
+
+- **Argonaut ist NICHT das Schiff, sondern der Insasse.** Er bleibt dateibasiert
+  (Filesystem + Filewatcher) mit nur dateibezogenen Mnemosyne-Funktionen. Kein
+  „Live-Mnemosyne-Kanal" in Argonaut — das gehörte fälschlich in die erste Skizze.
+- **Aegis ist das Herz der Hydras** — die Koordinations-Schicht, nicht die Einheit
+  selbst. Die `FlowUnit` bleibt die Arbeitseinheit; Aegis ist der geteilte Kontext,
+  aus dem jeder Kopf seine Lage bezieht.
+
+### Kopf ↔ Herz
+
+- Ein Hydra-Kopf (Sink) trägt nur seinen **aktuellen Prompt** und seinen **eigenen
+  Flow** — das „Hydraspatzenhirn" hat kein eigenes Herz.
+- Sein Wissen über die anderen Köpfe bezieht es **ausschließlich über Aegis**: Sinks
+  wissen voneinander *gemerged* über Aegis, nicht über direkte Streams oder geteilte
+  Transkripte.
+
+### Fenster ↔ Kopf
+
+- Ein neues Fenster im nativen AetherCodex **spawnt einen neuen Kopf** mit eigenem
+  Flow-Kontext.
+- Der Kopf **informiert zuerst Aegis** — was alle Fenster dann wissen. Aegis ist der
+  gemeinsame Kontext, die Phalanx, unter der alle marschieren.
+
+### Aegis (Kern) ↔ AetherAegis (Anzeige) — strikte Trennung
+
+- **Aegis ist die Core-Funktion in Ruby, integriert in AetherOracle.** Sie stellt die
+  **gesamte Awareness und das Hydra-Herz** bereit: geteilter Kontext, Koordination der
+  Hydra-Köpfe, gemerged Wissen. Aegis lebt im Daemon, nicht in einer GUI.
+- **AetherAegis ist nur das Anzeigeprogramm unter macOS** — es zeigt die live Flows an
+  (Situationsbewusstsein) und **zieht zusätzlich Systemberechtigungen** ein, die der
+  Ruby-Kern selbst nicht besitzt (z. B. Fenster-/System-Events). Es *hält* keine Flows
+  und stellt keine Awareness her — es *projiziert* nur, was Aegis im Kern bereits weiß.
+- Lagebewusstsein (situational awareness) entsteht im Kern (**Aegis**); AetherAegis ist
+  dessen Glas, nicht dessen Herz.
+
+### Flow-Isolations-Regel (Kontext-Reinheit)
+
+- Ein **live Flow besitzt seine eigene History**, die sich **nicht** mit anderen Flows
+  vermischen darf — sonst geraten deren Kontexte durcheinander und verderben.
+- **Erst beim Schließen** wird ein Flow vollständig Teil der Gesamthistory.
+- **Davor** sind Flows nur über die Hydra-Sink mit Aegis verbunden und wissen
+  voneinander (Silhouette), niemals durch geteilte History.
+
+> Konsequenz für `FlowUnit`: `history` ist **per Flow privat**; der einzige
+> cross-Flow-Kanal ist die Aegis-Orientierung (Silhouette/GistBus), nie der
+> Message-Verlauf selbst.
+
+---
+
 ## 3. Kernabstraktion (Vertrag, noch kein Code)
 
 ### 3.1 `FlowState` — der resumierbare Turn-State als Value-Object
