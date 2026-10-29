@@ -31,3 +31,6 @@ tmp_shell_smoke.rb
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# TextMate per-machine editor settings (never shipped)
+.tm_properties
