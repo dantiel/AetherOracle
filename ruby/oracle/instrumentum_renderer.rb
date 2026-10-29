@@ -22,7 +22,9 @@ module InstrumentumRenderer
     'patch_file'    => '~',
     'file_overview' => '@',
     'recall_notes'  => '?',
-    'remember'      => '*'
+    'remember'      => '*',
+    'web_search'    => 'ws',
+    'web_fetch'     => 'wf'
   }.freeze
 
   # How many body lines a panel shows before collapsing.
@@ -91,6 +93,10 @@ module InstrumentumRenderer
       lines = fi.is_a?(Hash) ? fi[:lines] : nil
       base = path.empty? ? 'überblickt' : path
       lines ? "#{base} - #{lines} Zeilen" : base
+    when 'web_search'
+      web_search_summary(result, args[:query])
+    when 'web_fetch'
+      web_fetch_summary(result, args[:url])
     else
       text = result.is_a?(Hash) ? (result[:result] || result.inspect) : result.to_s
       text.to_s.gsub(/\s+/, ' ')[0, 40]
@@ -111,6 +117,8 @@ module InstrumentumRenderer
              when 'file_overview'  then args[:path].to_s
              when 'recall_notes'   then args[:query].to_s
              when 'remember'       then args[:content].to_s.gsub(/\s+/, ' ')[0, 40]
+             when 'web_search'     then args[:query].to_s
+             when 'web_fetch'      then args[:url].to_s
              else ''
              end
     digest.to_s.gsub(/\s+/, ' ').strip.truncate(72)
@@ -137,6 +145,8 @@ module InstrumentumRenderer
     when 'patch_file'  then patch_file_body(el, max_lines: max_lines)
     when 'aegis'         then aegis_body(el[:result], max_lines: max_lines)
     when 'file_overview' then file_overview_body(el, max_lines: max_lines)
+    when 'web_search'    then web_search_body(el, max_lines: max_lines)
+    when 'web_fetch'     then web_fetch_body(el, max_lines: max_lines)
     else generic_instrumentum_body(el[:result], max_lines: max_lines)
     end
   end
@@ -321,6 +331,77 @@ module InstrumentumRenderer
     text = result.is_a?(Hash) ? (result[:result] || result.inspect) : result.to_s
     return ['(leer)'] if text.to_s.strip.empty?
     cap_lines(text.to_s, max_lines: max_lines)
+  end
+
+  # Web summaries must work on BOTH shapes the renderer receives: the raw Hash
+  # (Fokus-Ring) and the Markdown preview String (live telemetry).
+  def web_search_summary(result, query_arg)
+    if result.is_a?(Hash) && result[:error]
+      return result[:error].to_s.gsub(/\s+/, ' ').strip[0, 80]
+    end
+
+    n = if result.is_a?(Hash)
+          Array(result[:results] || result['results']).size
+        else
+          result.to_s[/\b(\d+) Treffer\b/, 1]&.to_i
+        end
+    q = (query_arg.to_s.empty? && result.is_a?(Hash)) ? (result[:query] || result['query']).to_s : query_arg.to_s
+    q = q.gsub(/\s+/, ' ').strip
+    base = n ? "#{n} Treffer" : 'Suche'
+    q.empty? ? base : "#{base} · #{q[0, 40]}"
+  end
+
+  def web_fetch_summary(result, url_arg)
+    if result.is_a?(Hash) && result[:error]
+      return result[:error].to_s.gsub(/\s+/, ' ').strip[0, 80]
+    end
+
+    title = result.is_a?(Hash) ? (result[:title] || result['title']).to_s.strip : ''
+    return title[0, 60] unless title.empty?
+
+    url_arg.to_s.gsub(/\s+/, ' ').strip[0, 60]
+  end
+
+  def web_search_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    return cap_lines(result.to_s, max_lines: max_lines) unless result.is_a?(Hash)
+
+    out = []
+    query = (result[:query] || result['query']).to_s.strip
+    out << "\e[2mQuery\e[0m  #{query}" unless query.empty?
+
+    Array(result[:results] || result['results']).each_with_index do |r, i|
+      r = {} unless r.is_a?(Hash)
+      title   = (r[:title] || r['title']).to_s.strip
+      url     = (r[:url] || r['url']).to_s.strip
+      site    = (r[:site_name] || r['site_name']).to_s.strip
+      date    = (r[:date] || r['date']).to_s.strip
+      auth    = (r[:authority] || r['authority']).to_s.strip
+      snippet = (r[:snippet] || r['snippet'] || r[:summary] || r['summary']).to_s.strip
+
+      meta = [site, date, auth].reject(&:empty?).join(' · ')
+      out << '' if out.any?
+      out << "\e[1m#{i + 1}. #{title.empty? ? url : title}\e[0m"
+      out << "\e[2m   #{meta}\e[0m" unless meta.empty?
+      out << "   #{url}" unless url.empty? || url == title
+      out << "   #{snippet}" unless snippet.empty?
+    end
+    out
+  end
+
+  def web_fetch_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    return cap_lines(result.to_s, max_lines: max_lines) unless result.is_a?(Hash)
+
+    out = []
+    title = (result[:title] || result['title']).to_s.strip
+    content = (result[:content] || result['content']).to_s
+    out << "\e[1m#{title}\e[0m" unless title.empty?
+    out << '' if out.any? && !content.strip.empty?
+    out.concat(cap_lines(content, max_lines: max_lines))
+    out
   end
 
   def cap_lines(text, max_lines:)

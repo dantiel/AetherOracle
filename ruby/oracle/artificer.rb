@@ -558,12 +558,74 @@ class Artificer
       # können; andere content-tragende Ergebnisse bleiben ein kompaktes Echo.
       return result if %w[read_file file_overview].include?(name&.to_s) && result.is_a?(Hash)
 
+      # Web instruments render as lightweight Markdown so the Pythia panel shows
+      # a readable hit list / page instead of a raw JSON blob.
+      return web_search_preview(result, limit) if name&.to_s == 'web_search'
+      return web_fetch_preview(result, limit)   if name&.to_s == 'web_fetch'
+
       text = if result.is_a?(Hash)
                (result[:content] || result['content'] || result.to_json).to_s
              else
                result.to_s
              end
       text.truncate(limit)
+    end
+
+    # Read a field from a web result item which may carry symbol or string keys
+    # (API-decoded results use string keys; synthetic/unit results may use symbols).
+    def web_field(hash, *keys)
+      keys.each do |k|
+        v = hash[k] || hash[k.to_s]
+        return v unless v.nil?
+      end
+      nil
+    end
+
+    def web_search_preview(result, limit)
+      return result.to_s.truncate(limit) unless result.is_a?(Hash)
+      return result[:error].to_s if !result[:error].nil?
+
+      query   = web_field(result, :query).to_s.strip
+      results = result[:results] || result['results']
+      results = [] unless results.is_a?(Array)
+
+      out = +''
+      out << "**Query:** `#{query}`" unless query.empty?
+      if results.empty?
+        out << "\n\n_Keine Treffer._"
+      else
+        out << "\n\n**#{results.size} Treffer**"
+        results.each_with_index do |r, i|
+          r = {} unless r.is_a?(Hash)
+          title   = web_field(r, :title).to_s.strip
+          url     = web_field(r, :url).to_s.strip
+          site    = web_field(r, :site_name).to_s.strip
+          date    = web_field(r, :date).to_s.strip
+          auth    = web_field(r, :authority).to_s.strip
+          snippet = web_field(r, :snippet, :summary).to_s.strip
+
+          meta  = [site, date, auth].reject(&:empty?).join(' · ')
+          label = title.empty? ? url : title
+          out << "\n\n#{i + 1}. **#{label}**"
+          out << "  \n  _#{meta}_" unless meta.empty?
+          out << "  \n  #{url}" unless url.empty? || url == label
+          out << "  \n  #{snippet}" unless snippet.empty?
+        end
+      end
+      out.strip.truncate(limit)
+    end
+
+    def web_fetch_preview(result, limit)
+      return result.to_s.truncate(limit) unless result.is_a?(Hash)
+      return result[:error].to_s if !result[:error].nil?
+
+      title   = web_field(result, :title).to_s.strip
+      content = web_field(result, :content).to_s
+
+      out = +''
+      out << "**#{title}**\n\n" unless title.empty?
+      out << content
+      out.strip.truncate(limit)
     end
 
     # Build user message with screenshot image for vision models
