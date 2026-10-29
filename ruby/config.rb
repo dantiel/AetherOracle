@@ -412,6 +412,20 @@ def self.cartography
   deep_merge(DEFAULT_CARTOGRAPHY, raw)
 end
 
+# Web grounding (DeepSeek Search/Fetch) defaults. DeepSeek exposes the
+# instruments natively; any other provider must opt in via `enabled: true`
+# (e.g. a proxy whose origin serves a DeepSeek-compatible /v1/tools/*
+# endpoint). This is the single gate the instrumentarium consults before
+# registering web_search/web_fetch.
+DEFAULT_WEB_SEARCH = {
+  enabled: false   # master switch: expose the web instruments for this provider
+}.freeze
+
+def self.web_search
+  raw = CFG[:web_search] || CFG['web_search'] || {}
+  deep_merge(DEFAULT_WEB_SEARCH, raw)
+end
+
   
   
   # Get configuration value with ENV override and default fallback

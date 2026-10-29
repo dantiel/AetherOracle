@@ -47,9 +47,14 @@ module WebSearch
     CONFIG.api_type.to_s.downcase == 'deepseek' || base_url.downcase.include?('deepseek')
   end
 
-  def missing_provider_error
-    "Web search requires a DeepSeek endpoint. Configure `api-type: deepseek` " \
-      "(current: #{CONFIG.api_type.inspect})."
+  # The single gate the instrumentarium consults before registering the web
+  # instruments. DeepSeek exposes them natively; any other provider must opt in
+  # explicitly via `web-search.enabled: true` in `.aethercodex`.
+  def available?
+    return true if deepseek?
+
+    enabled = CONFIG.web_search[:enabled]
+    enabled == true || enabled.to_s.downcase == 'true'
   end
 
   # POST JSON to `path` and return `{ status:, body:, error: }`. Retries only
@@ -141,54 +146,50 @@ module WebSearch
 end
 
 # ── web_search ───────────────────────────────────────────────────────────────
-instrument :web_search,
-           description: <<~DESC,
-             Search the live web with DeepSeek's search engine and return structured
-             results (title, url, snippet, summary, site_name, date, authority and,
-             when requested, full content). Use this for current events, recent
-             releases, or anything outside the model's training knowledge.
+# Registered only when the configured provider exposes live web grounding
+# (DeepSeek natively; any other provider via `web-search.enabled: true`).
+if WebSearch.available?
+  instrument :web_search,
+             description: <<~DESC,
+               Search the live web with DeepSeek's search engine and return structured
+               results (title, url, snippet, summary, site_name, date, authority and,
+               when requested, full content). Use this for current events, recent
+               releases, or anything outside the model's training knowledge.
 
-             The query supports operators: `site:`, `-site:`, `"exact phrase"`,
-             `-"exact phrase"`, `-term`, `lang:`, `after:`, `before:`.
-           DESC
-           params: {
-             query:        { type: String, required: true, minLength: 1, maxLength: 128,
-                              description: 'Search query (1-128 chars; supports operators).' },
-             count:        { type: Integer, default: 10, minimum: 1, maximum: 50,
-                              description: 'Number of results to return (1-50).' },
-             ori_question: { type: String, required: false, maxLength: 128,
-                              description: "The user's original question that triggered the search, to improve query understanding." },
-             localization: { type: String, required: false,
-                              description: 'Optional IP address used to localize results.' },
-             need_content: { type: 'boolean', default: false,
-                              description: 'Return full page content in each result.' }
-           },
-           timeout: 60,
-           returns: { query: String, results: Array, error: String } do |query:, count: 10, ori_question: nil, localization: nil, need_content: false|
-  unless WebSearch.deepseek?
-    { error: WebSearch.missing_provider_error }
-  else
+               The query supports operators: `site:`, `-site:`, `"exact phrase"`,
+               `-"exact phrase"`, `-term`, `lang:`, `after:`, `before:`.
+             DESC
+             params: {
+               query:        { type: String, required: true, minLength: 1, maxLength: 128,
+                                description: 'Search query (1-128 chars; supports operators).' },
+               count:        { type: Integer, default: 10, minimum: 1, maximum: 50,
+                                description: 'Number of results to return (1-50).' },
+               ori_question: { type: String, required: false, maxLength: 128,
+                                description: "The user's original question that triggered the search, to improve query understanding." },
+               localization: { type: String, required: false,
+                                description: 'Optional IP address used to localize results.' },
+               need_content: { type: 'boolean', default: false,
+                                description: 'Return full page content in each result.' }
+             },
+             timeout: 60,
+             returns: { query: String, results: Array, error: String } do |query:, count: 10, ori_question: nil, localization: nil, need_content: false|
     WebSearch.search(query, count, ori_question, localization, need_content)
   end
-end
 
-# ── web_fetch ────────────────────────────────────────────────────────────────
-instrument :web_fetch,
-           description: <<~DESC,
-             Fetch a single web page and return its content as Markdown, via
-             DeepSeek's Fetch API. Use this to read the full text of a page you
-             already know the URL of (for example, a result returned by
-             `web_search`).
-           DESC
-           params: {
-             url: { type: String, required: true, minLength: 1, maxLength: 8192,
-                     description: 'HTTP/HTTPS URL of the page to fetch.' }
-           },
-           timeout: 90,
-           returns: { title: String, content: String, error: String } do |url:|
-  unless WebSearch.deepseek?
-    { error: WebSearch.missing_provider_error }
-  else
+  # ── web_fetch ──────────────────────────────────────────────────────────────
+  instrument :web_fetch,
+             description: <<~DESC,
+               Fetch a single web page and return its content as Markdown, via
+               DeepSeek's Fetch API. Use this to read the full text of a page you
+               already know the URL of (for example, a result returned by
+               `web_search`).
+             DESC
+             params: {
+               url: { type: String, required: true, minLength: 1, maxLength: 8192,
+                       description: 'HTTP/HTTPS URL of the page to fetch.' }
+             },
+             timeout: 90,
+             returns: { title: String, content: String, error: String } do |url:|
     WebSearch.fetch(url)
   end
 end
