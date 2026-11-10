@@ -41,6 +41,7 @@ class ÆtherCodexCLI
     when 'ask'                         then ask_mode
     when 'chamber', 'dialog', 'talk'   then chamber_mode
     when 'server'                      then server_mode
+    when 'atlas', '--atlas', 'map'     then atlas_mode
     when 'config'                      then config_mode
     when 'context'                     then context_mode
     when 'task'                        then task_mode
@@ -133,6 +134,32 @@ class ÆtherCodexCLI
     puts "Memory DB: #{CONFIG.memory_db_path}"
     puts "Project Root: #{CONFIG.project_root}"
     puts "Config Sources: #{CONFIG.debug_info[:config_sources]}"
+  end
+
+  # Atlas, the cartographer's landing strip: print the compact `map` notes
+  # (one overview + one per territory) in a single pure read. If no map has
+  # been minted yet, sound the corpus and weave one so the command is useful
+  # out of the box; otherwise it never writes to the DB.
+  def atlas_mode
+    view = Mnemosyne.atlas_view
+    overview = view[:overview]
+    areas = view[:areas] || []
+
+    if overview.nil? && areas.empty?
+      puts '⬡ The atlas is empty — sounding the corpus and weaving a fresh map…'
+      Mnemosyne.corpus_sound! if Mnemosyne.respond_to?(:corpus_sound!)
+      view = Mnemosyne.atlas_view
+      overview = view[:overview]
+      areas = view[:areas] || []
+    end
+
+    if overview.nil? && areas.empty?
+      puts '⬡ No source files found to map.'
+      return
+    end
+
+    puts overview
+    areas.each { |area| puts "⬡ #{area}" }
   end
 
   def context_mode
@@ -433,6 +460,7 @@ class ÆtherCodexCLI
     puts "  chamber          Enter the Dialog-Kammer (polymorphic REPL)"
     puts "  ask \"prompt\"     Ask the oracle a question (one-shot)"
     puts "  server           Start web server (TextMate UI)"
+    puts "  atlas            Print the project map (Atlas, the cartographer)"
     puts "  logs             Tail the tagged log stream (colored, toggleable)"
     puts "  logs tags        Configure tags: colors + enable/disable"
     puts "  veil             Check, configure, and repair Aether setup"

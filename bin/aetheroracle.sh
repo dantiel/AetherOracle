@@ -46,6 +46,7 @@ fi
 
 case "$CMD" in
   ask|chamber|dialog|talk|server|config|context|task|logs|repl|veil|\
+  atlas|--atlas|map|\
   read|cat|inspect|ov|write|new|mv|rename|files|ast|grep|notes|mem|\
   note|history|hist|search|find|aegis|seal|seals)
     BRAIN=1
