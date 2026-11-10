@@ -118,6 +118,26 @@ end
 
 trap('TERM') { exit }
 
+# ── Session registry: register this server as a session in the shared Aegis ──
+# so a sibling session (editor daemon, chamber) in the same project sees it.
+begin
+  sid = Mnemosyne::Hydra.generate_id
+  Mnemosyne.current_session_id = sid
+  Mnemosyne.register_session(session_id: sid, label: "Limen·#{Process.pid}",
+                             role: 'oracle', project: CONFIG.project_root,
+                             port: (ENV['AETHER_PORT'] || CONFIG.port), pid: Process.pid)
+rescue StandardError => e
+  warn "[SESSION] registration failed: #{e.message}"
+end
+
+at_exit do
+  begin
+    Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
+  rescue StandardError
+    nil
+  end
+end
+
 # ── ÆtherLink: discover peer contexts on startup ──
 Thread.new do
   sleep 2 # let the server finish binding

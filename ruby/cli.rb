@@ -13,6 +13,7 @@
 
 require 'json'
 require 'optparse'
+require_relative '../lib/aetheroracle/version' unless defined?(AetherOracle::VERSION)
 require_relative 'config'
 require_relative 'oracle/oracle'
 require_relative 'oracle/terminal_stream'
@@ -54,6 +55,7 @@ class ÆtherCodexCLI
          'search', 'find', 'aegis', 'seal', 'seals'
       toolbelt_mode(command)
     when 'help', '-h', '--help'        then print_help
+    when 'version', '-v', '--version'  then print_version
     when nil                           then chamber_mode
     else
       ARGV.unshift(command) if command
@@ -421,7 +423,7 @@ class ÆtherCodexCLI
   end
 
   def print_help
-    puts "ÆtherCodex — Console-first Hermetic Programming Oracle"
+    puts "ÆtherCodex v#{oracle_version} — Console-first Hermetic Programming Oracle"
     puts "  (installed as `aetheroracle` — no command enters the Dialog-Kammer)"
     puts
     puts "Usage: aetheroracle [command] [options]"
@@ -446,6 +448,7 @@ class ÆtherCodexCLI
     puts "  agenda           Show Pythia's agenda (the Aethernaut's Manifest)"
     puts "  intent add       Sign an intention into the manifest"
     puts "  help             Show this help"
+    puts "  version          Show the version number"
     puts
     puts "Developer toolbelt (mirrors the oracle's own instruments):"
     puts "  read <path> [a:b] [--numbers]   Read a file (line range, numbered)"
@@ -459,7 +462,7 @@ class ÆtherCodexCLI
     puts "  seal list | status <id> | delegate <task_id> <owner>"
     puts
     puts "Chamber slash-commands:"
-    puts "  /morph /unmorph /personae /file /clear /config /context"
+    puts "  /morph /unmorph /personae /file /clear /config /context /aegis"
     puts "  /tools /markdown /highlight /theme"
     puts
     puts "Examples:"
@@ -470,9 +473,17 @@ class ÆtherCodexCLI
     puts "  ÆtherCodex ask --file app.rb \"Refactor this\""
   end
 
+  def print_version
+    puts "ÆtherCodex v#{oracle_version}"
+  end
+
+  def oracle_version
+    defined?(AetherOracle::VERSION) ? AetherOracle::VERSION : 'dev'
+  end
+
   def hydra_mode
-    require_relative 'oracle/hydra'
-    Hydra.start
+    require_relative 'oracle/hydra_terminal'
+    HydraTerminal.start
   end
 
   def chamber_mode

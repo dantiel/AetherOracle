@@ -92,6 +92,14 @@ class PrimaMateria
         tool_spec.params.each do |param_name, param_spec|
           value = actual_kwargs[param_name]
 
+          # Custom pre-validation normalisation (e.g. coerce a scalar line range
+          # into a 2-element array). The normalised value is written back so the
+          # implementation and the audit trail both observe the canonical form.
+          if param_spec.is_a?(Hash) && param_spec[:normalize].respond_to?(:call)
+            value = param_spec[:normalize].call(value)
+            actual_kwargs[param_name] = value
+          end
+
           # Check required parameters
           if param_spec.is_a?(Hash) && param_spec[:required] && !actual_kwargs.key?(param_name)
             raise ArgumentError, "missing required parameter: #{param_name}"
@@ -99,6 +107,14 @@ class PrimaMateria
 
           # Skip validation for missing optional parameters
           next unless actual_kwargs.key? param_name
+
+          # An optional parameter explicitly passed as nil means "not provided"
+          # (e.g. read_file(range: nil)). Treat it as absent rather than raising
+          # a spurious "must be an Array" ArgumentError.
+          if value.nil? && !(param_spec.is_a?(Hash) && param_spec[:required])
+            validated_kwargs[param_name] = nil
+            next
+          end
 
           # Type validation
           if param_spec.is_a?(Hash) && param_spec[:type]
@@ -235,14 +251,30 @@ class PrimaMateria
       validated_kwargs = {}
       tool_spec.params.each do |param_name, param_spec|
         value = actual_kwargs[param_name]
-
+      
+        # Custom pre-validation normalisation (e.g. coerce a scalar line range
+        # into a 2-element array). The normalised value is written back so the
+        # implementation and the audit trail both observe the canonical form.
+        if param_spec.is_a?(Hash) && param_spec[:normalize].respond_to?(:call)
+          value = param_spec[:normalize].call(value)
+          actual_kwargs[param_name] = value
+        end
+      
         # Check required parameters
         if param_spec.is_a?(Hash) && param_spec[:required] && !actual_kwargs.key?(param_name)
           raise ArgumentError, "missing required parameter: #{param_name}"
         end
-
+      
         # Skip validation for missing optional parameters
         next unless actual_kwargs.key? param_name
+      
+        # An optional parameter explicitly passed as nil means "not provided"
+        # (e.g. read_file(range: nil)). Treat it as absent rather than raising
+        # a spurious "must be an Array" ArgumentError.
+        if value.nil? && !(param_spec.is_a?(Hash) && param_spec[:required])
+          validated_kwargs[param_name] = nil
+          next
+        end
 
         # Type validation
         if param_spec.is_a?(Hash) && param_spec[:type]
@@ -411,7 +443,7 @@ class PrimaMateria
       # Build properties from tool params using recursive conversion
       properties = {}
       tool.params.each do |param_name, param_spec|
-        properties[param_name.to_s] = convert_param_spec_to_json_schema(param_spec.to_h.except(:required))
+        properties[param_name.to_s] = convert_param_spec_to_json_schema(param_spec.to_h.except(:required, :normalize))
       end
 
       schema_entry[:function][:parameters][:properties] = properties

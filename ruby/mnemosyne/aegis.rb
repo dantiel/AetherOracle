@@ -61,6 +61,16 @@ class Mnemosyne
             '(tags, summary, temperature, working_dir, thinking_str, created_at) VALUES ' \
             '(?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
             [tags_json, summary, temperature, working_dir, thinking]
+
+          # Session synchronization: every Aegis write refreshes this session's
+          # registry row, so sibling sessions see the freshest orientation
+          # silhouette next to its heartbeat. The shared Aegis and the roster
+          # synchronize through the same substrate — correspondence, not copy.
+          sid = Mnemosyne.current_session_id
+          if sid && !sid.to_s.empty?
+            Hydra.heartbeat(session_id: sid,
+                            aegis_summary: Mnemosyne.aegis && Mnemosyne.aegis[:summary])
+          end
         end
 
 

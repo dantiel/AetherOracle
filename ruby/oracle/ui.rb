@@ -102,6 +102,62 @@ module AthanorUI
     out
   end
 
+  # Character-width-aware wrap. Splits on newlines, then breaks each line at the
+  # last column that still fits (no word-awareness -- prompts are code-ish).
+  def wrap(text, width)
+    width = [width, 1].max
+    out = []
+    text.to_s.each_line do |raw|
+      line = raw.chomp
+      if display_width(line) <= width
+        out << line
+        next
+      end
+      cur = +''
+      cw = 0
+      line.each_char do |ch|
+        cww = char_width(ch)
+        if cw + cww > width
+          out << cur
+          cur = +''
+          cw = 0
+        end
+        cur << ch
+        cw += cww
+      end
+      out << cur
+    end
+    out
+  end
+
+  # A bordered, background-filled panel for the practitioner's prompt in history
+  # views. `label` (e.g. the π marker) prefixes the first wrapped row; the rest
+  # align under it. Returns pre-styled strings ready for `puts`.
+  def prompt_box(label, text, width:, palette:)
+    w = [width, 2].max
+    inner = [w - 2, 0].max
+    field = [inner - 2, 0].max
+    lw = display_width(label.to_s)
+
+    lines = wrap(text.to_s, field)
+    # The first row also carries `label`, so its text must fit into the narrower
+    # slot; overflow re-flows into following (full-width) rows.
+    if lines.any? && display_width(lines.first) + lw > field
+      first = lines.shift
+      lines = wrap(first, field - lw) + lines
+    end
+    lines = [''] if lines.empty?
+
+    out = [palette.accent(TL + (H * inner) + TR)]
+    lines.each_with_index do |ln, i|
+      prefix = i.zero? ? label : (' ' * lw)
+      body = palette.bg(pad(prefix + ln, field))
+      out << palette.accent(V) + ' ' + body + ' ' + palette.accent(V)
+    end
+    out << palette.accent(BL + (H * inner) + BR)
+    out
+  end
+
   # Two-column key/value lines, aligned on the value column (for config-style
   # panels). Returns plain (already dim-styled key) strings, ready for `box`.
   def kv(rows, palette:)

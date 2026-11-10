@@ -604,10 +604,50 @@ class StandaloneDaemon
     # The LAN æther (HTTP + Bonjour) rides along in every mode: the iOS
     # companion reaches this very brain over http://<mac>:<port>/aether/...
     start_http_server
+    register_session
+    start_session_heartbeat
     if (idx = ARGV.index('--listen'))
       run_socket(ARGV[idx + 1])
     else
       run_stdio
+    end
+  end
+
+  # Register this daemon process as a session in the shared Aegis ledger, so a
+  # sibling session opened in the same project sees it (and vice versa). The
+  # session_id is stable per process — context switches re-register the same id
+  # onto the new project's db instead of minting a fresh row.
+  def register_session
+    sid = Mnemosyne.current_session_id || Mnemosyne::Hydra.generate_id
+    Mnemosyne.current_session_id = sid
+    Mnemosyne.register_session(
+      session_id: sid,
+      label: "Pythia·#{Process.pid}",
+      role: 'oracle',
+      project: $project_root,
+      port: @http_port,
+      pid: Process.pid
+    )
+    sid
+  end
+
+  # A slow heartbeat thread keeps this session's registry row fresh while the
+  # daemon idles (between turns no Aegis write happens, yet the session is very
+  # much alive). Lightweight — a single UPDATE every HEARTBEAT_EVERY seconds.
+  def start_session_heartbeat
+    return if @session_heartbeat&.alive?
+
+    @session_heartbeat = Thread.new do
+      Thread.current.report_on_exception = false
+      loop do
+        sleep Mnemosyne::Hydra::HEARTBEAT_EVERY
+        break unless @running
+        begin
+          Mnemosyne.heartbeat_session
+        rescue StandardError
+          nil
+        end
+      end
     end
   end
 
@@ -879,6 +919,7 @@ class StandaloneDaemon
   end
 
   def shutdown
+    Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
     stop_bonjour
     @http_server&.stop
     warn "[AETHER-DAEMON] shutdown (pid #{Process.pid})"
@@ -1138,6 +1179,9 @@ class StandaloneDaemon
 
     apply_project_root(root)
     CONFIG.reload! if CONFIG.respond_to?(:reload!)
+    # Close the session in the *old* project's db before the connection is
+    # reset, then re-register it on the new project's æther below.
+    Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
     Mnemosyne.reset_connection! if Mnemosyne.respond_to?(:reset_connection!)
     @flow_mutex.synchronize do
       @shell&.reset($project_root)
@@ -1146,6 +1190,9 @@ class StandaloneDaemon
     # Re-point the active shell handle: any in-flight turn branch is stale now,
     # so the trunk and the instrument's handle both breathe the new project.
     $aether_shell = @shell
+    # Re-register this process as a session on the newly-activated project's
+    # æther — same stable id, fresh roster row in the new memory db.
+    register_session
 
     {
       project_root: $project_root,
@@ -1259,6 +1306,8 @@ class StandaloneDaemon
       tags = state[:tags]
       state[:tags] = tags.is_a?(String) ? tags.split(',').map(&:strip) : Array(tags)
       state[:notes] = Mnemosyne.recall_aegis_notes(limit: recall_depth(args))
+      state[:sessions] = Mnemosyne.active_sessions(project: $project_root,
+                                                   exclude: Mnemosyne.current_session_id)
       state
     when 'notes'
       Mnemosyne.recall_aegis_notes(max_tokens: args['max_tokens'],
@@ -1302,6 +1351,10 @@ class StandaloneDaemon
       { ok: true, broadcast: entry }
     when 'running', 'flows'
       GistBus.running.map { |f| gist_flow_view(f) }
+    when 'sessions'
+      Mnemosyne.active_sessions(project: $project_root,
+                                exclude: Mnemosyne.current_session_id)
+              .map { |s| session_view(s) }
     when 'broadcasts'
       GistBus.broadcasts.map do |m|
         { id: m[:id], at: m[:at], author: m[:author], target: m[:target], content: m[:content] }
@@ -1408,6 +1461,15 @@ class StandaloneDaemon
   def gist_flow_view(flow)
     { id: flow[:id], kind: flow[:kind], label: flow[:label], companion: flow[:companion],
       started_at: flow[:started_at].iso8601, aegis: flow[:aegis] }
+  end
+
+  # The public silhouette of a sibling session for the Swift side — who/when and
+  # its current Aegis orientation, never its reasoning or tool bodies.
+  def session_view(session)
+    { session_id: session[:session_id], label: session[:label], role: session[:role],
+      project: session[:project], pid: session[:pid], port: session[:port],
+      aegis_summary: session[:aegis_summary], started_at: session[:started_at],
+      last_seen: session[:last_seen] }
   end
 
   # Classify a queued request into a Gist Bus flow label + companion key, so

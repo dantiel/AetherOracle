@@ -85,6 +85,33 @@ def recall_note_cap(limit)
 end
 
 
+# Normalise a `range` argument into a 2-element integer array. The model
+# occasionally emits a scalar, a Ruby-style range, an "a-b" string, or a
+# {min:, max:} hash instead of the canonical [start, end] array — coerce them
+# so a single-line read doesn't hard-fail with "range must be an Array".
+def normalize_line_range(range)
+  case range
+  when nil then nil
+  when Array then range
+  when Range then [range.begin, range.end]
+  when Numeric then [range.to_i, range.to_i]
+  when String
+    nums = range.scan(/\d+/).map(&:to_i)
+    case nums.size
+    when 0 then range
+    when 1 then [nums.first, nums.first]
+    else nums.first(2)
+    end
+  when Hash
+    lo = range[:min] || range['min'] || range[:start] || range['start'] || range[:from] || range['from']
+    hi = range[:max] || range['max'] || range[:end] || range['end'] || range[:to] || range['to']
+    lo && hi ? [lo.to_i, hi.to_i] : range
+  else
+    range
+  end
+end
+
+
 # --- Register All Tools ---
 instrument :read_file,
            description: <<~DESC,
@@ -94,6 +121,7 @@ instrument :read_file,
            params: { path:         { type: String, required: true, minLength: 1 },
                      range:        { type:     Array,
                                      required: false,
+                                     normalize: ->(r) { normalize_line_range r },
                                      items:    { type: 'integer', minimum: 0, maximum: 10_000 },
                                      minItems: 2,
                                      maxItems: 2 },

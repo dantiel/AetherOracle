@@ -87,7 +87,10 @@ class HermeticExecutionDomain
         carry[key] = Thread.current[key] if Thread.current.key?(key)
       end
 
-      worker = Thread.new do
+      # report_on_exception is disabled: the block's exception is re-raised on
+      # the caller via `worker.value` below, so Ruby's default thread-exception
+      # dump would only duplicate the already-handled ArgumentError/parse noise.
+      worker = Thread.new(report_on_exception: false) do
         carry.each { |key, value| Thread.current[key] = value }
         block.call
       end

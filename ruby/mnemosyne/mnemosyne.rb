@@ -16,6 +16,7 @@ using TokenExtensions
 
 # Load sub-modules first — they reopen Mnemosyne to add inner classes
 require_relative 'aegis'
+require_relative 'hydra'
 require_relative 'resonance'
 require_relative 'notes'
 require_relative 'companion'
@@ -33,9 +34,9 @@ require_relative 'flash_aegis'
 require_relative 'atlas'
 
 class Mnemosyne
-  # The migration cascade below stamps `meta.db_version` up to 16; keep the
+  # The migration cascade below stamps `meta.db_version` up to 17; keep the
   # constant in agreement so "is the schema current?" checks stay truthful.
-  DB_VERSION = 16
+  DB_VERSION = 17
 
   # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
   # task runners each drive their own engine thread; the connection is shared, so
@@ -132,9 +133,10 @@ class Mnemosyne
 
   @current_mode = :standard
   @aegis = { tags: [], summary: '', temperature: 1.0, working_dir: nil, thinking: nil }
+  @current_session_id = nil
 
   class << self
-    attr_accessor :aegis
+    attr_accessor :aegis, :current_session_id
 
     MAX_NOTE_CONTENT_LENGTH = 500
 
@@ -606,6 +608,27 @@ end
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '16')"
       end
 
+      if 17 > db_version
+        db.execute <<~SQL
+          CREATE TABLE IF NOT EXISTS aether_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE NOT NULL,
+            label TEXT,
+            role TEXT DEFAULT 'oracle',
+            project TEXT,
+            port INTEGER,
+            pid INTEGER,
+            aegis_summary TEXT,
+            status TEXT DEFAULT 'active',
+            started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_aether_sessions_status ON aether_sessions (status)'
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_aether_sessions_project ON aether_sessions (project)'
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '17')"
+      end
+
       # Self-healing aegis_state. The Aegis orientation always reads/writes the
       # canonical append-only shape below, independent of the stamped
       # db_version. A divergent fork — notably the Swift port, which mints a
@@ -700,6 +723,12 @@ end
     def working_dir = Aegis.working_dir
     def set_working_dir(dir) = Aegis.set_working_dir(dir)
     def recall_aegis_notes(max_tokens: nil, max_content_length: nil, limit: 8) = Aegis.recall_aegis_notes(max_tokens: max_tokens, max_content_length: max_content_length, limit: limit)
+
+    # -- Hydra (session system) --
+    def register_session(session_id:, label: nil, role: 'oracle', project: nil, port: nil, pid: nil) = Hydra.register(session_id: session_id, label: label, role: role, project: project, port: port, pid: pid)
+    def heartbeat_session(session_id: nil, aegis_summary: nil) = Hydra.heartbeat(session_id: session_id, aegis_summary: aegis_summary)
+    def close_session(session_id: nil) = Hydra.close(session_id: session_id)
+    def active_sessions(project: nil, within: Hydra::STALE_AFTER, exclude: nil) = Hydra.active_sessions(project: project, within: within, exclude: exclude)
 
     # -- Notes --
     def get_note(note_id) = Notes.get_note(note_id)

@@ -23,7 +23,9 @@ ruby/.portable/
 # Temp probes / scratch scripts (never committed)
 _daemon_probe.rb
 *_probe*.rb
+*_probe*.txt
 tmp_shell_smoke.rb
+grep_out*.txt
 
 # Scratch artifacts (stray shell-redirect outputs)
 /1000

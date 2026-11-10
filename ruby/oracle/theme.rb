@@ -108,6 +108,14 @@ module ÆtherTheme
       "\e[38;2;#{r};#{g};#{b}m#{text}\e[0m"
     end
 
+    # Fill `text` with the accent colour as a background, choosing a readable
+    # foreground by luminance. Used for the practitioner's prompt in history.
+    def bg(text)
+      r, g, b = rgb(@colors[:accent] || DEFAULT[:accent])
+      fg = (0.299 * r + 0.587 * g + 0.114 * b) > 140 ? '30;30;30' : '255;255;255'
+      "\e[1m\e[38;2;#{fg}m\e[48;2;#{r};#{g};#{b}m#{text}\e[0m"
+    end
+
     private
 
     def rgb(hex)

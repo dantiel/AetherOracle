@@ -9,12 +9,15 @@ require_relative 'coniunctio'
 require_relative '../mnemosyne/mnemosyne'
 require_relative '../instrumentarium/instrumenta'
 
-# Hydra — the multi-headed terminal multiplexer for PythiaCLI.
+# HydraTerminal — the tmux-shaped frontend onto the Hydra session system.
 #
-# tmux-shaped but native (no tmux required): a grid of virtual "heads", each an
-# independent worker with its own prompt input, all breathing one shared
-# Mnemosyne context (.aether/mnemosyne.db is busy_timeout-guarded, so notes,
-# the Ægis orientation and the chronicle are one context across every worker).
+# The REAL Hydra is Mnemosyne::Hydra (ruby/mnemosyne/hydra.rb): the persistent
+# session registry where every head == a session, all breathing one shared
+# Aegis heart (.aether/mnemosyne.db). This terminal is just a graphical
+# *representation* of that system — a grid of virtual heads, each an
+# independent worker with its own prompt input, each registered as its own
+# session in Hydra. Native editors, the CLI chamber and the daemon speak to
+# the same Hydra substrate; this file renders and drives it tmux-style.
 #
 # FlashAegis is the master head — the brain at the top that decomposes a prompt
 # into sub-tasks and dispatches them to freshly spawned heads (or to heads you
@@ -29,7 +32,7 @@ require_relative '../instrumentarium/instrumenta'
 #
 # While typing, a head is a REPL: Enter submits, arrows move the cursor,
 # Ctrl+W/A/E/K/U edit, PgUp/PgDn scroll the stream, Ctrl+D quits.
-class Hydra
+class HydraTerminal
   DECOMPOSE_SYSTEM = <<~TEXT.freeze
     You are the Hydra brain (FlashAegis) — the mission forger. Decompose the
     practitioner's task into a MISSION and 2-8 independent sub-tasks that
@@ -127,7 +130,7 @@ class Hydra
     attr_accessor :id, :name, :kind, :buffer, :input, :cursor, :scroll,
                   :busy, :worker, :history,
                   :glyph, :system_prompt, :tool_scope, :output_type, :mission_id,
-                  :pause_state
+                  :pause_state, :session_id
 
     def initialize(id:, name:, kind: :worker)
       @id = id
@@ -146,6 +149,7 @@ class Hydra
       @output_type = nil
       @mission_id = nil
       @pause_state = nil
+      @session_id = nil
     end
   end
 
@@ -221,15 +225,23 @@ class Hydra
     @cursor_row = nil
     @cursor_col = nil
     @tty_reader = nil
+    @session_id = nil
+    @session_heartbeat = nil
 
     spawn_master
     spawn_worker('head-1')
     pre_spawn(spawn)
+    # spawn_worker steals focus (@active = size - 1); on startup the master
+    # (FlashAegis) must hold focus so the first prompt forges a mission instead
+    # of landing in a plain worker head.
+    @active = 0
   end
 
   # ---------------------------------------------------------------- lifecycle
 
   def run
+    register_session
+    start_session_heartbeat
     setup_terminal
     @input_thread = Thread.new do
       while @running
@@ -279,6 +291,9 @@ class Hydra
   def teardown_terminal
     @running = false
     @input_thread&.kill
+    @session_heartbeat&.kill
+    @heads.dup.each { |h| close_head_session(h) }
+    close_session
     begin
       ÆtherWinConsole.end_raw_input if @win
     rescue StandardError
@@ -291,6 +306,88 @@ class Hydra
       @out.write("\e[?25h\e[?1049l")
       @out.flush
     end
+  end
+
+  # ------------------------------------------------------------- session --
+
+  # Register this terminal as one head (session) in the shared Hydra roster.
+  # Every head == a session: the terminal itself is one head, and each spawned
+  # worker head registers as its own session too (see register_head_session).
+  # So a daemon/chamber/editor sibling sees the whole terminal — and every head
+  # inside it — as distinct sessions breathing the same .aether/mnemosyne.db.
+  def register_session
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:register_session)
+
+    @session_id = Mnemosyne.current_session_id || Mnemosyne::Hydra.generate_id
+    Mnemosyne.current_session_id = @session_id
+    Mnemosyne.register_session(
+      session_id: @session_id,
+      label: "HydraTerminal·#{Process.pid}",
+      role: 'terminal',
+      project: CONFIG.project_root,
+      pid: Process.pid
+    )
+    @session_id
+  rescue StandardError
+    nil
+  end
+
+  # Each head is a session: register it in the shared Hydra roster so a sibling
+  # (daemon, chamber, editor) sees every head of this terminal as a distinct
+  # session, not just the terminal as one blob. `role` carries the glyph (or
+  # 'master'/'head') so the roster reads like the heads it renders.
+  def register_head_session(head)
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:register_session)
+
+    head.session_id = Mnemosyne::Hydra.generate_id
+    role = if head.kind == :master then 'master'
+           elsif head.glyph then head.glyph.to_s
+           else 'head' end
+    Mnemosyne.register_session(session_id: head.session_id, label: head.name,
+                               role: role, project: CONFIG.project_root,
+                               pid: Process.pid)
+    head.session_id
+  rescue StandardError
+    nil
+  end
+
+  def close_head_session(head)
+    return unless head&.session_id
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:close_session)
+
+    Mnemosyne.close_session(session_id: head.session_id)
+  rescue StandardError
+    nil
+  end
+
+  # A slow heartbeat keeps this terminal's roster row fresh while idle (between
+  # turns no Aegis write happens, yet the terminal is very much alive).
+  def start_session_heartbeat
+    return if @session_heartbeat&.alive?
+
+    @session_heartbeat = Thread.new do
+      Thread.current.report_on_exception = false
+      loop do
+        sleep Mnemosyne::Hydra::HEARTBEAT_EVERY
+        break unless @running
+        begin
+          Mnemosyne.heartbeat_session
+          @heads.dup.each do |h|
+            Mnemosyne.heartbeat_session(session_id: h.session_id) if h.session_id
+          end
+        rescue StandardError
+          nil
+        end
+      end
+    end
+  end
+
+  def close_session
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:close_session)
+
+    Mnemosyne.close_session
+  rescue StandardError
+    nil
   end
 
   # ------------------------------------------------------------------ input
@@ -602,7 +699,7 @@ class Hydra
 
     head.busy = true
     head.worker = Thread.new do
-      forged = with_silenced_stdout { Hydra.decompose(prompt) }
+      forged = with_silenced_stdout { HydraTerminal.decompose(prompt) }
       mission = register_mission(forged[:mission])
       record_mission_seal(mission, forged[:subs])
       @render_lock.synchronize do
@@ -681,6 +778,7 @@ class Hydra
     @id_seq += 1
     head = Head.new(id: @id_seq, name: 'FlashAegis', kind: :master)
     @heads << head
+    register_head_session(head)
     refresh_master_banner(head)
     head
   end
@@ -702,6 +800,7 @@ class Hydra
       @heads << head
       @active = @heads.size - 1
     end
+    register_head_session(head)
     submit_worker(head, initial) if initial
     head
   end
@@ -729,6 +828,7 @@ class Hydra
       rescue StandardError
         nil
       end
+      close_head_session(head)
       @heads.delete_at(index)
       @active = [[@active, @heads.size - 1].min, 0].max
     end

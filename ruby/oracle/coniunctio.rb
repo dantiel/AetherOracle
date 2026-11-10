@@ -90,8 +90,21 @@ module Coniunctio
       # never inhale the live flow society, mirroring how they skip Aegis/manifest.
       flow = Thread.current[:aether_flow]
       concurrent_gist = if flow && !ephemeral
-                          GistBus.conduit_block(exclude_id: flow[:id], project: flow[:project],
-                                                companion: flow[:companion])
+                          parts = []
+                          # Process-level society first: sibling sessions sharing
+                          # this project's æther (the persistent Hydra session
+                          # system),
+                          # then the in-process flows (GistBus). Correspondence —
+                          # the whole project breathes as one, sessions and flows
+                          # alike weave into the same conduit.
+                          session_block = Mnemosyne::Hydra.summary_line(
+                            project: flow[:project], exclude: Mnemosyne.current_session_id
+                          )
+                          parts << session_block if session_block
+                          flow_block = GistBus.conduit_block(exclude_id: flow[:id], project: flow[:project],
+                                                             companion: flow[:companion])
+                          parts << flow_block if flow_block
+                          parts.join("\n\n") unless parts.empty?
                         end
 
       ctx = { history:       prepend_summaries(history),

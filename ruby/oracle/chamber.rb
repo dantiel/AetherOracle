@@ -11,6 +11,7 @@ require_relative 'instrumentum_renderer'
 require_relative 'token_ledger'
 require_relative 'ui'
 require_relative 'shell'
+require_relative '../../lib/aetheroracle/version' unless defined?(AetherOracle::VERSION)
 begin
   require 'tty-reader'
   HAVE_TTY_READER = true
@@ -60,6 +61,11 @@ end
 #
 # The base (unveiled) state is the full ÆtherCodex oracle itself.
 class ÆtherChamber
+  # Raised inside the worker thread to unwind an in-flight turn on Ctrl+C.
+  # Subclasses Exception (not StandardError) so Oracle.divination's broad
+  # `rescue StandardError` cannot swallow it; the chamber rescues it explicitly.
+  class TurnAborted < Exception; end
+
   # Namespaced aliases so a practitioner may summon a companion by any of its
   # epithets: the glyph key, the German name, or a descriptive epithet.
   PERSONA_ALIASES = {
@@ -157,6 +163,7 @@ class ÆtherChamber
     @console_mutex = Mutex.new
     @quit = false
     @pending_turn = nil
+    @prefill = nil
   end
 
   # ------------------------------------------------------------------ run --
@@ -164,6 +171,7 @@ class ÆtherChamber
   def run
     force_utf8_console
     TokenLedger.reset_session!
+    register_session
     banner
     puts TokenLedger.opening_line
     Readline.completion_proc = ->(s) { slash_commands.grep(/\A#{Regexp.escape(s)}/) } if HAVE_READLINE
@@ -195,11 +203,27 @@ class ÆtherChamber
         conjure(input)
       end
     end
+    Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
     release_veil!
     farewell
   end
 
   private
+
+  # Register this chamber as a session in the shared Aegis ledger, so a sibling
+  # session (daemon, another chamber) in the same project sees it. The Aegis
+  # writes that happen each turn keep the roster row fresh via save_aegis_state.
+  def register_session
+    return unless Mnemosyne.respond_to?(:register_session)
+
+    sid = Mnemosyne::Hydra.generate_id
+    Mnemosyne.current_session_id = sid
+    Mnemosyne.register_session(session_id: sid, label: "Chamber·#{Process.pid}",
+                               role: 'chamber', project: CONFIG.project_root,
+                               pid: Process.pid)
+  rescue StandardError
+    nil
+  end
 
   # ------------------------------------------------------------- dialogue --
 
@@ -241,6 +265,14 @@ class ÆtherChamber
     result = {}
     worker = Thread.new { run_divination(input, context, persona, result, tools: @tools) }
     browse_while_working(worker)
+
+    if result[:aborted]
+      @pending_turn = { prompt: input, persona: persona, error: nil, aborted: true }
+      puts
+      puts @palette.warn('  Zug abgebrochen.')
+      puts @palette.dim('  /edit bearbeitet die letzte Eingabe, /continue wiederholt sie.')
+      return false
+    end
 
     answer = result[:answer]
     tool_results = result[:tool_results]
@@ -345,6 +377,8 @@ class ÆtherChamber
       end
       result[:answer] = answer
       result[:tool_results] = tool_results
+    rescue TurnAborted
+      result[:aborted] = true
     rescue StandardError => e
       result[:error] = e
     ensure
@@ -355,15 +389,12 @@ class ÆtherChamber
   end
 
   # Wait for the background divination thread while polling for Tab/Shift-Tab,
-  # so the Fokus-Ring stays browsable during the turn. Windows-only -- the
-  # native console probe is non-blocking; elsewhere we fall back to a plain
-  # join and keep the prior synchronous behaviour.
+  # so the Fokus-Ring stays browsable during the turn. Ctrl+C aborts the turn
+  # (raises TurnAborted in the worker). Windows-only -- the native console probe
+  # is non-blocking; elsewhere we fall back to a SIGINT-aware join.
   def browse_while_working(worker)
     use_win = win_console_available?
-    unless use_win
-      worker.join
-      return
-    end
+    return join_with_interrupt(worker) unless use_win
 
     begin
       ÆtherWinConsole.begin_raw_input
@@ -398,6 +429,9 @@ class ÆtherChamber
         next if input.nil? || input[:kind] != :key
 
         case input[:action]
+        when :ctrl_c
+          worker.raise(TurnAborted) if worker.alive?
+          break
         when :tab, :back_tab
           selection = next_tab(selection, input[:action] == :tab ? 1 : -1)
           draw_working_overlay(selection)
@@ -424,6 +458,27 @@ class ÆtherChamber
       ÆtherWinConsole.end_raw_input
       worker.join
     end
+  end
+
+  # Non-Windows fallback: block on the worker but honour Ctrl+C by unwinding the
+  # in-flight divination. The editor's TTY::Reader is not active during the turn,
+  # so a transient SIGINT trap is safe here.
+  def join_with_interrupt(worker)
+    aborted = false
+    previous = Signal.trap('INT') do
+      aborted = true
+      worker.raise(TurnAborted) if worker.alive?
+    end
+    begin
+      worker.join
+    ensure
+      Signal.trap('INT', previous || 'DEFAULT')
+    end
+    aborted ? :aborted : nil
+  rescue ArgumentError
+    # Signal.trap unavailable (non-main thread / restricted platform): join plainly.
+    worker.join
+    nil
   end
 
   # Render the Fokus-Ring preview at the bottom while the agent works -- the
@@ -980,14 +1035,26 @@ class ÆtherChamber
   end
 
   def read_prompt
-    return read_prompt_inline if inline_tab_available?
+    prefill = @prefill
+    @prefill = nil
+    return read_prompt_inline(initial: prefill) if inline_tab_available?
 
-    read_prompt_plain
+    read_prompt_plain(prefill)
   end
 
   # Plain single-line read -- the fallback when neither the native Windows
   # console reader nor TTY::Reader can drive an inline editor.
-  def read_prompt_plain
+  def read_prompt_plain(prefill = nil)
+    if HAVE_READLINE && !WINDOWS && prefill && !prefill.empty?
+      Readline.pre_input_hook = lambda do
+        Readline.insert_text(prefill)
+        Readline.redisplay
+      end
+      line = Readline.readline(prompt_marker, true)
+      Readline.pre_input_hook = nil
+      return line
+    end
+
     print prompt_marker
     $stdout.flush
     if HAVE_READLINE && !WINDOWS
@@ -1276,11 +1343,11 @@ class ÆtherChamber
   # returns to normal typing; Up/Down recall the line history. Ctrl/Alt+<-/->
   # move by word, Ctrl/Alt+Backspace/Delete delete a word, and a multi-line
   # paste folds into a `[PASTED_CONTENT_n]` tag until submit.
-  def read_prompt_inline
+  def read_prompt_inline(initial: nil)
     @paste_register = []
     @rendered_lines = 0
-    buffer = +''
-    cursor = 0
+    buffer = initial ? initial.dup : +''
+    cursor = buffer.length
     selection = nil
     hist = nil
     draft = nil
@@ -1296,7 +1363,7 @@ class ÆtherChamber
         use_win = false # console mode probing failed -- fall back to TTY::Reader
       end
     end
-    return read_prompt_plain if !use_win && !HAVE_TTY_READER
+    return read_prompt_plain(initial) if !use_win && !HAVE_TTY_READER
 
     @editor_win = use_win
     bracketed = false
@@ -1508,7 +1575,7 @@ class ÆtherChamber
       use_win = false
       clear_inline_preview
       $stderr.puts "!! native console reader unavailable (#{e.message}) -- falling back to line input" if $DEBUG
-      return read_prompt_plain
+      return read_prompt_plain(initial)
     ensure
       disable_mouse if bracketed
       disable_bracketed_paste if bracketed
@@ -2509,12 +2576,15 @@ class ÆtherChamber
 
   SLASH_HELP = [
     ['/help',       'Zeige diese Hilfe'],
+    ['/aegis',      'Aegis-Orientierung zeigen'],
     ['/morph',      'Begleiter-Checkboxen (an/ab, Leertaste + Enter)'],
     ['/unmorph',    'Begleiter entfernen'],
     ['/personae',   'Alle zwölf Begleiter auflisten'],
     ['/file',       'Datei an die nächste Frage heften'],
-    ['/clear',      'Gesprächsverlauf löschen'],
-    ['/history',    'Verlauf zeigen (Sitzung + Chronik)'],
+    ['/continue',          'Abgebrochenen Zug wiederholen'],
+    ['/edit',              'Letzte Eingabe erneut bearbeiten'],
+    ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
+    ['/edit',       'Letzte Eingabe erneut bearbeiten'],
     ['/config',     'Konfiguration zeigen'],
     ['/context',    'Abgeleiteten Kontext zeigen'],
     ['/tools',      'Werkzeug-Browser (Tab = Doku) · /tools <name> = Detail'],
@@ -2528,8 +2598,8 @@ class ÆtherChamber
   ].freeze
 
   def slash_commands
-    %w[/help /morph /unmorph /personae /file /clear /history /config /context /tools
-       /tool /markdown /highlight /theme /cost /mouse /continue /exit]
+    %w[/help /aegis /morph /unmorph /personae /file /clear /history /config /context /tools
+       /tool /markdown /highlight /theme /cost /mouse /continue /edit /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -2540,12 +2610,14 @@ class ÆtherChamber
 
     case cmd
     when '/help'                    then show_help
+    when '/aegis'                   then aegis_summary
     when '/morph', '/veil'          then morph(arg)
     when '/unmorph', '/release'     then unmorph(arg)
     when '/personae', '/companions' then list_personae
     when '/file'                    then attach_file(arg)
     when '/clear'                   then clear_history
     when '/continue'                then continue_turn
+    when '/edit', '/re'             then edit_last_prompt
     when '/history'                 then show_history(arg)
     when '/config'                  then config_summary
     when '/context'                 then context_summary
@@ -2580,6 +2652,7 @@ class ÆtherChamber
       ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
       ['/config',            'Konfiguration zeigen'],
       ['/context',           'Abgeleiteten Kontext zeigen'],
+      ['/aegis',             'Aegis-Orientierung zeigen (Tags, Summary, Notizen)'],
       ['/tools',             'Verfügbare Werkzeuge listen'],
       ['/markdown',          'Markdown-Rendering an/aus'],
       ['/highlight',         'Syntax-Highlighting an/aus'],
@@ -2628,6 +2701,30 @@ class ÆtherChamber
     puts 'Gesprächsverlauf gelöscht.'
   end
 
+  # `/edit` -- load the last submitted prompt back into the editor so it can be
+  # revised and re-submitted (the counterpart to `/continue`, which re-runs it
+  # verbatim). Prefers the in-flight/aborted prompt, then the line history.
+  def edit_last_prompt
+    last = last_prompt_text
+    if last.nil? || last.empty?
+      puts @palette.dim('  Keine letzte Eingabe zum Bearbeiten.')
+      return
+    end
+    @prefill = last
+    puts @palette.dim('  Letzte Eingabe in den Editor geladen -- bearbeiten und Enter.')
+  end
+
+  def last_prompt_text
+    pending = @pending_turn && @pending_turn[:prompt].to_s.strip
+    return pending unless pending.empty?
+
+    @line_history.reverse_each do |ln|
+      stripped = ln.to_s.strip
+      return stripped unless stripped.empty?
+    end
+    nil
+  end
+
   def show_history(arg)
     session_only = false
     chronicle_only = false
@@ -2644,6 +2741,15 @@ class ÆtherChamber
     render_chronicle(limit)  unless session_only
   end
 
+  # A prominent, bordered + background-filled block for the practitioner's
+  # prompt in the history views (multi-line prompts wrap to the terminal).
+  def render_prompt_banner(prompt)
+    text = prompt.to_s.strip
+    text = '(leer)' if text.empty?
+    width = [terminal_width - 2, 4].max
+    AthanorUI.prompt_box('π ', text, width: width, palette: @palette).each { |row| puts row }
+  end
+
   def render_session_history
     if @history.empty?
       puts "\e[1mSitzung (in-memory)\e[0m -- noch kein Verlauf"
@@ -2654,7 +2760,7 @@ class ÆtherChamber
       tools = Array(h[:tool_calls]).size
       stamp = h[:created_at].is_a?(Time) ? h[:created_at].strftime('%H:%M:%S') : h[:created_at].to_s
       puts "-- #{i + 1}. #{stamp}  (#{tools} tools)"
-      puts "π #{h[:prompt].to_s.strip}"
+      render_prompt_banner(h[:prompt])
       ans = h[:answer].to_s.strip
       puts ans.empty? ? '   (keine Antwort)' : ans
       puts
@@ -2679,7 +2785,7 @@ class ÆtherChamber
     entries.each do |e|
       stamp = e[:created_at] || e[:timestamp]
       puts "-- #{stamp}  (#{e[:tool_call_count].to_i} tools)"
-      puts "π #{e[:prompt].to_s.strip}"
+      render_prompt_banner(e[:prompt])
       ans = e[:answer].to_s.strip
       puts ans.empty? ? '   (keine Antwort)' : ans
       puts
@@ -2704,6 +2810,58 @@ class ÆtherChamber
     ]
     puts AthanorUI.box('Kontext', AthanorUI.kv(rows, palette: @palette),
                      width: [terminal_width, 80].min, palette: @palette)
+  end
+
+  # `/aegis` — the oracle's persistent orientation: the living Aegis state
+  # (summary, tags, temperament, working directory) plus the notes currently
+  # within recall reach. Mirrors `aetheroracle aegis`, but framed for the REPL.
+  def aegis_summary
+    ensure_mnemosyne
+    return unless defined?(Mnemosyne)
+
+    Mnemosyne.restore_aegis if Mnemosyne.respond_to?(:restore_aegis)
+    a = Mnemosyne.aegis || {}
+    a = {} unless a.respond_to?(:[])
+
+    rows = [
+      ['Summary',     a[:summary].to_s.empty? ? '—' : a[:summary].to_s],
+      ['Tags',        aegis_tags(a).join(', ')],
+      ['Temperature', a[:temperature].to_s],
+      ['Thinking',    a[:thinking].to_s.empty? ? '—' : a[:thinking].to_s],
+      ['Working Dir', a[:working_dir].to_s.empty? ? '—' : a[:working_dir].to_s]
+    ]
+    puts AthanorUI.box('Aegis', AthanorUI.kv(rows, palette: @palette),
+                       width: [terminal_width, 80].min, palette: @palette)
+
+    notes = Array(Mnemosyne.recall_aegis_notes(limit: 8))
+    puts
+    if notes.empty?
+      puts @palette.dim('  Keine Aegis-Notizen in Reichweite.')
+    else
+      puts @palette.dim("  #{notes.size} Aegis-Notizen in Reichweite:")
+      notes.each_with_index do |n, i|
+        content = (n[:content] || n['content']).to_s.gsub(/\s+/, ' ').strip
+        score   = (n[:score] || n['score']).to_s
+        puts @palette.dim("  #{i + 1}. [#{score}] #{content[0, 160]}")
+      end
+    end
+    puts
+  end
+
+  def aegis_tags(a)
+    t = a[:tags]
+    t = t.split(',') if t.is_a?(String)
+    Array(t).map(&:to_s).reject(&:empty?)
+  end
+
+  # Ensure Mnemosyne is loaded before reading the Aegis state; `/aegis` may run
+  # before the first turn has lazily required it (inscribe_chronicle does so).
+  def ensure_mnemosyne
+    return if defined?(Mnemosyne)
+
+    require_relative '../mnemosyne/mnemosyne'
+  rescue LoadError, StandardError
+    puts @palette.warn('  Mnemosyne nicht verfügbar — Aegis nicht lesbar.')
   end
 
   def tool_names
@@ -2946,8 +3104,12 @@ class ÆtherChamber
       '  /morph ruft sie — /unmorph entlässt sie — exit geht.',
       '  $ transmorphiert die π-Prompterei in die ÆtherShell (exit kehrt zurück).'
     ]
-    puts AthanorUI.box('Dialog-Kammer · ÆtherCodex', rows, width: [terminal_width, 80].min, palette: @palette)
+    puts AthanorUI.box("Dialog-Kammer · ÆtherCodex v#{oracle_version}", rows, width: [terminal_width, 80].min, palette: @palette)
     puts
+  end
+
+  def oracle_version
+    defined?(AetherOracle::VERSION) ? AetherOracle::VERSION : 'dev'
   end
 
   def farewell
