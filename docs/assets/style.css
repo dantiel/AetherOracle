@@ -277,15 +277,47 @@ footer .motto {
 footer .motto::before { content: "Æ "; color: var(--accent); }
 footer .motto::after { content: " Æ"; color: var(--accent); }
 
+/* ---------- mobile nav toggle ---------- */
+.nav-toggle {
+  position: absolute; opacity: 0; width: 1px; height: 1px; overflow: hidden;
+}
+.nav-burger { display: none; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
-  .nav-inner { flex-direction: column; gap: 8px; align-items: flex-start; }
-  .nav-links { flex-wrap: wrap; }
+  .nav-inner { flex-wrap: wrap; gap: 8px; }
+  .nav-burger {
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    width: 42px; height: 42px; padding: 10px;
+    border: 1px solid var(--line-2); border-radius: var(--radius);
+    cursor: pointer; flex: 0 0 auto;
+  }
+  .nav-burger span {
+    display: block; width: 100%; height: 2px;
+    background: var(--text); border-radius: 2px;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+  .nav-toggle:focus-visible ~ .nav-burger { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nav-toggle:checked ~ .nav-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .nav-toggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
+  .nav-toggle:checked ~ .nav-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .nav-links {
+    display: none; flex-direction: column; align-items: stretch;
+    width: 100%; gap: 2px; padding: 6px 0 12px;
+    border-top: 1px solid var(--line);
+  }
+  .nav-toggle:checked ~ .nav-links { display: flex; }
+  .nav-links > a { padding: 12px; }
+  .group-label { display: block; padding: 12px; }
+  .nav-group { position: static; }
   .nav-drop {
     position: static; display: block; min-width: 0;
-    border: none; box-shadow: none; padding: 2px 0 2px 14px; background: transparent;
+    border: none; box-shadow: none; background: transparent;
+    padding: 2px 0 10px 14px;
   }
-  .nav-group:hover .nav-drop, .nav-group:focus-within .nav-drop { display: block; }
+  .nav-drop a { padding: 10px 12px; }
+
   .hero { padding: 52px 0 36px; }
   .ledger .row { grid-template-columns: 34px 1fr; }
   .ledger .arrow { display: none; }
