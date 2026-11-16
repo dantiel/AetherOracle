@@ -1006,6 +1006,26 @@ class Conduit
 
         response
       rescue Faraday::ClientError, Faraday::ServerError => e
+        # 5xx server errors are transient (overload, gateway hiccup) — worth a
+        # short backoff-retry like connection failures; 4xx stays on the
+        # self-correction path below.
+        status = e.response&.dig(:status)
+        if (500..599).include?(status)
+          @connection_retries = (@connection_retries || 0) + 1
+          if @connection_retries <= CONNECTION_RETRY_MAX
+            backoff = CONNECTION_RETRY_BACKOFF * (2**(@connection_retries - 1))
+            HorologiumAeternum.system_error(
+              "Server error (HTTP #{status}) — retrying in #{backoff.round(1)}s " \
+              "(#{@connection_retries}/#{CONNECTION_RETRY_MAX})"
+            )
+            sleep backoff
+            retry
+          end
+          HorologiumAeternum.system_error(
+            "Server error (HTTP #{status}) persisted after #{CONNECTION_RETRY_MAX} retries — giving up"
+          )
+        end
+
         error_message = ErrorHandler.handle_faraday_client_error e
         if error_message.is_a?(String)
           # Retry tool_calls format errors after sanitizing messages

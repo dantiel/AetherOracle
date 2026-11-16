@@ -138,6 +138,22 @@ at_exit do
   end
 end
 
+# ── Session heartbeat: keep this daemon's head fresh in Hydra ──
+# Aegis state writes are sparse (only on orientation changes), so without a
+# periodic heartbeat an idle-but-alive daemon drifts past STALE_AFTER and reads
+# as 'stale' — the source of the phantom-stale sessions. Refresh last_seen on a
+# steady rhythm so the roster reflects liveness, not activity.
+Thread.new do
+  loop do
+    sleep Mnemosyne::Hydra::HEARTBEAT_EVERY
+    begin
+      Mnemosyne.heartbeat_session
+    rescue StandardError => e
+      warn "[HEARTBEAT] #{e.message}"
+    end
+  end
+end
+
 # ── ÆtherLink: discover peer contexts on startup ──
 Thread.new do
   sleep 2 # let the server finish binding
@@ -557,6 +573,38 @@ post '/aether/aegis' do
       summary: aegis[:summary] || '',
       tags: aegis[:tags] || []
     } }.to_json
+  rescue StandardError => e
+    status 500
+    { error: e.message }.to_json
+  end
+end
+
+
+# ── Sessions: the Aegis is the antenna pole; sessions are its children. ──
+# ÆtherLink-facing surface over the Hydra registry. GET lists every head
+# (active + stale + closed) with age and effective_status; POST manipulates.
+get '/aether/sessions' do
+  content_type :json
+  { own_session: Mnemosyne.current_session_id,
+    sessions: Mnemosyne.all_sessions }.to_json
+end
+
+post '/aether/sessions' do
+  content_type :json
+  begin
+    payload = JSON.parse(request.body.read, symbolize_names: true)
+    action = (payload[:action] || 'list').to_s
+    sid = payload[:session_id].to_s
+
+    case action
+    when 'close'     then Mnemosyne.close_session(session_id: sid)
+    when 'kick'      then Mnemosyne.kick_session(session_id: sid)
+    when 'heartbeat' then Mnemosyne.heartbeat_session(session_id: sid)
+    when 'prune'     then Mnemosyne::Hydra.prune!
+    end
+
+    { ok: true, action: action, session_id: sid,
+      sessions: Mnemosyne.all_sessions }.to_json
   rescue StandardError => e
     status 500
     { error: e.message }.to_json

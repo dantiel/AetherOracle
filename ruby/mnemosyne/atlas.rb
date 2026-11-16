@@ -29,8 +29,12 @@ class Mnemosyne
           fragments = delta_fragments!(report)
           fragments += marker_fragment!(report) if fragments.positive? && cartography[:sync_marker]
         end
-        notes = cartography[:auto_map] ? map! : 0
-        promoted = (kind == :sync && report) ? Ouroboros.promote! : 0
+        # A zero-delta sync is a true no-op: re-minting the map (and running
+        # the promotion ladder) only churns the DB. Mint/promote solely when
+        # the tree actually moved (or on a full re-sound, which has no report).
+        changed = report ? (report[:added].any? || report[:changed].any? || report[:removed].any?) : (kind == :sound)
+        notes = cartography[:auto_map] && changed ? map! : 0
+        promoted = (kind == :sync && report && changed) ? Ouroboros.promote! : 0
         { kind: kind, fragments: fragments, notes: notes, promoted: promoted }
       end
 

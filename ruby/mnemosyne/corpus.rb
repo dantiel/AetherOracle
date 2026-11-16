@@ -24,9 +24,16 @@ class Mnemosyne
     # Extensionless build/config files still worth sounding.
     BUILD_FILENAMES = %w[makefile gnumakefile dockerfile containerfile].freeze
 
+    # Unreal/build/IDE intermediate dirs are the heavy hitters: a UE project's
+    # Intermediate/, Binaries/, Saved/ and DerivedDataCache/ trees hold tens of
+    # thousands of generated .cpp/.h/.cs/.json files that must never enter the
+    # corpus graph — sounding them is what bloats memory_tokens into the tens
+    # of millions and the db past a gigabyte.
     SKIP_DIRS = %w[
       .git .hg .svn vendor_bundle .vendor_bundle .vendor vendored node_modules
       .tm-ai .aether tmp log coverage dist build .bundle .sass-cache
+      intermediate binaries saved deriveddatacache ddc .vs .idea
+      build-vs build-vs2 build-vs3 build-current build-merged build-out build-doc
     ].freeze
 
     class << self
@@ -40,7 +47,7 @@ class Mnemosyne
           next if File.directory?(abs)
 
           rel = abs.delete_prefix(prefix).tr(File::SEPARATOR, '/')
-          next if rel.split('/').any? { |seg| SKIP_DIRS.include?(seg) }
+          next if rel.split('/').any? { |seg| SKIP_DIRS.include?(seg.downcase) }
 
           ext = File.extname(abs).downcase
           next unless SCAN_EXTENSIONS.include?(ext) || BUILD_FILENAMES.include?(File.basename(abs).downcase)
@@ -78,6 +85,7 @@ class Mnemosyne
         end
         files.each { |rel| record_sighting(rel, fingerprint(rel, root)) }
         woven = defined?(Atlas) ? Mnemosyne.atlas_weave!(kind: :sound) : nil
+        Mnemosyne.checkpoint!
         { files: files.size, nodes: count_nodes, edges: count_edges, maps: woven }
       end
 
@@ -98,10 +106,24 @@ class Mnemosyne
         nil
       end
 
-      def record_sighting(rel, fp)
-        Mnemosyne.db.execute(<<~SQL, [rel, fp])
-          INSERT OR REPLACE INTO corpus_sightings (path, fingerprint, indexed_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
+      # Working-tree blob hash via git plumbing. nil when the repo is not a
+      # git checkout (or the file is untracked) — the caller then treats git
+      # as unable to confirm a change. `hash-object` hashes content only, so
+      # it is the true "did the bytes move" signal that mtime+size can miss.
+      def git_blob(rel, root = project_root)
+        out, _err, status = Open3.capture3('git', 'hash-object', '--', rel, chdir: root)
+        return nil unless status.success?
+
+        hash = out.strip
+        hash.empty? ? nil : hash
+      rescue StandardError
+        nil
+      end
+
+      def record_sighting(rel, fp, git_hash = nil)
+        Mnemosyne.db.execute(<<~SQL, [rel, fp, git_hash])
+          INSERT OR REPLACE INTO corpus_sightings (path, fingerprint, git_hash, indexed_at)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP)
         SQL
       end
 
@@ -110,8 +132,10 @@ class Mnemosyne
       end
 
       def sighting_map
-        Mnemosyne.db.execute('SELECT path, fingerprint FROM corpus_sightings')
-                  .each_with_object({}) { |r, h| h[r['path']] = r['fingerprint'] }
+        Mnemosyne.db.execute('SELECT path, fingerprint, git_hash FROM corpus_sightings')
+                  .each_with_object({}) do |r, h|
+                    h[r['path']] = { fingerprint: r['fingerprint'], git_hash: r['git_hash'] }
+                  end
       end
 
       def sighting_count
@@ -198,9 +222,10 @@ class Mnemosyne
         report = { added: [], changed: [], removed: [], unchanged: 0, files: files.size }
         files.each do |rel|
           fp = fingerprint(rel, root)
-          if !known.key?(rel)
+          sighting = known[rel]
+          if !sighting
             report[:added] << rel
-          elsif known[rel] != fp || force.include?(rel)
+          elsif sighting[:fingerprint] != fp || force.include?(rel)
             report[:changed] << rel
           else
             report[:unchanged] += 1
@@ -215,7 +240,18 @@ class Mnemosyne
           next unless files.include?(rel)
           next if report[:added].include?(rel) || report[:changed].include?(rel)
 
+          # `git status` lists an uncommitted file every run, so presence is
+          # not a change signal. Only trust git when the working-tree blob
+          # hash actually moved since the last sighting — that catches the
+          # same-size-same-mtime edits the fingerprint cannot see, without
+          # re-sounding untouched uncommitted files on every sync.
+          hash = git_blob(rel, root)
+          next if hash.nil? || (known[rel] && known[rel][:git_hash] == hash)
+
           report[:changed] << rel
+          # The file was already counted in `unchanged` by the fingerprint
+          # pass; git reclassified it, so the buckets must stay balanced.
+          report[:unchanged] -= 1
         end
 
         Mnemosyne.db.transaction do
@@ -224,7 +260,7 @@ class Mnemosyne
             remove_file_nodes(rel)
             file_id, imports = index_file(rel, root)
             reindexed[file_id] = { rel: rel, imports: imports } if file_id
-            record_sighting(rel, fingerprint(rel, root))
+            record_sighting(rel, fingerprint(rel, root), git_blob(rel, root))
           end
           report[:removed].each do |rel|
             remove_file_nodes(rel)

@@ -135,6 +135,11 @@ module ÆtherWinConsole
   MOUSE_WHEELED = 0x0004
 
   PASTE_MAX_EVENTS = 8192
+ 
+  # Win32 clipboard constants (used by clipboard_copy to land the chamber's own
+  # text selection on the system clipboard as UTF-16).
+  CF_UNICODETEXT = 13
+  GMEM_MOVEABLE   = 0x0002
 
   # Raised when the native console reader cannot read from the console input
   # handle (invalid handle, detached console, redirected stdin, …). The chamber
@@ -195,6 +200,52 @@ module ÆtherWinConsole
       SetConsoleOutputCP(65001)
       true
     end
+   
+    # Copy text to the Windows clipboard as CF_UNICODETEXT (UTF-16LE). The
+    # console's ENABLE_QUICK_EDIT_MODE is off while mouse capture is on, so the
+    # OS-native drag-select is gone; this lets the chamber's own selection still
+    # land on the system clipboard without spawning a child process (which could
+    # touch the console input mode mid-prompt).
+    def clipboard_copy(text)
+      return false if text.nil? || text.empty?
+   
+      # The clipboard API lives in user32, the Global* allocator in kernel32.
+      # Fiddle::Importer keeps a single dlload handle, so the user32 symbols are
+      # resolved through explicit handles here instead of module-level externs.
+      # VOIDP returns arrive as Fiddle::Pointer, so null-checks use `null?`.
+      k32 = Fiddle::Handle.new('kernel32')
+      u32 = Fiddle::Handle.new('user32')
+   
+      g_alloc  = Fiddle::Function.new(k32['GlobalAlloc'], [Fiddle::TYPE_INT, Fiddle::TYPE_SIZE_T], Fiddle::TYPE_VOIDP)
+      g_lock   = Fiddle::Function.new(k32['GlobalLock'], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_VOIDP)
+      g_unlock = Fiddle::Function.new(k32['GlobalUnlock'], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+      g_free   = Fiddle::Function.new(k32['GlobalFree'], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_VOIDP)
+   
+      bytes = text.encode(Encoding::UTF_16LE).b + "\x00\x00".b
+      hmem = g_alloc.call(GMEM_MOVEABLE, bytes.bytesize)
+      return false if hmem.null?
+   
+      ptr = g_lock.call(hmem)
+      if ptr.null?
+        g_free.call(hmem)
+        return false
+      end
+   
+      ptr[0, bytes.bytesize] = bytes
+      g_unlock.call(hmem)
+   
+      open_cb = Fiddle::Function.new(u32['OpenClipboard'], [Fiddle::TYPE_VOIDP], Fiddle::TYPE_INT)
+      return false unless open_cb.call(0) == 1
+   
+      Fiddle::Function.new(u32['EmptyClipboard'], [], Fiddle::TYPE_INT).call
+      ok = Fiddle::Function.new(u32['SetClipboardData'], [Fiddle::TYPE_INT, Fiddle::TYPE_VOIDP], Fiddle::TYPE_VOIDP).call(CF_UNICODETEXT, hmem)
+      Fiddle::Function.new(u32['CloseClipboard'], [], Fiddle::TYPE_INT).call
+      # On success the system owns hmem; free it only when SetClipboardData failed.
+      g_free.call(hmem) if ok.null?
+      !ok.null?
+    rescue StandardError
+      false
+    end
 
     # Non-blocking readiness probe: WaitForSingleObject on the console input
     # handle returns immediately (WAIT_OBJECT_0) when records are buffered,
@@ -220,22 +271,70 @@ module ÆtherWinConsole
     # Cygwin / ConPTY hosts where `$stdin.tty?` is true but STD_INPUT_HANDLE is
     # a pipe rather than a console.
     def available?
-      return @available unless @available.nil?
+      return true if @available == true
 
       h = console_handle
       return @available = false if h.nil? || h.zero?
 
-      get_mode(h)
+      @pristine_mode ||= get_mode(h)
       @available = true
     rescue StandardError
       @available = false
     end
 
-    # Permanently disable the native reader for the rest of the process — used
-    # once a read has failed, so the chamber does not retry (and re-fail) on
-    # every subsequent prompt.
+    # Drop the native reader for now. `available?` re-probes GetConsoleMode on
+    # the next call (it only caches a `true`), so a transient failure — a child
+    # process briefly touching the console, a spurious ReadConsoleInputW error —
+    # degrades only the current read, not the rest of the session. Only a
+    # genuinely dead handle (pipe/detached stdin) keeps failing the re-probe.
     def disable!
       @available = false
+    end
+
+    # The console's pristine input mode, captured once at the first successful
+    # probe and reused as the restore target for every raw session. Restoring
+    # THIS -- not whatever mode happened to be current when a raw session began
+    # -- guarantees a spawned child (cmd.exe) or a stray SetConsoleMode can
+    # never bake its pollution into the next prompt's baseline.
+    def pristine_mode
+      @pristine_mode ||= get_mode(console_handle)
+    end
+
+    # Force the console input mode back to pristine and clear any ref-count
+    # debt plus stashed mouse records. Called at prompt boundaries and after a
+    # turn so a leaked raw session or child-process mode change can never
+    # degrade the next read. Safe at any depth.
+    def reset!
+      raw_mutex.synchronize do
+        @raw_depth = 0
+        @raw_saved_mode = nil
+        @mouse_stash = nil
+        h = console_handle
+        return false if h.nil? || h.zero?
+
+        @pristine_mode ||= get_mode(h)
+        set_mode(h, @pristine_mode)
+        true
+      end
+    rescue StandardError
+      false
+    end
+
+    # Drain every queued input record (stale key-ups, mouse motion, paste
+    # remnants left over from the previous turn) so the next prompt starts from
+    # a clean buffer instead of misreading a leftover event as fresh input.
+    def flush_input!
+      n = pending_count
+      return 0 if n.nil? || n <= 0
+
+      drained = 0
+      n.times do
+        read_record
+        drained += 1
+      end
+      drained
+    rescue StandardError
+      0
     end
 
     def get_mode(handle)
@@ -267,9 +366,14 @@ module ÆtherWinConsole
     # Absolute console cursor position [x, y] in 0-based character cells.
     # dwCursorPosition sits at offset 4 in CONSOLE_SCREEN_BUFFER_INFO (right
     # after dwSize), so the buffer is read whole and the COORD sliced out.
+    # The screen-buffer info lives on the OUTPUT handle: GetConsoleScreenBufferInfo
+    # takes a console screen buffer, and STD_INPUT_HANDLE (console_handle) is the
+    # input queue — passing it makes the call fail and cursor_position return nil,
+    # which silently disabled every mouse-click resolution (click-to-place-cursor,
+    # click-to-expand, click-to-focus) because the anchor row could never be set.
     def cursor_position
       buf = "\0" * 22
-      ok = GetConsoleScreenBufferInfo(console_handle, buf)
+      ok = GetConsoleScreenBufferInfo(output_handle, buf)
       return nil if ok.nil? || ok.zero?
 
       buf[4, 4].unpack('S<S<')
@@ -285,6 +389,7 @@ module ÆtherWinConsole
       raw_mutex.synchronize do
         if @raw_depth.to_i.zero?
           mode = get_mode(console_handle)
+          @pristine_mode ||= mode
           # Raw key events plus, by default, mouse input (clicks, wheel).
           # QuickEdit — the console's built-in drag-select/right-click-paste
           # mode — is cleared when mouse capture is on: it would swallow clicks
@@ -315,8 +420,9 @@ module ÆtherWinConsole
         return if @raw_depth.to_i.zero?
 
         @raw_depth -= 1
-        if @raw_depth.zero? && @raw_saved_mode
-          set_mode(console_handle, @raw_saved_mode)
+        if @raw_depth.zero?
+          target = @pristine_mode || @raw_saved_mode
+          set_mode(console_handle, target) if target
           @raw_saved_mode = nil
         end
       end

@@ -53,7 +53,7 @@ class ÆtherCodexCLI
     when 'hydra'                       then hydra_mode
     when 'read', 'cat', 'inspect', 'ov', 'write', 'new', 'mv', 'rename',
          'files', 'ast', 'grep', 'notes', 'mem', 'note', 'history', 'hist',
-         'search', 'find', 'aegis', 'seal', 'seals'
+         'search', 'find', 'aegis', 'sessions', 'seal', 'seals'
       toolbelt_mode(command)
     when 'help', '-h', '--help'        then print_help
     when 'version', '-v', '--version'  then print_version
@@ -136,28 +136,104 @@ class ÆtherCodexCLI
     puts "Config Sources: #{CONFIG.debug_info[:config_sources]}"
   end
 
-  # Atlas, the cartographer's landing strip: print the compact `map` notes
-  # (one overview + one per territory) in a single pure read. If no map has
-  # been minted yet, sound the corpus and weave one so the command is useful
-  # out of the box; otherwise it never writes to the DB.
+  # Atlas, the cartographer's landing strip. Four rites, one command:
+  #   atlas            incremental sync — delta-compare against the previous
+  #                    sighting (fingerprint + git), re-sound only what
+  #                    changed, weave delta fragments, re-mint the map and
+  #                    promote sync-hotspots (Ouroboros). First run on an
+  #                    empty DB falls back to a full sounding.
+  #   atlas view       pure read of the cached map notes (fastest, no writes)
+  #   atlas full       full re-sounding: wipe the corpus graph + tokens and
+  #                    re-walk the whole repo (also `sound` / `rescan`)
+  #   atlas promote    force the Ouroboros promotion ladder (fragment -> note)
   def atlas_mode
-    view = Mnemosyne.atlas_view
+    sub = ARGV.shift
+    case sub
+    when 'view', 'print'
+      print_atlas(Mnemosyne.atlas_view)
+    when 'full', 'sound', 'rescan'
+      run_full_sound
+    when 'promote'
+      run_promote
+    else
+      ARGV.unshift(sub) if sub
+      run_atlas_sync
+    end
+  end
+
+  # Incremental rite: compare the living tree against the last sighting,
+  # re-index only touched files, weave the change into the cascade
+  # (fragments + map + promotion), then print the living map.
+  def run_atlas_sync
+    report = Mnemosyne.corpus_sync!
+    if report.key?(:added)
+      added = report[:added] || []
+      changed = report[:changed] || []
+      removed = report[:removed] || []
+      puts "⬡ Atlas sync — #{report[:files]} files: +#{added.size} added, ~#{changed.size} changed, " \
+           "-#{removed.size} removed, #{report[:unchanged]} unchanged"
+      puts "   (git-assisted: #{report[:git]} path(s) — last sync #{report[:synced_at]})"
+      print_delta('added', added)
+      print_delta('changed', changed)
+      print_delta('removed', removed.map { |i| i.is_a?(Hash) ? i[:rel] : i })
+      print_woven(report[:fragments])
+    else
+      puts "⬡ Atlas (first run) — full sounding: #{report[:files]} files, " \
+           "#{report[:nodes]} nodes, #{report[:edges]} edges"
+      print_woven(report[:maps])
+    end
+    print_atlas(Mnemosyne.atlas_view)
+  end
+
+  def run_full_sound
+    puts '⬡ Full re-sounding — wiping the corpus graph and re-walking the repo…'
+    report = Mnemosyne.corpus_sound!
+    puts "⬡ Corpus: #{report[:files]} files, #{report[:nodes]} nodes, #{report[:edges]} edges"
+    print_woven(report[:maps])
+    print_atlas(Mnemosyne.atlas_view)
+  end
+
+  def run_promote
+    n = Mnemosyne.ouroboros_promote!
+    puts n.positive? ? "⬡ Promoted #{n} sync-hotspot path(s) into durable notes." \
+                     : '⬡ Nothing to promote — no path glowed past the threshold.'
+  end
+
+  def print_delta(label, entries)
+    entries.each do |e|
+      rel = e.is_a?(Hash) ? e[:rel] : e.to_s
+      symbols = e.is_a?(Hash) && e[:symbols] ? " (#{e[:symbols]} symbols)" : ''
+      puts "   #{label == 'removed' ? '-' : '+'} #{rel}#{symbols}"
+    end
+  end
+
+  # The woven report from Atlas.weave! nests map! counts under :notes, so
+  # unpack both shapes (a bare Integer for a no-op map, or the map! hash).
+  def print_woven(woven)
+    return unless woven.is_a?(Hash)
+
+    frags = woven[:fragments].to_i
+    notes_h = woven[:notes]
+    map_notes = notes_h.is_a?(Hash) ? notes_h[:notes].to_i : notes_h.to_i
+    removed_maps = notes_h.is_a?(Hash) ? notes_h[:removed_maps].to_i : 0
+    flash_used = notes_h.is_a?(Hash) && notes_h[:flash]
+    promoted = woven[:promoted].to_i
+    bits = []
+    bits << "#{frags} delta fragment(s)" if frags.positive?
+    bits << "#{map_notes} map note(s) re-minted" if map_notes.positive?
+    bits << "#{removed_maps} stale map note(s) excised" if removed_maps.positive?
+    bits << 'kopist (flash) wrote the one-liners' if flash_used
+    bits << "#{promoted} promoted" if promoted.positive?
+    puts "   ⬡ woven: #{bits.join(', ')}" if bits.any?
+  end
+
+  def print_atlas(view)
     overview = view[:overview]
     areas = view[:areas] || []
-
-    if overview.nil? && areas.empty?
-      puts '⬡ The atlas is empty — sounding the corpus and weaving a fresh map…'
-      Mnemosyne.corpus_sound! if Mnemosyne.respond_to?(:corpus_sound!)
-      view = Mnemosyne.atlas_view
-      overview = view[:overview]
-      areas = view[:areas] || []
-    end
-
     if overview.nil? && areas.empty?
       puts '⬡ No source files found to map.'
       return
     end
-
     puts overview
     areas.each { |area| puts "⬡ #{area}" }
   end
@@ -460,7 +536,10 @@ class ÆtherCodexCLI
     puts "  chamber          Enter the Dialog-Kammer (polymorphic REPL)"
     puts "  ask \"prompt\"     Ask the oracle a question (one-shot)"
     puts "  server           Start web server (TextMate UI)"
-    puts "  atlas            Print the project map (Atlas, the cartographer)"
+    puts "  atlas            Sync + print the project map (incremental delta)"
+    puts "  atlas view       Read the cached map only (fastest, no writes)"
+    puts "  atlas full       Full re-sounding of the corpus graph (rescan)"
+    puts "  atlas promote    Force the Ouroboros promotion ladder"
     puts "  logs             Tail the tagged log stream (colored, toggleable)"
     puts "  logs tags        Configure tags: colors + enable/disable"
     puts "  veil             Check, configure, and repair Aether setup"

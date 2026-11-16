@@ -130,9 +130,9 @@ module AthanorUI
     out
   end
 
-  # A bordered, background-filled panel for the practitioner's prompt in history
-  # views. `label` (e.g. the π marker) prefixes the first wrapped row; the rest
-  # align under it. Returns pre-styled strings ready for `puts`.
+  # A bordered panel (no background fill) for the practitioner's prompt in
+  # history views. `label` (e.g. the π marker) prefixes the first wrapped row;
+  # the rest align under it. Returns pre-styled strings ready for `puts`.
   def prompt_box(label, text, width:, palette:)
     w = [width, 2].max
     inner = [w - 2, 0].max
@@ -151,7 +151,7 @@ module AthanorUI
     out = [palette.accent(TL + (H * inner) + TR)]
     lines.each_with_index do |ln, i|
       prefix = i.zero? ? label : (' ' * lw)
-      body = palette.bg(pad(prefix + ln, field))
+      body = pad(prefix + ln, field)
       out << palette.accent(V) + ' ' + body + ' ' + palette.accent(V)
     end
     out << palette.accent(BL + (H * inner) + BR)

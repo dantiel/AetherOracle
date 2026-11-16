@@ -818,7 +818,6 @@ instrument :patch_file,
              :start_line: (required) The line number of original content where the search block begins.
              -------
              [exact content to find including whitespace]
-             =======
              [new content to replace with]
              >>>>>>> REPLACE
              ```
@@ -833,7 +832,6 @@ instrument :patch_file,
                  for item in items:
                      total += item
                  return total
-             =======
              def calculate_total(items):
                  """Calculate total with 10% markup"""
                  return sum(item * 1.1 for item in items)
@@ -847,7 +845,6 @@ instrument :patch_file,
              -------
              def calculate_total(items):
                  sum = 0
-             =======
              def calculate_sum(items):
                  sum = 0
              >>>>>>> REPLACE
@@ -857,7 +854,6 @@ instrument :patch_file,
              -------
                  total += item
                  return total
-             =======
                  sum += item
                  return sum
              >>>>>>> REPLACE
@@ -955,6 +951,71 @@ instrument :aegis,
   { aegis_notes: notes, aegis_orientation: Mnemosyne.aegis }
 rescue StandardError => e
   { error: "Aegis failed: #{e.message}" }
+end
+
+
+instrument :sessions,
+           description: <<~DESC,
+             Inspect and manipulate the Hydra session registry — the roster of
+             heads (processes) breathing this project's æther (aether_sessions).
+             Sessions are children of the Aegis: the Aegis is the antenna pole
+             (the orientation/course), each session a head listening to it.
+             Actions:
+               list      (default) every session — active, stale AND closed —
+                         with age_seconds + effective_status. This surfaces the
+                         invisible: rows still stamped 'active' but silent past
+                         the heartbeat window (crashed/orphaned heads).
+               close     gracefully mark one session closed (session_id).
+               kick      hard-delete one session row (session_id).
+               prune     delete all closed rows + rows silent past the prune
+                         horizon.
+               heartbeat refresh one session's last_seen (session_id).
+           DESC
+           params: {
+             action:     { type: String, required: false,
+                           enum: %w[list close kick prune heartbeat],
+                           description: 'list (default) | close | kick | prune | heartbeat' },
+             session_id: { type: String, required: false,
+                           description: 'Target session_id for close/kick/heartbeat' }
+           },
+           returns: { action: String, sessions: Array, count: Integer, active: Integer,
+                      stale: Integer, closed: Integer, pruned: Boolean, session_id: String,
+                      error: String } do |action: 'list', session_id: nil|
+  act = action.to_s
+  case act
+  when 'list'
+    sessions = Mnemosyne.all_sessions
+    {
+      action: 'list',
+      sessions: sessions,
+      count: sessions.size,
+      active: sessions.count { |s| s[:effective_status] == 'active' },
+      stale:  sessions.count { |s| s[:effective_status] == 'stale' },
+      closed: sessions.count { |s| s[:effective_status] == 'closed' }
+    }
+  when 'close'
+    sid = session_id.to_s
+    return { action: 'close', error: 'session_id required' } if sid.empty?
+    Mnemosyne.close_session(session_id: sid)
+    { action: 'close', session_id: sid }
+  when 'kick'
+    sid = session_id.to_s
+    return { action: 'kick', error: 'session_id required' } if sid.empty?
+    Mnemosyne.kick_session(session_id: sid)
+    { action: 'kick', session_id: sid }
+  when 'prune'
+    Mnemosyne::Hydra.prune!
+    { action: 'prune', pruned: true }
+  when 'heartbeat'
+    sid = session_id.to_s
+    return { action: 'heartbeat', error: 'session_id required' } if sid.empty?
+    Mnemosyne.heartbeat_session(session_id: sid)
+    { action: 'heartbeat', session_id: sid }
+  else
+    { action: act, error: "unknown action: #{act} (list|close|kick|prune|heartbeat)" }
+  end
+rescue StandardError => e
+  { action: action, error: "Sessions failed: #{e.message}" }
 end
 
 

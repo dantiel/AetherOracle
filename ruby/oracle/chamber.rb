@@ -66,6 +66,50 @@ class ÆtherChamber
   # `rescue StandardError` cannot swallow it; the chamber rescues it explicitly.
   class TurnAborted < Exception; end
 
+  # Thread-local gate the Oracle loop consults at every step boundary
+  # (`Thread.current[:pause_gate]&.arm(messages)&.wait`). The chamber uses it to
+  # weave a word typed while the agent works straight into the live messages, so
+  # the amendment reaches the next API call instead of queueing behind the turn.
+  class TurnGate
+    def initialize
+      @mutex = Mutex.new
+      @messages = nil
+      @pending = []
+    end
+
+    # The worker hands over the live messages at each boundary. An amendment
+    # woven in before the first boundary (the turn was still assembling) is
+    # flushed here, so it is never lost to the gap before the first step.
+    def arm(messages)
+      @mutex.synchronize do
+        @messages = messages
+        @pending.each { |text| messages << { role: 'user', content: text } }
+        @pending.clear
+      end
+      self
+    end
+
+    # Weave the practitioner's word into the running chapter. Lands immediately
+    # once the worker has reached a boundary, otherwise waits in the pending
+    # queue until the next `arm`. Never blocks.
+    def amend(text)
+      @mutex.synchronize do
+        if @messages
+          @messages << { role: 'user', content: text.to_s }
+        else
+          @pending << text.to_s
+        end
+      end
+      true
+    end
+
+    # The chamber never holds the turn, so the boundary wait is a no-op. It
+    # exists because the Oracle loop chains `arm(...).wait` unconditionally.
+    def wait
+      :released
+    end
+  end
+
   # Namespaced aliases so a practitioner may summon a companion by any of its
   # epithets: the glyph key, the German name, or a descriptive epithet.
   PERSONA_ALIASES = {
@@ -98,7 +142,7 @@ class ÆtherChamber
   # A pasted-content placeholder in the prompt editor. Multi-line pastes are
   # folded into `[PASTED_CONTENT_1]`, `[PASTED_CONTENT_2]`, ... so the single-line
   # editor stays intact; they expand back into the real text on submit.
-  PASTE_TAG_RE = /\[PASTED_CONTENT_\d+\]/
+  PASTE_TAG_RE = /\[PASTED_CONTENT_\d+(?: · \d+ Zeichen)?\]/
 
   # Attached "Sigillen" in the prompt. Minted by typing `@` (opens the
   # Sigil-Picker) or by pressing `@` while a Fokus-Ring element is selected.
@@ -149,18 +193,23 @@ class ÆtherChamber
     @veiled = []
     @render_markdown = true
     @highlight = true
-    @mouse = false
+    @mouse = true
     @pending_suggestions = []
     @focusable = []
     @focus_keys = {}
     @line_history = []
     @rendered_lines = 0
+    @cursor_row = 0
+    @click_overlay_rows = 0
+    @text_sel = nil
+    @drag_anchor = nil
     @expanded_focus = {}
     @terminal_size = nil
     @paste_register = []
     @select_menu_lines = 0
     @working_overlay_lines = 0
     @console_mutex = Mutex.new
+    @stdout_mutex = Mutex.new
     @quit = false
     @pending_turn = nil
     @prefill = nil
@@ -201,6 +250,7 @@ class ÆtherChamber
         show_help
       else
         conjure(input)
+        break if @quit
       end
     end
     Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
@@ -254,7 +304,7 @@ class ÆtherChamber
   # Run one full turn. Returns true on success, false when the turn produced no
   # answer (the practitioner can /continue). Any exception raised here in the
   # main thread propagates to the caller, which records it as @pending_turn.
-  def perform_turn(input, persona)
+  def perform_turn(input, persona, resume_state: nil)
     flash_aegis_intent(input)
     context = Coniunctio.build(history: @history, temperature: current_temperature)
 
@@ -263,29 +313,37 @@ class ÆtherChamber
     # Fokus-Ring while the agent is still working.
     started = Time.now
     result = {}
-    worker = Thread.new { run_divination(input, context, persona, result, tools: @tools) }
-    browse_while_working(worker)
+    gate = TurnGate.new
+    worker = Thread.new do
+      Thread.current[:pause_gate] = gate
+      run_divination(input, context, persona, result, tools: @tools, resume_state: resume_state)
+    ensure
+      Thread.current[:pause_gate] = nil
+    end
+    browse_while_working(worker, gate)
 
     if result[:aborted]
-      @pending_turn = { prompt: input, persona: persona, error: nil, aborted: true }
+      @pending_turn = { prompt: input, persona: persona, error: nil, aborted: true,
+                        resume_state: result[:pause_state] }
       puts
       puts @palette.warn('  Zug abgebrochen.')
-      puts @palette.dim('  /edit bearbeitet die letzte Eingabe, /continue wiederholt sie.')
+      puts @palette.dim('  /edit bearbeitet die letzte Eingabe, /continue setzt fort.')
       return false
     end
 
     answer = result[:answer]
     tool_results = result[:tool_results]
 
-    if answer.nil?
-      err = result[:error]
-      @pending_turn = { prompt: input, persona: persona, error: err }
+    if answer.nil? || failed_answer?(answer)
+      err = result[:error] || build_turn_error(answer)
+      @pending_turn = { prompt: input, persona: persona, error: err,
+                        resume_state: result[:pause_state] }
       if err
         warn "\e[31m!! #{err.class}: #{err.message}\e[0m"
       else
         warn "\e[31m!! Zug lieferte keine Antwort\e[0m"
       end
-      puts @palette.dim('  /continue wiederholt den Zug.')
+      puts @palette.dim('  /continue setzt den Zug fort.')
       return false
     end
 
@@ -302,18 +360,25 @@ class ÆtherChamber
     true
   end
 
-  # Re-run the most recent turn that finished prematurely (worker error, empty
-  # answer, or main-thread failure). Continues with the same prompt and persona,
-  # rebuilding the context from the current @history so the retry sees the exact
-  # same conversation state as the failed attempt.
+  # Resume the most recent turn that finished prematurely (worker error, empty
+  # answer, or main-thread failure). If the failed attempt saved a mid-flight
+  # checkpoint (messages + accumulated tool calls), it is handed back to the
+  # oracle as `resume_state`, so /continue keeps every tool call already made and
+  # only re-issues the step that failed — a true continuation, not a restart.
   def continue_turn
     turn = @pending_turn
     if turn.nil? || turn[:prompt].to_s.strip.empty?
       puts 'Kein unvollendeter Zug zum Fortsetzen.'
       return
     end
-    puts @palette.dim("  → Fortsetzen: #{turn[:prompt].to_s.strip[0, 60]}")
-    perform_turn(turn[:prompt], turn[:persona])
+    resume_state = turn[:resume_state] || turn[:pause_state]
+    if resume_state
+      done = Array(resume_state[:tool_results]).size
+      puts @palette.dim("  → Fortsetzen: #{turn[:prompt].to_s.strip[0, 60]} (#{done} Werkzeugaufruf(e) werden wiederaufgenommen)")
+    else
+      puts @palette.dim("  → Fortsetzen: #{turn[:prompt].to_s.strip[0, 60]}")
+    end
+    perform_turn(turn[:prompt], turn[:persona], resume_state: resume_state)
   rescue StandardError => e
     @pending_turn = turn.merge(error: e)
     warn "\e[31m!! #{e.class}: #{e.message}\e[0m"
@@ -363,36 +428,76 @@ class ÆtherChamber
   # terminal only shows the stream's own telemetry. Populates `result` with
   # :answer and :tool_results so the caller (in a background thread) can hand
   # the outcome back to the main thread.
-  def run_divination(input, context, persona, result, tools:)
+  def run_divination(input, context, persona, result, tools:, resume_state: nil)
     previous_stream = Thread.current[:aether_terminal_stream]
     Thread.current[:aether_terminal_stream] = @stream
 
     original_stdout = $stdout
-    $stdout = StringIO.new
+    capture = StringIO.new
+    @stdout_mutex.synchronize { $stdout = capture }
     begin
-      answer, _arts, tool_results = Oracle.divination(input, context, tools: tools,
-                                                       system_prompt: persona,
-                                                       stream: @stream) do |name, args, tool_ctx|
+      answer, arts, tool_results = Oracle.divination(input, context, tools: tools,
+                                                     system_prompt: persona,
+                                                     stream: @stream,
+                                                     resume_state: resume_state) do |name, args, tool_ctx|
         tools.handle(tool: name, args:, context: tool_ctx)
       end
       result[:answer] = answer
       result[:tool_results] = tool_results
+      result[:error] ||= turn_error_from_arts(arts)
     rescue TurnAborted
       result[:aborted] = true
     rescue StandardError => e
       result[:error] = e
     ensure
-      $stdout.close if $stdout != original_stdout
-      $stdout = original_stdout
+      # Capture the oracle's mid-flight checkpoint (messages + accumulated tool
+      # calls) so /continue can resume this exact turn instead of restarting it.
+      result[:pause_state] = Thread.current[:pause_state]
+      @stdout_mutex.synchronize do
+        capture.close unless capture.closed?
+        $stdout = original_stdout
+      end
       Thread.current[:aether_terminal_stream] = previous_stream
     end
+  end
+
+  # A turn that ends in one of these sentinels did not actually complete: the
+  # conduit returns "❌ API Error: …" / "❌ Connection lost …" for HTTP and
+  # network failures, and Oracle.divination surfaces hard errors as the literal
+  # "<<empty>>". Treating them as real answers would clear @pending_turn and
+  # pollute @history, leaving /continue with nothing to resume.
+  def failed_answer?(answer)
+    return false if answer.nil?
+
+    stripped = answer.to_s.strip
+    return true if '<<empty>>' == stripped
+
+    stripped.start_with?('❌ API Error') || stripped.start_with?('❌ Connection lost')
+  end
+
+  # Extract a descriptive error from a failed-answer sentinel so the
+  # practitioner sees *why* the turn died instead of a bare "no answer".
+  def build_turn_error(answer)
+    stripped = answer.to_s.strip
+    return nil if stripped.empty? || '<<empty>>' == stripped
+
+    RuntimeError.new(stripped.sub(/\A❌\s*/, ''))
+  end
+
+  # Oracle.divination packs its failure reason into the arts hash (e.g.
+  # `{ error: "Divination failed: …" }`) and returns "<<empty>>" as the answer.
+  # Surface that reason as a real exception so the caller can show it.
+  def turn_error_from_arts(arts)
+    return nil unless arts.is_a?(Hash) && arts[:error]
+
+    arts[:error].is_a?(Exception) ? arts[:error] : RuntimeError.new(arts[:error].to_s)
   end
 
   # Wait for the background divination thread while polling for Tab/Shift-Tab,
   # so the Fokus-Ring stays browsable during the turn. Ctrl+C aborts the turn
   # (raises TurnAborted in the worker). Windows-only -- the native console probe
   # is non-blocking; elsewhere we fall back to a SIGINT-aware join.
-  def browse_while_working(worker)
+  def browse_while_working(worker, gate = nil)
     use_win = win_console_available?
     return join_with_interrupt(worker) unless use_win
 
@@ -405,6 +510,8 @@ class ÆtherChamber
     end
 
     selection = nil
+    buffer = +''
+    @paste_register = []
     @working_overlay_lines = 0
     begin
       loop do
@@ -421,12 +528,44 @@ class ÆtherChamber
 
           input = ÆtherWinConsole.next_input
         rescue ÆtherWinConsole::ConsoleInputError
-          ÆtherWinConsole.disable!
+          # A transient read error (e.g. a spawned child process momentarily
+          # disturbing the console input queue) must not degrade the rest of
+          # the session: stop polling for this turn only. `available?` now
+          # re-probes, so the next prompt re-enters raw mode if the handle is
+          # still sound instead of falling back to TTY::Reader permanently.
           break
         ensure
           @console_mutex.unlock if @console_mutex.owned?
         end
-        next if input.nil? || input[:kind] != :key
+        next if input.nil?
+
+        # Typed text and pastes collect into a working prompt line; Enter weaves
+        # them into the running turn (or executes a command) instead of waiting
+        # for the answer to finish.
+        if input[:kind] == :paste
+          selection = nil
+          text = input[:text].to_s
+          @paste_register << text
+          buffer << paste_tag(@paste_register.size, text)
+          draw_working_overlay(selection, buffer)
+          next
+        end
+
+        if input[:kind] == :literal
+          selection = nil
+          buffer << input[:text].to_s
+          draw_working_overlay(selection, buffer)
+          next
+        end
+
+        next unless input[:kind] == :key
+
+        if input[:action] == :literal
+          selection = nil
+          buffer << input[:char].to_s
+          draw_working_overlay(selection, buffer)
+          next
+        end
 
         case input[:action]
         when :ctrl_c
@@ -434,29 +573,44 @@ class ÆtherChamber
           break
         when :tab, :back_tab
           selection = next_tab(selection, input[:action] == :tab ? 1 : -1)
-          draw_working_overlay(selection)
+          draw_working_overlay(selection, buffer)
         when :up, :right
           if instrumentum_at?(selection)
             @expanded_focus[selection] = true
-            draw_working_overlay(selection)
+            draw_working_overlay(selection, buffer)
           end
         when :down, :left
           if instrumentum_at?(selection)
             @expanded_focus[selection] = false
-            draw_working_overlay(selection)
+            draw_working_overlay(selection, buffer)
           end
         when :escape
           selection = nil
-          draw_working_overlay(nil)
+          draw_working_overlay(nil, buffer)
+        when :backspace
+          unless buffer.empty?
+            delete_left(buffer, buffer.length)
+            draw_working_overlay(selection, buffer)
+          end
+        when :word_backspace, :ctrl_w
+          unless buffer.empty?
+            word_delete_left(buffer, buffer.length)
+            draw_working_overlay(selection, buffer)
+          end
         when :enter
+          submitted = expand_pastes(buffer).dup
+          buffer.clear
           clear_working_overlay
+          dispatch_working_input(submitted, gate)
           selection = nil
+          draw_working_overlay(selection, buffer)
         end
       end
     ensure
       clear_working_overlay
-      ÆtherWinConsole.end_raw_input
       worker.join
+      ÆtherWinConsole.end_raw_input
+      ÆtherWinConsole.reset!
     end
   end
 
@@ -484,7 +638,7 @@ class ÆtherChamber
   # Render the Fokus-Ring preview at the bottom while the agent works -- the
   # same rows the prompt editor uses (minified by default, ^/-> expands), so the
   # browsing experience is identical in both states.
-  def draw_working_overlay(selection)
+  def draw_working_overlay(selection, buffer = nil)
     @stream.write_mutex.synchronize do
       n = [@working_overlay_lines - 1, 0].max
       STDOUT.print "\e[#{n}A" if n.positive?
@@ -496,7 +650,12 @@ class ÆtherChamber
         rows.concat(focus_list_rows(selection, terminal_width))
         rows.concat(instrumentum_preview_rows(el, selection, terminal_width)) if el[:type] == :instrumentum
       else
-        rows << "\e[2m... Der Agent arbeitet -- Tab/Shift-Tab browsen, ^/-> aufklappen, Esc ausblenden\e[0m"
+        rows << "\e[2m... Der Agent arbeitet -- tippen und Enter: Wort einweben · Tab/Shift-Tab browsen · Esc ausblenden\e[0m"
+      end
+
+      if buffer && !buffer.empty?
+        styled = tokenize_inline(buffer).map { |t| render_token(t) }.join
+        rows << truncate_visible(prompt_marker + styled + "\e[2m▌\e[0m", terminal_width)
       end
 
       rows.each { |line| STDOUT.print "#{line}\n" }
@@ -515,6 +674,60 @@ class ÆtherChamber
       STDOUT.print "\r\e[J"
       @working_overlay_lines = 0
       STDOUT.flush
+    end
+  end
+
+  # Mint a pasted-content placeholder that also shows the paste's length, so a
+  # multi-line paste reads `[PASTED_CONTENT_1 · 412 Zeichen]` in the single-line
+  # editor instead of an opaque counter.
+  def paste_tag(index, text)
+    "[PASTED_CONTENT_#{index} · #{text.to_s.length} Zeichen]"
+  end
+
+  # Dispatch a line typed while the agent was working. Slash commands and `$`
+  # shell pipelines execute in place (the chamber stays open); any other text is
+  # woven into the running turn as an amendment -- it lands after the next tool
+  # call, not queued behind the turn.
+  def dispatch_working_input(line, gate)
+    input = line.to_s.strip
+    return if input.empty?
+
+    if input.start_with?('$')
+      with_terminal_stdout { (@shell ||= ÆtherShell.new(palette: @palette)).execute(input[1..].to_s.strip) }
+    elsif input.start_with?('/')
+      cmd = input.partition(/\s+/).first
+      unless %w[/help /aegis /personae /companions /history /config /context /cost
+                /markdown /highlight /mouse /clear].include?(cmd)
+        STDOUT.print "#{@palette.dim('  !')} #{cmd} ist während des laufenden Zugs nicht verfügbar.\n"
+        return
+      end
+      with_terminal_stdout { handle_slash(input) }
+    else
+      if gate&.amend(input)
+        confirm = input.gsub(/\s+/, ' ').strip
+        w = terminal_width
+        confirm = truncate_visible(confirm, w - 20) if w && w > 20
+        STDOUT.print "#{@palette.dim('  ↪ Einweben:')} #{confirm}\n"
+      end
+    end
+  rescue StandardError => e
+    STDOUT.print "#{@palette.warn('  !!')} #{e.class}: #{e.message}\n"
+  end
+
+  # Run a block with `$stdout` pointed back at the terminal. The worker thread
+  # swaps the *global* $stdout to a StringIO for the whole turn (to silence the
+  # Conduit's debug chatter), which would swallow slash-command output typed
+  # mid-turn. Both swaps serialize on @stdout_mutex so the worker's teardown can
+  # never close the StringIO beneath a concurrent dispatch.
+  def with_terminal_stdout
+    @stdout_mutex.synchronize do
+      previous = $stdout
+      $stdout = STDOUT
+      begin
+        @stream.write_mutex.synchronize { yield }
+      ensure
+        $stdout = previous unless previous.closed?
+      end
     end
   end
 
@@ -1293,10 +1506,11 @@ class ÆtherChamber
     line = if HAVE_READLINE && !WINDOWS
              Readline.readline('', false)
            else
-             # The console may still be raw from the browse-poll. Drop raw mode
-             # (ref-counted) so $stdin.gets reads a proper cooked line; the
-             # browse_while_working ensure restores the final mode after join.
-             ÆtherWinConsole.end_raw_input if win_console_available?
+             # The console may still be raw from the browse-poll. Drop to the
+             # pristine cooked mode so $stdin.gets reads a proper line; the
+             # browse_while_working ensure joins first and then restores the
+             # final mode, so the two threads never fight over the console.
+             ÆtherWinConsole.reset! if win_console_available?
              $stdin.gets
            end
     line&.strip || ''
@@ -1354,6 +1568,15 @@ class ÆtherChamber
     mention = nil
     slash = nil
 
+    # Hard boundary: drop ref-count debt, restore the pristine console mode and
+    # drain stale events from the previous turn. This is the bullet-proofing
+    # that prevents the "modifiers dead after the first prompt" class of bug --
+    # the next prompt never inherits a polluted console state.
+    if WINDOWS && HAVE_WIN_CONSOLE && $stdin.tty?
+      ÆtherWinConsole.reset!
+      ÆtherWinConsole.flush_input!
+    end
+
     use_win = win_console_available?
     if use_win
       begin
@@ -1369,6 +1592,8 @@ class ÆtherChamber
     bracketed = false
     @anchor_row = nil
     @click_regions = []
+    @text_sel = nil
+    @drag_anchor = nil
     if use_win
       @anchor_row = anchor_cursor_row
     else
@@ -1386,18 +1611,70 @@ class ÆtherChamber
         return nil if input.nil?
 
         if input[:kind] == :mouse
-          mention = nil if mention
-          slash = nil if slash
-          result = apply_mouse_input(input, buffer, cursor, selection)
-          if result[0] == :activate
-            clear_inline_preview
-            print "\n"
-            return result[1]
+          case input[:action]
+          when :motion
+            # Drag-extend an in-progress text selection; a bare hover is a no-op
+            # (no repaint) so a mouse drifting over the window never flickers.
+            if input[:button] == :left && @drag_anchor
+              offset = prompt_click_offset(input, buffer)
+              if offset
+                cursor = offset
+                @text_sel = normalize_range(@drag_anchor, offset)
+              end
+            end
+            next
+          when :release
+            @drag_anchor = nil
+            next
+          when :click
+            if input[:button] == :left
+              offset = prompt_click_offset(input, buffer)
+              if offset
+                # Left click on prompt text: place the cursor and open a drag.
+                cursor = offset
+                @drag_anchor = offset
+                @text_sel = [offset, offset]
+                mention = nil if mention
+                slash = nil if slash
+                next
+              end
+            end
+            # Not prompt text (focus/expand/activate/border): resolve the UI region.
+            mention = nil if mention
+            slash = nil if slash
+            result = apply_mouse_input(input, buffer, cursor, selection)
+            if result[0] == :activate
+              clear_inline_preview
+              print "\n"
+              return result[1]
+            end
+            selection, cursor = result
+            next
+          else
+            # :scroll_up / :scroll_down cycle the Fokus-Ring.
+            mention = nil if mention
+            slash = nil if slash
+            selection, cursor = apply_mouse_input(input, buffer, cursor, selection)
+            next
           end
-          selection, cursor = result
-          next
         end
 
+        # Any non-mouse input clears an active text selection; Ctrl+C with an
+        # active selection copies it first instead of cancelling the prompt. A
+        # modifying input (typing, paste, delete) first consumes the selection so
+        # it is replaced, matching standard editor semantics.
+        if input[:kind] == :key && input[:action] == :ctrl_c && text_selection_active?
+          copy_text_selection(buffer)
+          @text_sel = nil
+          next
+        end
+        if modifying_input?(input)
+          buffer, cursor, consumed = consume_text_selection(buffer, cursor)
+          next if consumed && delete_input?(input)
+        else
+          @text_sel = nil
+        end
+       
         if mention
           mention, buffer, cursor = mention_step(mention, input, buffer, cursor)
           next
@@ -1412,7 +1689,7 @@ class ÆtherChamber
         when :paste
           selection = nil
           @paste_register << input[:text]
-          tag = "[PASTED_CONTENT_#{@paste_register.size}]"
+          tag = paste_tag(@paste_register.size, input[:text])
           buffer.insert(cursor, tag)
           cursor += tag.length
         when :literal
@@ -1743,7 +2020,7 @@ class ÆtherChamber
       block_row = overlay_rows.size
       block_col = display_width(label)
     else
-      prompt_rows, brow, bcol = render_prompt_geometry(buffer, cursor, width)
+      prompt_rows, brow, bcol = render_prompt_geometry(buffer, cursor, width, active_text_selection)
       block_row = overlay_rows.size + brow
       block_col = bcol
     end
@@ -1763,38 +2040,60 @@ class ÆtherChamber
     $stdout.flush
   end
 
+  # Frame geometry for the prompt editor: the accent border (│…│) plus its two
+  # padding spaces narrow the wrapable field. Returns
+  # [marker_width, inner_width, field_width, content_width].
+  def prompt_frame_geometry(width)
+    mw = display_width(prompt_marker)
+    inner = [width - 2, 2].max
+    field = [inner - 2, 1].max
+    [mw, inner, field, [field - mw, 1].max]
+  end
+
   # Render the prompt buffer -- which may now contain literal newlines -- into
   # the physical rows to draw plus the cursor's (row, col) inside that block.
-  # The prompt marker occupies the left edge of the first row; every following
-  # row is indented by the same width so wrapped text stays aligned.
-  def render_prompt_geometry(buffer, cursor, width)
-    mw = display_width(prompt_marker)
-    content_width = [width - mw, 1].max
+  # The block is wrapped in an accent border (no background fill), matching the
+  # history prompt banner. The prompt marker occupies the left edge of the first
+  # content row; every following row is indented by the same width so wrapped
+  # text stays aligned.
+  def render_prompt_geometry(buffer, cursor, width, sel = nil)
+    mw, inner, field, content_width = prompt_frame_geometry(width)
     rows = []
     cursor_row = nil
     cursor_col = nil
     raw_offset = 0
-
+ 
     buffer.split("\n", -1).each_with_index do |raw_line, li|
       line_start = raw_offset
       line_end = raw_offset + raw_line.length
       loc = (cursor >= line_start && cursor <= line_end) ? cursor - line_start : nil
-
-      sub_rows, sub_row, sub_col = wrap_tokens(tokenize_inline(raw_line), loc, content_width)
+ 
+      line_sel = nil
+      if sel
+        ls = sel[0] > line_start ? sel[0] : line_start
+        le = sel[1] < line_end ? sel[1] : line_end
+        line_sel = [ls - line_start, le - line_start] if le > ls
+      end
+ 
+      sub_rows, sub_row, sub_col = wrap_tokens(tokenize_inline(raw_line), loc, content_width, line_sel)
       sub_rows.each_with_index do |text, ri|
         prefix = (li.zero? && ri.zero?) ? prompt_marker : (' ' * mw)
-        rows << "#{prefix}#{text}"
+        body = AthanorUI.pad(prefix + text, field)
+        rows << @palette.accent(AthanorUI::V) + ' ' + body + ' ' + @palette.accent(AthanorUI::V)
       end
 
       if sub_row
         cursor_row = rows.size - sub_rows.size + sub_row
-        cursor_col = mw + sub_col
+        cursor_col = 2 + mw + sub_col
       end
 
       raw_offset = line_end + 1
     end
 
-    [rows, cursor_row || 0, cursor_col || mw]
+    rows.unshift @palette.accent(AthanorUI::TL + (AthanorUI::H * inner) + AthanorUI::TR)
+    rows << @palette.accent(AthanorUI::BL + (AthanorUI::H * inner) + AthanorUI::BR)
+
+    [rows, (cursor_row || 0) + 1, cursor_col || (2 + mw)]
   end
 
   # Split one logical prompt line into styled tokens. Each token is
@@ -1831,11 +2130,38 @@ class ÆtherChamber
     code = STYLE_CODES[token[:style]]
     code ? "#{code}#{token[:plain]}\e[0m" : token[:plain]
   end
+ 
+  # render_token with a selection span. `raw_start` is the token's raw offset
+  # within its logical line; `sel` is a line-relative [start, end] raw range (or
+  # nil). The visible plain text occupies [raw_start + prefix, … + plain.length],
+  # so the selected slice is wrapped in reverse-video (\e[7m…\e[27m) without
+  # disturbing the token's base style or the wrap geometry.
+  def render_token_sel(token, raw_start, sel)
+    return render_token(token) unless sel
+ 
+    vis_start = raw_start + token[:prefix]
+    vis_end = vis_start + token[:plain].length
+    s = sel[0] > vis_start ? sel[0] : vis_start
+    e = sel[1] < vis_end ? sel[1] : vis_end
+    return render_token(token) if e <= s
+ 
+    a = s - vis_start
+    b = e - vis_start
+    plain = token[:plain]
+    out = +''
+    code = STYLE_CODES[token[:style]]
+    out << code if code
+    out << plain[0...a]
+    out << "\e[7m" << plain[a...b] << "\e[27m"
+    out << plain[b..]
+    out << "\e[0m"
+    out
+  end
 
   # Wrap a logical line's tokens into physical rows (each at most `width`
   # display columns) and locate the cursor. `cursor_offset` is the cursor's raw
   # offset within the logical line, or nil when the cursor is elsewhere.
-  def wrap_tokens(tokens, cursor_offset, width)
+  def wrap_tokens(tokens, cursor_offset, width, sel = nil)
     lines = []
     current = +''
     col = 0
@@ -1847,7 +2173,7 @@ class ÆtherChamber
     tokens.each do |t|
       raw_start = raw_pos
       raw_end = raw_pos + t[:raw].length
-      styled = render_token(t)
+      styled = render_token_sel(t, raw_start, sel)
       pw = display_width(t[:plain])
 
       if cursor_offset && cursor_offset >= raw_start && cursor_offset < raw_end
@@ -2052,13 +2378,113 @@ class ÆtherChamber
     end
     nil
   end
+   
+  # Raw buffer offset for a mouse position that lands on the prompt's editable
+  # text (not the border, not a focus/expand/activate region). nil otherwise.
+  def prompt_click_offset(input, buffer)
+    return nil unless @click_regions && !@click_regions.empty? && @anchor_row
+   
+    block_row = input[:y] - @anchor_row
+    return nil if block_row.negative? || block_row >= @click_regions.size
+   
+    region = @click_regions[block_row]
+    return nil unless region && region[:type] == :prompt
+   
+    prompt_offset_at(buffer, terminal_width, block_row - @click_overlay_rows, input[:x])
+  end
+   
+  # Normalised [start, end] of the active text selection, or nil when there is
+  # none (a collapsed selection counts as none).
+  def active_text_selection
+    sel = @text_sel
+    return nil unless sel && sel[0] != sel[1]
+   
+    sel[0] < sel[1] ? sel : [sel[1], sel[0]]
+  end
+   
+  def normalize_range(a, b)
+    a < b ? [a, b] : [b, a]
+  end
+   
+  def text_selection_active?
+    !active_text_selection.nil?
+  end
+   
+  def copy_text_selection(buffer)
+    sel = active_text_selection
+    return false unless sel
+ 
+    copy_to_clipboard(buffer[sel[0]...sel[1]])
+  end
+ 
+  # Collapse an active text selection into a deletion before a modifying edit:
+  # returns [buffer, cursor, consumed] with the selected span removed and the
+  # cursor at its start. `consumed` is true only when a selection was actually
+  # deleted (so delete keys can stop instead of deleting a second character).
+  def consume_text_selection(buffer, cursor)
+    sel = active_text_selection
+    return [buffer, cursor, false] unless sel
+ 
+    buffer.slice!(sel[0]...sel[1])
+    @text_sel = nil
+    @drag_anchor = nil
+    [buffer, sel[0], true]
+  end
+ 
+  # True when `input` changes the buffer content (and should therefore replace an
+  # active text selection). Navigation/focus/submit keys only clear the selection.
+  def modifying_input?(input)
+    return true if input[:kind] == :paste || input[:kind] == :literal
+    return false unless input[:kind] == :key
+ 
+    case input[:action]
+    when :newline, :backspace, :delete, :word_backspace, :ctrl_w, :word_delete, :ctrl_k, :ctrl_u, :literal
+      true
+    else
+      false
+    end
+  end
+ 
+  # True when `input` deletes text (as opposed to inserting). After such an input
+  # consumes a selection, the deletion is already done — no further edit is needed.
+  def delete_input?(input)
+    input[:kind] == :key &&
+      %i[backspace delete word_backspace ctrl_w word_delete ctrl_k ctrl_u].include?(input[:action])
+  end
+   
+  def copy_to_clipboard(text)
+    return false if text.nil? || text.empty?
+   
+    if WINDOWS && HAVE_WIN_CONSOLE
+      ÆtherWinConsole.clipboard_copy(text)
+    else
+      copy_to_clipboard_unix(text)
+    end
+  end
+   
+  def copy_to_clipboard_unix(text)
+    cmd =
+      if system('which pbcopy >/dev/null 2>&1') then 'pbcopy'
+      elsif system('which wl-copy >/dev/null 2>&1') then 'wl-copy'
+      elsif system('which xclip >/dev/null 2>&1') then 'xclip -selection clipboard'
+      elsif system('which xsel >/dev/null 2>&1') then 'xsel --clipboard --input'
+      end
+    return false unless cmd
+   
+    IO.popen(cmd, 'w') { |io| io.write(text) }
+    true
+  rescue StandardError
+    false
+  end
 
   # Inverse of render_prompt_geometry: given a prompt-relative row and screen
   # column, return the raw buffer offset the cursor should move to.
   def prompt_offset_at(buffer, width, row, col)
-    mw = display_width(prompt_marker)
-    content_width = [width - mw, 1].max
-    content_col = col - mw
+    mw, _inner, _field, content_width = prompt_frame_geometry(width)
+    row -= 1 # strip the top border line
+    return nil if row.negative?
+
+    content_col = col - 2 - mw # strip left border │ + padding space + marker
     content_col = 0 if content_col.negative?
 
     global_row = 0
@@ -2473,12 +2899,12 @@ class ÆtherChamber
   def tag_before(buffer, cursor)
     return nil unless cursor.positive?
 
-    m = buffer[0...cursor].match(/\[PASTED_CONTENT_\d+\]\z/)
+    m = buffer[0...cursor].match(/\[PASTED_CONTENT_\d+(?: · \d+ Zeichen)?\]\z/)
     m && [cursor - m[0].length, m[0].length]
   end
 
   def tag_after(buffer, cursor)
-    m = buffer[cursor..].to_s.match(/\A\[PASTED_CONTENT_\d+\]/)
+    m = buffer[cursor..].to_s.match(/\A\[PASTED_CONTENT_\d+(?: · \d+ Zeichen)?\]/)
     m && [cursor, m[0].length]
   end
 
@@ -2581,7 +3007,7 @@ class ÆtherChamber
     ['/unmorph',    'Begleiter entfernen'],
     ['/personae',   'Alle zwölf Begleiter auflisten'],
     ['/file',       'Datei an die nächste Frage heften'],
-    ['/continue',          'Abgebrochenen Zug wiederholen'],
+    ['/continue',          'Unvollendeten Zug fortsetzen'],
     ['/edit',              'Letzte Eingabe erneut bearbeiten'],
     ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
     ['/edit',       'Letzte Eingabe erneut bearbeiten'],
@@ -2648,7 +3074,7 @@ class ÆtherChamber
       ['/',                  'Befehls-Picker öffnen'],
       ['Tab / Shift-Tab',    'Fokus-Positionen durchlaufen'],
       ['/clear',             'Gesprächsverlauf löschen'],
-      ['/continue',          'Abgebrochenen Zug wiederholen'],
+      ['/continue',          'Unvollendeten Zug fortsetzen'],
       ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
       ['/config',            'Konfiguration zeigen'],
       ['/context',           'Abgeleiteten Kontext zeigen'],

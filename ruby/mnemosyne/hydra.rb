@@ -142,6 +142,60 @@ class Mnemosyne
         nil
       end
 
+      # Every session row in this project's æther — active, stale AND closed —
+      # with a computed age and an effective status. `active_sessions` hides
+      # anything silent past the heartbeat window; this is the debug view that
+      # surfaces the invisible: orphaned rows from crashed processes still
+      # stamped 'active' but long dead. `stale` = alive past STALE_AFTER.
+      def all_sessions(project: nil, exclude: nil)
+        conditions = []
+        params = []
+
+        unless project.to_s.empty?
+          conditions << 'project = ?'
+          params << project.to_s
+        end
+        unless exclude.to_s.empty?
+          conditions << 'session_id != ?'
+          params << exclude.to_s
+        end
+
+        where = conditions.empty? ? '' : "WHERE #{conditions.join(' AND ')}"
+        sql = <<~SQL
+          SELECT session_id, label, role, project, port, pid,
+                 aegis_summary, status, started_at, last_seen,
+                 CAST((julianday('now') - julianday(last_seen)) * 86400 AS INTEGER) AS age_seconds
+            FROM aether_sessions
+            #{where}
+           ORDER BY last_seen DESC
+        SQL
+
+        Mnemosyne.db.execute(sql, params).map do |r|
+          r = r.transform_keys(&:to_sym)
+          age = r[:age_seconds].to_i
+          r[:age_seconds] = age
+          r[:stale] = r[:status] == 'active' && age > STALE_AFTER
+          r[:effective_status] = r[:stale] ? 'stale' : r[:status]
+          r
+        end
+      rescue StandardError => e
+        warn "[Hydra] all_sessions failed: #{e.class}: #{e.message}"
+        []
+      end
+
+      # Force-remove a session row (crashed head, orphaned editor, stuck slot).
+      # Hard delete — unlike `close`, which only stamps status='closed'.
+      def kick!(session_id:)
+        sid = session_id.to_s
+        return nil if sid.empty?
+
+        Mnemosyne.db.execute('DELETE FROM aether_sessions WHERE session_id = ?', [sid])
+        sid
+      rescue StandardError => e
+        warn "[Hydra] kick! failed: #{e.class}: #{e.message}"
+        nil
+      end
+
       # A compact, token-cheap line for the conduit/orientation: the roster of
       # sibling sessions, each with its current Aegis silhouette.
       def summary_line(project: nil, exclude: nil, max_aegis: 80)

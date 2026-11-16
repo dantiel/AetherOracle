@@ -34,9 +34,9 @@ require_relative 'flash_aegis'
 require_relative 'atlas'
 
 class Mnemosyne
-  # The migration cascade below stamps `meta.db_version` up to 17; keep the
+  # The migration cascade below stamps `meta.db_version` up to 18; keep the
   # constant in agreement so "is the schema current?" checks stay truthful.
-  DB_VERSION = 17
+  DB_VERSION = 18
 
   # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
   # task runners each drive their own engine thread; the connection is shared, so
@@ -209,7 +209,13 @@ class Mnemosyne
       mode = db.get_first_value('PRAGMA journal_mode=WAL').to_s.downcase
       # synchronous=NORMAL is the crash-safe sweet spot under WAL: a commit is
       # durable against process death, only an OS crash may lose the tail.
-      db.execute('PRAGMA synchronous=NORMAL') if mode == 'wal'
+      if mode == 'wal'
+        db.execute('PRAGMA synchronous=NORMAL')
+        # Auto-checkpoint much earlier than SQLite's 1000-page default so a
+        # crashed sibling never leaves a multi-hundred-MB -wal for the next
+        # opener to recover/checkpoint (the "instances freeze at open" hang).
+        db.execute('PRAGMA wal_autocheckpoint=200')
+      end
       mode
     rescue SQLite3::Exception
       nil
@@ -276,6 +282,7 @@ class Mnemosyne
     # project's `.aether/mnemosyne.db` without restarting the process.
     def reset_connection!
       begin
+        checkpoint!
         @db&.close
       rescue StandardError
         nil
@@ -283,6 +290,19 @@ class Mnemosyne
       @db = nil
       self.aegis = { tags: [], summary: '', temperature: 1.0, working_dir: nil, thinking: nil }
       true
+    end
+
+    # Force a WAL checkpoint (default TRUNCATE). A sibling process that died
+    # mid-write can leave a huge -wal with a stale -shm behind; the next opener
+    # then spends minutes recovering + checkpointing hundreds of MB while
+    # holding the write lock — the "opened instances freeze" hang. Checkpointing
+    # on clean close and after big corpus writes keeps the WAL small.
+    def checkpoint!(mode = :truncate)
+      db = @db
+      return nil unless db
+      db.execute("PRAGMA wal_checkpoint(#{mode})")
+    rescue StandardError
+      nil
     end
 
     def migrate(db)
@@ -629,6 +649,12 @@ end
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '17')"
       end
 
+      if 18 > db_version
+        cols = db.execute('PRAGMA table_info(corpus_sightings)').map { |r| r['name'] }
+        db.execute 'ALTER TABLE corpus_sightings ADD COLUMN git_hash TEXT' unless cols.include?('git_hash')
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '18')"
+      end
+
       # Self-healing aegis_state. The Aegis orientation always reads/writes the
       # canonical append-only shape below, independent of the stamped
       # db_version. A divergent fork — notably the Swift port, which mints a
@@ -729,6 +755,8 @@ end
     def heartbeat_session(session_id: nil, aegis_summary: nil) = Hydra.heartbeat(session_id: session_id, aegis_summary: aegis_summary)
     def close_session(session_id: nil) = Hydra.close(session_id: session_id)
     def active_sessions(project: nil, within: Hydra::STALE_AFTER, exclude: nil) = Hydra.active_sessions(project: project, within: within, exclude: exclude)
+    def all_sessions(project: nil, exclude: nil) = Hydra.all_sessions(project: project, exclude: exclude)
+    def kick_session(session_id:) = Hydra.kick!(session_id: session_id)
 
     # -- Notes --
     def get_note(note_id) = Notes.get_note(note_id)

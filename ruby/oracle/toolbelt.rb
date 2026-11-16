@@ -26,6 +26,7 @@ module Toolbelt
     'history' => 'show recent chronicle history (--notes for notes)',
     'search'  => 'search Mnemosyne notes + chronicle (--limit N)',
     'aegis'   => 'view / edit Aegis state (summary, tags, temp, thinking, dir)',
+    'sessions' => 'list / close / kick / prune / heartbeat Hydra sessions',
     'seal'    => "list / status / delegate Salomo's executive seals"
   }.freeze
 
@@ -42,6 +43,7 @@ module Toolbelt
     when 'history', 'hist'      then history(args)
     when 'search', 'find'       then search(args)
     when 'aegis'                then aegis(args)
+    when 'sessions'             then sessions(args)
     when 'seal', 'seals'        then seal(args)
     else usage
     end
@@ -451,6 +453,59 @@ module Toolbelt
     state[:working_dir] = (dir.nil? || dir.empty?) ? nil : dir
     Mnemosyne.save_aegis_state(**state)
     aegis_show
+  end
+
+  def sessions(args)
+    action = args.shift || 'list'
+    case action
+    when 'list', 'ls', 'show'
+      sessions_list
+    when 'prune'
+      Mnemosyne::Hydra.prune!
+      puts 'pruned closed + stale sessions'
+    when 'close', 'kick', 'heartbeat'
+      sid = args.shift
+      abort "Usage: aetheroracle sessions #{action} <session_id>" if sid.nil?
+      case action
+      when 'close'     then Mnemosyne.close_session(session_id: sid)
+      when 'kick'      then Mnemosyne.kick_session(session_id: sid)
+      when 'heartbeat' then Mnemosyne.heartbeat_session(session_id: sid)
+      end
+      puts "#{action}: #{sid}"
+    else
+      abort "unknown sessions action: #{action} (list | close <id> | kick <id> | prune | heartbeat <id>)"
+    end
+  end
+
+  def sessions_list
+    sessions = Mnemosyne.all_sessions
+    if sessions.empty?
+      puts 'no sessions'
+      return
+    end
+
+    green  = "\e[1;32m"
+    yellow = "\e[1;33m"
+    red    = "\e[1;31m"
+    dim    = "\e[2m"
+    reset  = "\e[0m"
+
+    puts '── Hydra Sessions ──'
+    sessions.each do |s|
+      color = case s[:effective_status]
+              when 'active' then green
+              when 'stale'  then yellow
+              else red
+              end
+      age = s[:age_seconds].to_i
+      age_s = age < 60 ? "#{age}s" : "#{age / 60}m#{age % 60}s"
+      name = s[:label].to_s.strip
+      name = s[:session_id].to_s if name.empty?
+      summary = s[:aegis_summary].to_s.strip
+      summary = summary.empty? ? '' : "  · #{summary[0, 60]}"
+      puts "#{color}[#{s[:effective_status].ljust(6)}]#{reset} #{name}  #{dim}(#{s[:role]}, pid #{s[:pid]}, port #{s[:port]}, #{age_s} ago)#{reset}#{summary}"
+      puts "  #{dim}#{s[:session_id]}#{reset}"
+    end
   end
 
   def seal(args)
