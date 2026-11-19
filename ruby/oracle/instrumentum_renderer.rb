@@ -26,7 +26,8 @@ module InstrumentumRenderer
     'recall_notes'  => '?',
     'remember'      => '*',
     'web_search'    => 'ws',
-    'web_fetch'     => 'wf'
+    'web_fetch'     => 'wf',
+    'captura_visus' => 'cv'
   }.freeze
 
   # How many body lines a panel shows before collapsing.
@@ -86,6 +87,15 @@ module InstrumentumRenderer
     when 'remember'
       snippet = args[:content].to_s.gsub(/\s+/, ' ')[0, 40]
       snippet.empty? ? 'gespeichert' : snippet
+    when 'create_file'
+      args[:path].to_s.empty? ? 'erstellt' : args[:path].to_s
+    when 'rename_file'
+      from = args[:from].to_s
+      to = args[:to].to_s
+      from.empty? ? 'umbenannt' : "#{from} -> #{to}"
+    when 'temp_create_file'
+      path = result.is_a?(Hash) ? result[:path].to_s : ''
+      path.empty? ? 'Tempdatei' : path
     when 'aegis'
       notes = result.is_a?(Hash) ? (result[:aegis_notes] || []) : []
       "#{notes.size} Notizen"
@@ -99,6 +109,8 @@ module InstrumentumRenderer
       web_search_summary(result, args[:query])
     when 'web_fetch'
       web_fetch_summary(result, args[:url])
+    when 'captura_visus'
+      captura_visus_summary(result, args[:mode])
     else
       text = result.is_a?(Hash) ? (result[:result] || result.inspect) : result.to_s
       text.to_s.gsub(/\s+/, ' ')[0, 40]
@@ -116,11 +128,13 @@ module InstrumentumRenderer
              when 'patch_file'     then args[:path].to_s
              when 'create_file'    then args[:path].to_s
              when 'rename_file'    then "#{args[:from]} -> #{args[:to]}"
+             when 'temp_create_file' then args[:path].to_s
              when 'file_overview'  then args[:path].to_s
              when 'recall_notes'   then args[:query].to_s
              when 'remember'       then args[:content].to_s.gsub(/\s+/, ' ')[0, 40]
              when 'web_search'     then args[:query].to_s
              when 'web_fetch'      then args[:url].to_s
+             when 'captura_visus'  then args[:mode].to_s
              else ''
              end
     digest.to_s.gsub(/\s+/, ' ').strip.truncate(72)
@@ -144,11 +158,15 @@ module InstrumentumRenderer
     when 'read_file'   then read_file_body(el, max_lines: max_lines)
     when 'run_command' then run_command_body(el, max_lines: max_lines)
     when 'remember'    then remember_body(el)
+    when 'create_file'      then create_file_body(el, max_lines: max_lines)
+    when 'rename_file'      then rename_file_body(el, max_lines: max_lines)
+    when 'temp_create_file' then temp_create_file_body(el, max_lines: max_lines)
     when 'patch_file'  then patch_file_body(el, max_lines: max_lines)
     when 'aegis'         then aegis_body(el[:result], max_lines: max_lines)
     when 'file_overview' then file_overview_body(el, max_lines: max_lines)
     when 'web_search'    then web_search_body(el, max_lines: max_lines)
     when 'web_fetch'     then web_fetch_body(el, max_lines: max_lines)
+    when 'captura_visus' then captura_visus_body(el, max_lines: max_lines)
     else generic_instrumentum_body(el[:result], max_lines: max_lines)
     end
   end
@@ -159,7 +177,7 @@ module InstrumentumRenderer
     content = result.is_a?(Hash) ? result[:content].to_s : result.to_s
     out = []
     header = file_header(el[:args])
-    out << "\e[2m#{header}\e[0m" unless header.empty?
+    out << clickable_file((el[:args] || {})[:path].to_s, label: header) unless header.empty?
     out << '' if out.any? && !content.strip.empty?
     out.concat(content.strip.empty? ? ['(leer)'] : cap_lines(content, max_lines: max_lines))
     out
@@ -211,13 +229,47 @@ module InstrumentumRenderer
     out
   end
 
+  def create_file_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    out = []
+    path = (el[:args] || {})[:path].to_s
+    out << "\e[1mPfad\e[0m  #{clickable_file(path)}" unless path.empty?
+    out << 'Datei angelegt' if out.empty?
+    out
+  end
+
+  def rename_file_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    args = el[:args] || {}
+    out = []
+    from = args[:from].to_s
+    to = args[:to].to_s
+    out << "\e[1mVon\e[0m   #{clickable_file(from)}" unless from.empty?
+    out << "\e[1mNach\e[0m  #{clickable_file(to)}" unless to.empty?
+    out << 'umbenannt' if out.empty?
+    out
+  end
+
+  def temp_create_file_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    return ['(leer)'] unless result.is_a?(Hash)
+    out = []
+    path = result[:path].to_s
+    out << "Pfad   #{clickable_file(path)}" unless path.empty?
+    out << 'Tempdatei angelegt' if out.empty?
+    out
+  end
+
   def patch_file_body(el, max_lines:)
     result = el[:result]
     return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
     args = el[:args] || {}
     out = []
     path = args[:path].to_s
-    out << "\e[1mPfad\e[0m  #{path}" unless path.empty?
+    out << "\e[1mPfad\e[0m  #{clickable_file(path)}" unless path.empty?
     diff = args[:diff].to_s
     n = diff.scan(/<<<<<<< SEARCH/).size
     out << "\e[1m#{n} Edit#{n == 1 ? '' : 's'}\e[0m" if n.positive?
@@ -265,7 +317,7 @@ module InstrumentumRenderer
     out = []
     fi = result.is_a?(Hash) ? result[:file_info] : nil
     if fi.is_a?(Hash)
-      out << palette.accent("@ #{fi[:path]}")
+      out << palette.accent("@ #{clickable_file(fi[:path])}")
       stats = "#{fi[:lines]} Zeilen · #{fi[:size]} Bytes"
       stats = "#{stats} · #{fi[:last_modified]}" if fi[:last_modified]
       out << palette.dim("  #{stats}")
@@ -386,7 +438,7 @@ module InstrumentumRenderer
       out << '' if out.any?
       out << "\e[1m#{i + 1}. #{title.empty? ? url : title}\e[0m"
       out << "\e[2m   #{meta}\e[0m" unless meta.empty?
-      out << "   #{url}" unless url.empty? || url == title
+      out << "   #{clickable_url(url)}" unless url.empty? || url == title
       out << "   #{snippet}" unless snippet.empty?
     end
     out
@@ -404,6 +456,73 @@ module InstrumentumRenderer
     out << '' if out.any? && !content.strip.empty?
     out.concat(cap_lines(content, max_lines: max_lines))
     out
+  end
+
+  def captura_visus_summary(result, _mode_arg)
+    return result[:error].to_s.gsub(/\s+/, ' ').strip[0, 80] if result.is_a?(Hash) && result[:error]
+    return 'Bild' unless result.is_a?(Hash)
+
+    path = result[:path].to_s
+    parts = []
+    parts << result[:mode].to_s unless result[:mode].to_s.empty?
+    parts << result[:format].to_s.upcase unless result[:format].to_s.empty?
+    parts << "#{result[:bytes]} Bytes" if result[:bytes]
+    base = parts.empty? ? 'Bild' : parts.join(' · ')
+    path.empty? ? base : "#{path} - #{base}"
+  end
+
+  def captura_visus_body(el, max_lines:)
+    result = el[:result]
+    return [palette.fail(result[:error])] if result.is_a?(Hash) && result[:error]
+    return ['(leer)'] unless result.is_a?(Hash)
+
+    out = []
+    out << "Modus   #{result[:mode]}" unless result[:mode].to_s.empty?
+    out << "Format  #{result[:format]}" unless result[:format].to_s.empty?
+    out << "Größe   #{result[:bytes]} Bytes" if result[:bytes]
+    path = result[:path].to_s
+    if path.empty?
+      out << '(kein Bildpfad)'
+    else
+      out << '' if out.any?
+      out << "Bild    #{clickable_file(path)}"
+    end
+    out
+  end
+
+  # ── clickable links (OSC 8 hyperlinks) ───────────────────────────────────
+  # OSC 8 lets a terminal (iTerm2, Windows Terminal, …) turn a span of text
+  # into a real hyperlink. File paths become file:/// URIs, URLs stay as-is,
+  # so instrumenta results are clickable in the chamber. AETHER_NO_LINKS
+  # disables the sequence (label printed plain) — the same switch the markdown
+  # engine honours.
+  def hyperlinks_enabled?
+    ENV['AETHER_NO_LINKS'].to_s.empty?
+  end
+
+  def osc8_link(target, label)
+    label = label.to_s.empty? ? target.to_s : label.to_s
+    return label unless hyperlinks_enabled?
+
+    "\e]8;;#{target}\a#{label}\e]8;;\a"
+  end
+
+  def clickable_file(path, line: nil, column: nil, label: nil)
+    text = label.to_s
+    if text.empty?
+      text = +path.to_s
+      text << ":#{line}" if line
+      text << ":#{column}" if line && column
+    end
+    uri = "file:///#{File.expand_path(path.to_s).tr('\\', '/')}"
+    osc8_link(uri, "\e[4;34m#{text}\e[0m")
+  rescue StandardError
+    label || path.to_s
+  end
+
+  def clickable_url(url, label = nil)
+    text = label.to_s.empty? ? url.to_s : label.to_s
+    osc8_link(url.to_s, "\e[4;34m#{text}\e[0m")
   end
 
   def cap_lines(text, max_lines:)

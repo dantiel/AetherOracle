@@ -2,6 +2,7 @@
 
 require 'socket'
 require 'securerandom'
+require 'json'
 
 class Mnemosyne
   # Hydra — the session system: a persistent registry of heads (sessions)
@@ -34,6 +35,33 @@ class Mnemosyne
       def generate_id
         host = Socket.gethostname.to_s.gsub(/[^a-zA-Z0-9_-]/, '-')[0, 24]
         "#{host}-#{Process.pid}-#{SecureRandom.hex(4)}"
+      end
+
+      # JSON round-trips stringify symbol keys; the Oracle's resume_state
+      # expects symbols, so resurrected state must be deep-symbolized.
+      def deep_symbolize(obj)
+        case obj
+        when Hash  then obj.each_with_object({}) { |(k, v), h| h[k.to_sym] = deep_symbolize(v) }
+        when Array then obj.map { |v| deep_symbolize(v) }
+        else obj
+        end
+      end
+
+      # Coerce an arbitrary resume_state into a JSON-safe graph before
+      # serialization: symbol keys → strings, Time-like values → iso8601, and
+      # anything else non-primitive → its string form. Guarantees `JSON.generate`
+      # never raises on a stray Time/object inside `arts` or `tool_results`.
+      def serialize_state(obj)
+        case obj
+        when Hash
+          obj.each_with_object({}) { |(k, v), h| h[k.to_s] = serialize_state(v) }
+        when Array
+          obj.map { |v| serialize_state(v) }
+        when String, Integer, Float, TrueClass, FalseClass, NilClass
+          obj
+        else
+          obj.respond_to?(:iso8601) ? obj.iso8601 : obj.to_s
+        end
       end
 
       # Insert or refresh a session row. Idempotent — a context switch (or a
@@ -164,7 +192,8 @@ class Mnemosyne
         sql = <<~SQL
           SELECT session_id, label, role, project, port, pid,
                  aegis_summary, status, started_at, last_seen,
-                 CAST((julianday('now') - julianday(last_seen)) * 86400 AS INTEGER) AS age_seconds
+                 CAST((julianday('now') - julianday(last_seen)) * 86400 AS INTEGER) AS age_seconds,
+                 CASE WHEN state_json IS NULL OR state_json = '' THEN 0 ELSE 1 END AS resumable
             FROM aether_sessions
             #{where}
            ORDER BY last_seen DESC
@@ -176,6 +205,7 @@ class Mnemosyne
           r[:age_seconds] = age
           r[:stale] = r[:status] == 'active' && age > STALE_AFTER
           r[:effective_status] = r[:stale] ? 'stale' : r[:status]
+          r[:resumable] = r[:resumable].to_i == 1
           r
         end
       rescue StandardError => e
@@ -194,6 +224,95 @@ class Mnemosyne
       rescue StandardError => e
         warn "[Hydra] kick! failed: #{e.class}: #{e.message}"
         nil
+      end
+
+      # Persist a session's durable runtime state — its mid-flight Oracle
+      # resume_state (messages / tool_results / arts / answer) — as JSON on the
+      # registry row, so a crash can be resumed seamlessly. `state: nil` clears
+      # the snapshot (a clean turn leaves nothing in flight). Also refreshes the
+      # heartbeat, since a checkpoint implies the head is alive.
+      def save_state(session_id:, state: nil)
+        sid = session_id.to_s
+        return nil if sid.empty?
+
+        json = state.nil? ? nil : JSON.generate(serialize_state(state))
+        Mnemosyne.db.execute(<<~SQL, [json, sid])
+          UPDATE aether_sessions
+             SET state_json = ?,
+                 last_seen = CURRENT_TIMESTAMP,
+                 status = 'active'
+           WHERE session_id = ?
+        SQL
+        sid
+      rescue StandardError => e
+        warn "[Hydra] save_state failed: #{e.class}: #{e.message}"
+        nil
+      end
+
+      # Read a session's durable state back (the last persisted resume_state),
+      # or nil when the row is missing or carries no snapshot.
+      def load_state(session_id:)
+        sid = session_id.to_s
+        return nil if sid.empty?
+
+        row = Mnemosyne.db.execute(
+          'SELECT state_json FROM aether_sessions WHERE session_id = ?', [sid]
+        ).first
+        return nil unless row
+
+        deep_symbolize(Mnemosyne.safe_parse_json(row['state_json'], nil))
+      rescue StandardError => e
+        warn "[Hydra] load_state failed: #{e.class}: #{e.message}"
+        nil
+      end
+
+      # "Proceed" a crashed/closed session: re-adopt its identity in the current
+      # process, restore its durable state, and stamp it active again. Returns
+      # the resurrected session row (state under :state), ready for the caller
+      # to continue seamlessly. The dead pid is replaced by the adopting
+      # process, so the row is genuinely alive again.
+      def proceed(session_id:)
+        sid = session_id.to_s
+        return nil if sid.empty?
+
+        row = Mnemosyne.db.execute(
+          'SELECT session_id, label, role, project, port, pid, aegis_summary, ' \
+          'status, started_at, last_seen, state_json ' \
+          'FROM aether_sessions WHERE session_id = ?', [sid]
+        ).first
+        return nil unless row
+        row = row.transform_keys(&:to_sym)
+
+        state = deep_symbolize(Mnemosyne.safe_parse_json(row[:state_json], nil))
+
+        # Re-adopt the identity (register refreshes last_seen + status, and
+        # swaps in this process's pid) while preserving the durable state.
+        register(session_id: sid,
+                 label: row[:label], role: row[:role], project: row[:project],
+                 port: row[:port], pid: nil)
+        save_state(session_id: sid, state: state) if state
+
+        row[:state] = state
+        row[:status] = 'active'
+        row
+      rescue StandardError => e
+        warn "[Hydra] proceed failed: #{e.class}: #{e.message}"
+        nil
+      end
+
+      # Crashed heads: rows still stamped 'active' but silent past the heartbeat
+      # window — orphans whose process died without a graceful close. These are
+      # the candidates `proceed` can resurrect.
+      def stale_sessions(project: nil, exclude: nil)
+        all_sessions(project: project, exclude: exclude).select { |s| s[:stale] }
+      end
+
+      # Resume every crashed session at once. Returns the resurrected roster,
+      # each with its restored state.
+      def proceed_stale(project: nil, exclude: nil)
+        stale_sessions(project: project, exclude: exclude).map do |s|
+          proceed(session_id: s[:session_id])
+        end.compact
       end
 
       # A compact, token-cheap line for the conduit/orientation: the roster of

@@ -221,6 +221,17 @@ class TerminalStream
     timing = el[:execution_time]
     suffix = timing ? " - \e[2m#{format('%.2f', timing)}s\e[0m" : ''
     puts "  #{mark} #{instrumentum_summary(el)}#{suffix}"
+    emit_image_link(el) if el[:name].to_s == 'captura_visus'
+  end
+
+  # A fresh capture is the one instrumentum whose whole point is its file:
+  # surface it as an immediately-clickable OSC 8 link in the live telemetry so
+  # the practitioner can open the image without tabbing to the Fokus-Ring.
+  def emit_image_link(el)
+    result = el[:result]
+    return unless result.is_a?(Hash) && !result[:error] && !result[:path].to_s.empty?
+
+    puts "  #{clickable_file(result[:path])}"
   end
 
   # Render the per-turn token usage the Conduit streams after each API response

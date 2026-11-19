@@ -596,14 +596,16 @@ post '/aether/sessions' do
     action = (payload[:action] || 'list').to_s
     sid = payload[:session_id].to_s
 
-    case action
-    when 'close'     then Mnemosyne.close_session(session_id: sid)
-    when 'kick'      then Mnemosyne.kick_session(session_id: sid)
-    when 'heartbeat' then Mnemosyne.heartbeat_session(session_id: sid)
-    when 'prune'     then Mnemosyne::Hydra.prune!
-    end
+    result = case action
+             when 'close'          then Mnemosyne.close_session(session_id: sid)
+             when 'kick'           then Mnemosyne.kick_session(session_id: sid)
+             when 'heartbeat'      then Mnemosyne.heartbeat_session(session_id: sid)
+             when 'prune'          then Mnemosyne::Hydra.prune!
+             when 'proceed'        then Mnemosyne.proceed_session(session_id: sid)
+             when 'proceed_stale'  then Mnemosyne.proceed_stale_sessions
+             end
 
-    { ok: true, action: action, session_id: sid,
+    { ok: true, action: action, session_id: sid, result: result,
       sessions: Mnemosyne.all_sessions }.to_json
   rescue StandardError => e
     status 500

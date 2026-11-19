@@ -34,9 +34,9 @@ require_relative 'flash_aegis'
 require_relative 'atlas'
 
 class Mnemosyne
-  # The migration cascade below stamps `meta.db_version` up to 18; keep the
+  # The migration cascade below stamps `meta.db_version` up to 19; keep the
   # constant in agreement so "is the schema current?" checks stay truthful.
-  DB_VERSION = 18
+  DB_VERSION = 19
 
   # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
   # task runners each drive their own engine thread; the connection is shared, so
@@ -282,7 +282,7 @@ class Mnemosyne
     # project's `.aether/mnemosyne.db` without restarting the process.
     def reset_connection!
       begin
-        checkpoint!
+        checkpoint!(:passive)
         @db&.close
       rescue StandardError
         nil
@@ -292,12 +292,13 @@ class Mnemosyne
       true
     end
 
-    # Force a WAL checkpoint (default TRUNCATE). A sibling process that died
-    # mid-write can leave a huge -wal with a stale -shm behind; the next opener
-    # then spends minutes recovering + checkpointing hundreds of MB while
-    # holding the write lock — the "opened instances freeze" hang. Checkpointing
-    # on clean close and after big corpus writes keeps the WAL small.
-    def checkpoint!(mode = :truncate)
+    # Force a WAL checkpoint, default PASSIVE. PASSIVE never blocks on a sibling
+    # reader — an orphaned/stale session that still holds a WAL read-mark must
+    # not stall a memory write for the whole busy_timeout (let alone the
+    # busy-retry backoff ladder). TRUNCATE/FULL/RESTART all wait for readers and
+    # are reserved for explicit maintenance where blocking is acceptable; the
+    # end-of-turn path below therefore asks for PASSIVE explicitly.
+    def checkpoint!(mode = :passive)
       db = @db
       return nil unless db
       db.execute("PRAGMA wal_checkpoint(#{mode})")
@@ -655,6 +656,12 @@ end
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '18')"
       end
 
+      if 19 > db_version
+        session_cols = db.execute('PRAGMA table_info(aether_sessions)').map { |r| r['name'] }
+        db.execute 'ALTER TABLE aether_sessions ADD COLUMN state_json TEXT' unless session_cols.include?('state_json')
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '19')"
+      end
+
       # Self-healing aegis_state. The Aegis orientation always reads/writes the
       # canonical append-only shape below, independent of the stamped
       # db_version. A divergent fork — notably the Swift port, which mints a
@@ -757,6 +764,11 @@ end
     def active_sessions(project: nil, within: Hydra::STALE_AFTER, exclude: nil) = Hydra.active_sessions(project: project, within: within, exclude: exclude)
     def all_sessions(project: nil, exclude: nil) = Hydra.all_sessions(project: project, exclude: exclude)
     def kick_session(session_id:) = Hydra.kick!(session_id: session_id)
+    def save_session_state(session_id:, state: nil) = Hydra.save_state(session_id: session_id, state: state)
+    def load_session_state(session_id:) = Hydra.load_state(session_id: session_id)
+    def proceed_session(session_id:) = Hydra.proceed(session_id: session_id)
+    def stale_sessions(project: nil, exclude: nil) = Hydra.stale_sessions(project: project, exclude: exclude)
+    def proceed_stale_sessions(project: nil, exclude: nil) = Hydra.proceed_stale(project: project, exclude: exclude)
 
     # -- Notes --
     def get_note(note_id) = Notes.get_note(note_id)

@@ -970,17 +970,24 @@ instrument :sessions,
                prune     delete all closed rows + rows silent past the prune
                          horizon.
                heartbeat refresh one session's last_seen (session_id).
+               proceed   resurrect a crashed/closed session in this process,
+                         restoring its durable state so it continues seamlessly
+                         (session_id).
+               proceed_stale
+                         resurrect every crashed (stale-but-active) session at
+                         once, each with its restored state.
            DESC
            params: {
              action:     { type: String, required: false,
-                           enum: %w[list close kick prune heartbeat],
-                           description: 'list (default) | close | kick | prune | heartbeat' },
+                           enum: %w[list close kick prune heartbeat proceed proceed_stale],
+                           description: 'list (default) | close | kick | prune | heartbeat | ' \
+                                        'proceed | proceed_stale' },
              session_id: { type: String, required: false,
-                           description: 'Target session_id for close/kick/heartbeat' }
+                           description: 'Target session_id for close/kick/heartbeat/proceed' }
            },
            returns: { action: String, sessions: Array, count: Integer, active: Integer,
                       stale: Integer, closed: Integer, pruned: Boolean, session_id: String,
-                      error: String } do |action: 'list', session_id: nil|
+                      session: Hash, resumed: Integer, error: String } do |action: 'list', session_id: nil|
   act = action.to_s
   case act
   when 'list'
@@ -1011,8 +1018,17 @@ instrument :sessions,
     return { action: 'heartbeat', error: 'session_id required' } if sid.empty?
     Mnemosyne.heartbeat_session(session_id: sid)
     { action: 'heartbeat', session_id: sid }
+  when 'proceed'
+    sid = session_id.to_s
+    return { action: 'proceed', error: 'session_id required' } if sid.empty?
+    session = Mnemosyne.proceed_session(session_id: sid)
+    return { action: 'proceed', session_id: sid, error: 'session not found' } unless session
+    { action: 'proceed', session_id: sid, session: session, resumed: 1 }
+  when 'proceed_stale'
+    sessions = Mnemosyne.proceed_stale_sessions
+    { action: 'proceed_stale', sessions: sessions, resumed: sessions.size }
   else
-    { action: act, error: "unknown action: #{act} (list|close|kick|prune|heartbeat)" }
+    { action: act, error: "unknown action: #{act} (list|close|kick|prune|heartbeat|proceed|proceed_stale)" }
   end
 rescue StandardError => e
   { action: action, error: "Sessions failed: #{e.message}" }

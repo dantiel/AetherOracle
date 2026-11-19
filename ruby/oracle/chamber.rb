@@ -24,6 +24,7 @@ begin
 rescue LoadError, StandardError
   HAVE_WIN_CONSOLE = false
 end
+require_relative 'mouse_backend'
 require_relative 'coniunctio'
 
 begin
@@ -493,13 +494,19 @@ class ÆtherChamber
     arts[:error].is_a?(Exception) ? arts[:error] : RuntimeError.new(arts[:error].to_s)
   end
 
-  # Wait for the background divination thread while polling for Tab/Shift-Tab,
-  # so the Fokus-Ring stays browsable during the turn. Ctrl+C aborts the turn
-  # (raises TurnAborted in the worker). Windows-only -- the native console probe
-  # is non-blocking; elsewhere we fall back to a SIGINT-aware join.
+  # Wait for the background divination thread while polling for keystrokes, so
+  # the chamber stays open (type to amend, Enter to dispatch, Tab to browse)
+  # during the turn. Ctrl+C aborts the turn (raises TurnAborted in the worker).
+  # Prefers the native Windows console reader (non-blocking ReadConsoleInputW);
+  # otherwise polls TTY::Reader non-blockingly, and only as a last resort blocks
+  # on a SIGINT-aware join.
   def browse_while_working(worker, gate = nil)
     use_win = win_console_available?
-    return join_with_interrupt(worker) unless use_win
+    unless use_win
+      return browse_while_working_tty(worker, gate) if HAVE_TTY_READER && $stdin.tty?
+
+      return join_with_interrupt(worker)
+    end
 
     begin
       ÆtherWinConsole.begin_raw_input
@@ -524,15 +531,23 @@ class ÆtherChamber
         break unless @console_mutex.try_lock
 
         begin
-          next unless ÆtherWinConsole.input_ready?
+          # No input yet: yield the CPU instead of busy-spinning on
+          # WaitForSingleObject for the whole turn. A tool call keeps this loop
+          # alive for seconds; spinning at 100% starves the worker and hammers
+          # the console input handle that the prompt editor depends on.
+          unless ÆtherWinConsole.input_ready?
+            sleep 0.01
+            next
+          end
 
           input = ÆtherWinConsole.next_input
         rescue ÆtherWinConsole::ConsoleInputError
           # A transient read error (e.g. a spawned child process momentarily
-          # disturbing the console input queue) must not degrade the rest of
-          # the session: stop polling for this turn only. `available?` now
-          # re-probes, so the next prompt re-enters raw mode if the handle is
-          # still sound instead of falling back to TTY::Reader permanently.
+          # disturbing the console input queue) must not degrade the rest of the
+          # session. Mark the reader for a re-probe (`disable!` drops the
+          # `@available == true` cache) and stop polling for this turn only;
+          # `available?` re-verifies GetConsoleMode on the next prompt.
+          ÆtherWinConsole.disable!
           break
         ensure
           @console_mutex.unlock if @console_mutex.owned?
@@ -612,6 +627,100 @@ class ÆtherChamber
       ÆtherWinConsole.end_raw_input
       ÆtherWinConsole.reset!
     end
+  end
+
+  # TTY::Reader fallback for browse-while-working: poll keypresses non-blockingly
+  # so the practitioner can still type amendments and run commands while the
+  # agent works on platforms where the native Windows console reader is
+  # unavailable (mintty / MSYS2 / macOS / Linux). Same key vocabulary as the
+  # native path; mouse/Fokus-Ring expansion stays minimal (Tab browsing only).
+  def browse_while_working_tty(worker, gate = nil)
+    @tty_reader ||= TTY::Reader.new(interrupt: :noop)
+    @tty_keymap ||= @tty_reader.console.keys
+
+    selection = nil
+    buffer = +''
+    @paste_register = []
+    @working_overlay_lines = 0
+    aborted = false
+
+    # Between polls the terminal is back in cooked mode, where Ctrl+C is a
+    # signal rather than a keypress -- trap it so a stray Ctrl+C cannot kill the
+    # chamber. Inside a poll the raw-mode read surfaces Ctrl+C as the "\x03"
+    # key, handled below; both paths unwind the worker via TurnAborted.
+    previous = Signal.trap('INT') do
+      aborted = true
+      worker.raise(TurnAborted) if worker.alive?
+    end
+
+    begin
+      loop do
+        break unless worker.alive?
+
+        char = @tty_reader.read_keypress(nonblock: true)
+        if char.nil?
+          sleep 0.03
+          next
+        end
+
+        input = decode_tty_char(char)
+        next if input.nil?
+
+        if input[:kind] == :paste
+          selection = nil
+          @paste_register << input[:text]
+          buffer << paste_tag(@paste_register.size, input[:text])
+          draw_working_overlay(selection, buffer)
+          next
+        end
+
+        next unless input[:kind] == :key
+
+        case input[:action]
+        when :ctrl_c
+          worker.raise(TurnAborted) if worker.alive?
+          aborted = true
+          break
+        when :literal
+          selection = nil
+          buffer << input[:char].to_s
+          draw_working_overlay(selection, buffer)
+        when :tab, :back_tab
+          selection = next_tab(selection, input[:action] == :tab ? 1 : -1)
+          draw_working_overlay(selection, buffer)
+        when :escape
+          selection = nil
+          draw_working_overlay(selection, buffer)
+        when :backspace
+          delete_left(buffer, buffer.length) unless buffer.empty?
+          draw_working_overlay(selection, buffer)
+        when :word_backspace, :ctrl_w
+          word_delete_left(buffer, buffer.length) unless buffer.empty?
+          draw_working_overlay(selection, buffer)
+        when :enter, :return, :newline
+          submitted = expand_pastes(buffer).dup
+          buffer.clear
+          clear_working_overlay
+          dispatch_working_input(submitted, gate)
+          draw_working_overlay(selection, buffer)
+        end
+      end
+    rescue Interrupt, Errno::EINTR
+      # A SIGINT delivered while a blocking read was in flight; the trap above
+      # already armed the abort -- fall through to the teardown.
+      aborted = true
+    ensure
+      clear_working_overlay
+      worker.join
+      Signal.trap('INT', previous || 'DEFAULT')
+    end
+
+    aborted ? :aborted : nil
+  rescue ArgumentError
+    # Signal.trap unavailable (restricted platform): join plainly.
+    clear_working_overlay
+    worker.join
+    nil
   end
 
   # Non-Windows fallback: block on the worker but honour Ctrl+C by unwinding the
@@ -1578,16 +1687,23 @@ class ÆtherChamber
     end
 
     use_win = win_console_available?
+    backend = nil
     if use_win
+      backend = MouseBackend.build(win: true, mouse: @mouse, chamber: self)
       begin
-        ÆtherWinConsole.begin_raw_input(mouse: @mouse)
+        backend.begin_capture
       rescue StandardError
-        ÆtherWinConsole.disable!
-        use_win = false # console mode probing failed -- fall back to TTY::Reader
+        # A spawned tool child can leave the console input handle momentarily
+        # disturbed. The Windows backend retries once internally before raising;
+        # surrendering here means falling back to TTY::Reader (Ctrl+Backspace and
+        # the other ctrl combos are lost on that path).
+        backend.disable!
+        use_win = false
       end
     end
     return read_prompt_plain(initial) if !use_win && !HAVE_TTY_READER
 
+    @mouse_backend = use_win ? backend : MouseBackend.build(win: false, mouse: @mouse, chamber: self)
     @editor_win = use_win
     bracketed = false
     @anchor_row = nil
@@ -1602,7 +1718,7 @@ class ÆtherChamber
       # Anchor before mouse tracking is on so a stray motion event cannot
       # interleave with the DSR response read.
       @anchor_row = anchor_cursor_row
-      enable_mouse if @mouse
+      @mouse_backend.begin_capture if @mouse
     end
     begin
       loop do
@@ -1854,10 +1970,10 @@ class ÆtherChamber
       $stderr.puts "!! native console reader unavailable (#{e.message}) -- falling back to line input" if $DEBUG
       return read_prompt_plain(initial)
     ensure
-      disable_mouse if bracketed
+      @mouse_backend&.end_capture if bracketed || use_win
       disable_bracketed_paste if bracketed
-      ÆtherWinConsole.end_raw_input if use_win
       @editor_win = nil
+      @mouse_backend = nil
       @anchor_row = nil
       @click_regions = []
     end
@@ -1877,6 +1993,14 @@ class ÆtherChamber
     char = @tty_reader.read_keypress
     return nil if char.nil?
 
+    decode_tty_char(char)
+  end
+
+  # Classify one raw TTY::Reader keypress into the unified input shape shared by
+  # the prompt editor and the browse-while-working overlay. Mouse (SGR) and
+  # bracketed-paste sequences are resolved here: the former needs the raw SGR
+  # bytes, the latter folds a paste into one [PASTED_CONTENT_n] tag.
+  def decode_tty_char(char)
     char = complete_extended_key(char)
     char = coalesce_utf8(char)
     if char.start_with?("\e[<")
@@ -1898,8 +2022,15 @@ class ÆtherChamber
     action = :back_tab if action == :shift_tab
 
     if action.nil?
-      if char == "\x7f" || char == "\b"
+      # On Windows msvcrt `_getch` reports Backspace as \b and Ctrl+Backspace as
+      # \x7f (DEL) — two distinct keys. Keep them distinct so the TTY fallback
+      # (used while the native reader is momentarily unavailable) still deletes
+      # a whole word on Ctrl+Backspace instead of a single character. On Unix,
+      # DEL *is* backspace, so the legacy mapping is preserved there.
+      if char == "\b"
         action = :backspace
+      elsif char == "\x7f"
+        action = WINDOWS ? :word_backspace : :backspace
       elsif char.is_a?(String) && char.match?(/\A[[:print:]]\z/)
         return { kind: :key, action: :literal, char: char }
       else
@@ -2249,14 +2380,19 @@ class ÆtherChamber
   # select it, click an instrumentum to expand it, click the prompt to move the
   # cursor, or scroll to cycle the Fokus-Ring. Windows drives this natively
   # (ENABLE_MOUSE_INPUT + MOUSE_EVENT records); Unix uses xterm SGR mode.
-
+ 
+  # The mouse/selection seam below is driven from MouseBackend (a separate
+  # object), so it must be public — the `private` wall earlier in the class
+  # would otherwise turn these into NoMethodError from the backend.
+  public
+ 
   def enable_mouse
-    print "\e[?1000h\e[?1006h"
+    print "\e[?1000h\e[?1006h\e[?1002h"
     $stdout.flush
   end
 
   def disable_mouse
-    print "\e[?1006l\e[?1000l"
+    print "\e[?1002l\e[?1006l\e[?1000l"
     $stdout.flush
   end
 
@@ -2264,6 +2400,8 @@ class ÆtherChamber
   # it straight from the console buffer; Unix asks the terminal where its cursor
   # sits (DSR \e[6n) while the cursor is still on the block's first line.
   def anchor_cursor_row
+    return @mouse_backend.anchor_row if @mouse_backend
+
     if @editor_win
       pos = ÆtherWinConsole.cursor_position
       pos && pos[1]
@@ -2454,7 +2592,8 @@ class ÆtherChamber
    
   def copy_to_clipboard(text)
     return false if text.nil? || text.empty?
-   
+    return @mouse_backend.clipboard_copy(text) if @mouse_backend
+
     if WINDOWS && HAVE_WIN_CONSOLE
       ÆtherWinConsole.clipboard_copy(text)
     else

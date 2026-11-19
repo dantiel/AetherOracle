@@ -34,6 +34,7 @@ class Mnemosyne
       .tm-ai .aether tmp log coverage dist build .bundle .sass-cache
       intermediate binaries saved deriveddatacache ddc .vs .idea
       build-vs build-vs2 build-vs3 build-current build-merged build-out build-doc
+      .setup __pycache__ .build-tmp thirdparty third_party
     ].freeze
 
     class << self
@@ -42,12 +43,14 @@ class Mnemosyne
       def source_files(root = project_root)
         root = File.expand_path(root)
         prefix = root + File::SEPARATOR
+        ai_excludes = ai_exclude_patterns
         files = []
         Dir.glob(File.join(root, '**', '*'), File::FNM_DOTMATCH).each do |abs|
           next if File.directory?(abs)
 
           rel = abs.delete_prefix(prefix).tr(File::SEPARATOR, '/')
           next if rel.split('/').any? { |seg| SKIP_DIRS.include?(seg.downcase) }
+          next if ai_excludes.any? { |ex| Argonaut.argonaut_match?(ex, rel) }
 
           ext = File.extname(abs).downcase
           next unless SCAN_EXTENSIONS.include?(ext) || BUILD_FILENAMES.include?(File.basename(abs).downcase)
@@ -55,6 +58,21 @@ class Mnemosyne
           files << rel
         end
         files.sort
+      end
+
+      # `.aethercodex` `excludeInArgonaut` globs (the AI-context ignore list),
+      # merged with Argonaut's own excludes. Applied during sounding so the
+      # corpus graph honours the same AI-only filter as the prompt context —
+      # wrong/generated dirs never enter the token substrate.
+      def ai_exclude_patterns
+        list = if defined?(Argonaut) && Argonaut.respond_to?(:exclude_files)
+                 Argonaut.exclude_files
+               else
+                 ['*.{o}', 'pyc']
+               end
+        Array(list).map(&:to_s).reject(&:empty?)
+      rescue StandardError
+        []
       end
 
       def project_root

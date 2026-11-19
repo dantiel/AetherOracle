@@ -11,8 +11,13 @@ module AetherOracle
                         read cat inspect ov write new mv rename files ast grep notes mem
                         note history hist search find aegis sessions seal seals agenda intent].freeze
 
+    VERSION_FLAGS = %w[version -v --version].freeze
+
     def self.run(argv)
       command = argv.first
+
+      # Pure-stdlib: report the gem version without loading the brain tier.
+      return print_version if VERSION_FLAGS.include?(command)
 
       # Hermetic default: bare `aetheroracle` enters the Dialog-Kammer, not a
       # dry usage line. Link-tier commands (peers / heartbeat / invoke) stay
@@ -23,6 +28,12 @@ module AetherOracle
       end
 
       Link.run(argv.dup)
+      0
+    end
+
+    def self.print_version
+      require_relative 'version'
+      puts "ÆtherCodex v#{VERSION}"
       0
     end
 

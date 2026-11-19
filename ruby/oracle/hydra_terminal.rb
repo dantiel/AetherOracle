@@ -663,12 +663,17 @@ class HydraTerminal
   def run_worker_divination(head, prompt)
     tools = head.tool_scope || @tools
     context = Coniunctio.build(history: head.history)
+    # Bind this worker thread to its head's own session row, so Oracle's
+    # crash-resume checkpoint writes to the head — not the terminal.
+    Thread.current[:hydra_session_id] = head.session_id
     answer, _arts, tool_results = Oracle.divination(prompt, context, tools: tools, stream: nil,
                                                                   resume_state: head.pause_state,
                                                                   system_prompt: head.system_prompt) do |name, args, tool_ctx|
       tools.handle(tool: name, args: args, context: tool_ctx)
     end
     [answer, tool_results]
+  ensure
+    Thread.current[:hydra_session_id] = nil
   end
 
   # Cooperative pause: the oracle loop checks Thread.current[:paused] before

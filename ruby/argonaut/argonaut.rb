@@ -152,27 +152,47 @@ class Argonaut
 
   def self.include_files
     tm_query = ENV['TM_QUERY']
-    return ['*', '.tm_properties', '.htaccess'] unless tm_query
+    from_tm = if tm_query
+                `#{tm_query}`
+                .scan(/includeInArgonaut=\{([^\n]*)\}/).flatten.first.to_s.gsub(/\{|\}/, '').split(',')
+              else
+                []
+              end
 
-    ['*', '.tm_properties', '.htaccess'] +
-      `#{tm_query}`
-      .scan(/includeInArgonaut=\{([^\n]*)\}/).flatten.first.to_s.gsub(/\{|\}/,'').split(',')
-      .reject do |f|
-        f.empty? || '{}' == f
-      end
+    (['*', '.tm_properties', '.htaccess'] + from_tm + config_glob_list(:include_in_argonaut))
+      .reject { |f| f.empty? || '{}' == f }
   end
   "excludeInArgonaut={{,*.orig,*.rej,*.js},*/target/debug,debug}"
 
   def self.exclude_files
     tm_query = ENV['TM_QUERY']
-    return ['*.{o}', 'pyc'] unless tm_query
+    from_tm = if tm_query
+                `#{tm_query}`
+                .scan(/excludeInArgonaut=\{([^\n]*)\}/).flatten.first.to_s.gsub(/\{|\}/, '').split(',')
+              else
+                []
+              end
 
-    ['*.{o}', 'pyc'] +
-      `#{tm_query}`
-      .scan(/excludeInArgonaut=\{([^\n]*)\}/).flatten.first.to_s.gsub(/\{|\}/,'').split(',')
-      .reject do |f|
-        f.empty? || '{}' == f
-      end
+    (['*.{o}', 'pyc'] + from_tm + config_glob_list(:exclude_in_argonaut))
+      .reject { |f| f.empty? || '{}' == f }
+  end
+
+  # AI-context ignore list read from the project `.aethercodex` (YAML keys
+  # `includeInArgonaut` / `excludeInArgonaut`). These mirror the TextMate
+  # `excludeInArgonaut` variable Argonaut already consumes via TM_QUERY, but are
+  # resolved from the `.aethercodex` config so the aethercodex-win editor (no
+  # TM_QUERY) filters the Pythia/AI context identically. Accepts a YAML list or
+  # a comma-separated brace-expanded string.
+  def self.config_glob_list(key)
+    raw = CONFIG[key]
+    return [] if raw.nil? || raw == ''
+
+    list = if raw.is_a?(Array)
+             raw
+           else
+             raw.to_s.gsub(/\{|\}/, '').split(',')
+           end
+    list.map(&:to_s).map(&:strip).reject(&:empty?)
   end
 
 

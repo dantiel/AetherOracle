@@ -286,6 +286,8 @@ module ÆtherTerminalMarkdown
         path = url.split('#').first.to_s
         if url !~ %r{\A(?:https?|ftp)://}i && fileish?(path)
           file_link(path, nil, nil, label)
+        elsif url =~ %r{\A(?:https?|ftp)://}i
+          hyperlink(url, label)
         else
           "#{Paint.wrap(label, Paint::UNDERLINE, Paint::BLUE)}#{Paint.dim(" #{url}")}"
         end
@@ -342,6 +344,15 @@ module ÆtherTerminalMarkdown
 
   def hyperlinks?
     ENV['AETHER_NO_LINKS'].to_s.empty?
+  end
+
+  # Turn an http(s)/ftp URL into a clickable OSC 8 hyperlink (the URL is the
+  # target), so web references in markdown output are tappable in the chamber.
+  def hyperlink(url, label = nil)
+    label ||= url
+    return Paint.wrap(label, Paint::UNDERLINE, Paint::BLUE) unless hyperlinks?
+
+    "\e]8;;#{url}\a#{Paint.wrap(label, Paint::UNDERLINE, Paint::BLUE)}\e]8;;\a"
   end
 
   def absolute_path(path)

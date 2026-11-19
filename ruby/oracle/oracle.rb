@@ -101,6 +101,43 @@ class Oracle
     end
 
 
+    # ── Crash-resume state checkpointing ─────────────────────────────────────
+    # Snapshots the Oracle's mid-flight resume_state onto the Hydra registry row
+    # so a crashed session can be "proceed"-ed seamlessly. Throttled (one write
+    # per STATE_PERSIST_EVERY seconds) so the hot divination loop doesn't touch
+    # SQLite on every API call. The target row is the current head's session
+    # (`Thread.current[:hydra_session_id]` when a HydraTerminal head runs, else
+    # `Mnemosyne.current_session_id`).
+    STATE_PERSIST_EVERY = 5.0
+
+    def persist_session_state(state, session_id: nil)
+      sid = session_id || Thread.current[:hydra_session_id] || Mnemosyne.current_session_id
+      return if sid.nil? || sid.to_s.empty?
+      return unless defined?(Mnemosyne::Hydra) && Mnemosyne::Hydra.respond_to?(:save_state)
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return if now - Thread.current[:oracle_last_state_persist].to_f < STATE_PERSIST_EVERY
+
+      Thread.current[:oracle_last_state_persist] = now
+      Mnemosyne::Hydra.save_state(session_id: sid, state: state)
+    rescue StandardError
+      nil
+    end
+
+    # Clear a session's durable state — a clean turn leaves nothing in flight,
+    # so the next crash has nothing stale to resurrect.
+    def clear_session_state(session_id: nil)
+      sid = session_id || Thread.current[:hydra_session_id] || Mnemosyne.current_session_id
+      return if sid.nil? || sid.to_s.empty?
+      return unless defined?(Mnemosyne::Hydra) && Mnemosyne::Hydra.respond_to?(:save_state)
+
+      Mnemosyne::Hydra.save_state(session_id: sid, state: nil)
+      Thread.current[:oracle_last_state_persist] = 0.0
+    rescue StandardError
+      nil
+    end
+
+
     # Public API Methods
     def ask(prompt, context)
       divination(prompt, context, tools: nil) do |name, args|
@@ -164,6 +201,7 @@ class Oracle
         arts: arts,
         answer: nil
       }
+      persist_session_state(Thread.current[:pause_state])
 
       stream_initial_status msg_uuid, stream, set_temperature
 
@@ -175,6 +213,8 @@ class Oracle
         # Return the divine interruption signal directly (just the hash, not the array)
         return [result || '<<empty>>', arts, tool_results]
       end
+
+      clear_session_state
 
       [result || '<<empty>>', arts, tool_results]
     rescue Oracle::RestartException => e
@@ -223,6 +263,7 @@ class Oracle
           arts: arts,
           answer: answer
         }
+        persist_session_state(Thread.current[:pause_state])
 
         # ⏸ The user's hand: a held turn waits *here*, at the step boundary — the
         # messages stay live and the stream stays open, so ▶ continues this very

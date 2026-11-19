@@ -28,6 +28,7 @@ module ÆtherWinConsole
   extern 'int SetConsoleCP(int)'
   extern 'int SetConsoleOutputCP(int)'
   extern 'int WaitForSingleObject(void*, int)'
+  extern 'int ReadConsoleOutputCharacterW(void*, void*, int, int, int*)'
 
   # dwControlKeyState bits
   RIGHT_ALT_PRESSED  = 0x0001
@@ -276,7 +277,13 @@ module ÆtherWinConsole
       h = console_handle
       return @available = false if h.nil? || h.zero?
 
-      @pristine_mode ||= get_mode(h)
+      # Probe the handle NOW. `@pristine_mode` is captured only on the first
+      # success; every re-probe after a `disable!` must still call GetConsoleMode
+      # to verify the handle actually works. The old `@pristine_mode ||=` form
+      # short-circuited once the pristine mode was set, so a "re-probe" was a
+      # no-op and a transiently broken handle was never detected here.
+      mode = get_mode(h)
+      @pristine_mode ||= mode
       @available = true
     rescue StandardError
       @available = false
@@ -377,6 +384,33 @@ module ÆtherWinConsole
       return nil if ok.nil? || ok.zero?
 
       buf[4, 4].unpack('S<S<')
+    end
+
+    # Characters actually on the console screen at (x, y), reading `len` cells
+    # rightward. Windows-specific: conhost's screen buffer is the source of
+    # truth for what the terminal displays, so this is how the chamber selects
+    # text it did not itself draw (scrolled output). The COORD (two 16-bit
+    # shorts) is packed into one 32-bit value — low word x, high word y — and
+    # passed by value. Returns UTF-8 (may be shorter than `len` at end-of-row),
+    # or nil on failure.
+    def screen_text_at(x, y, len)
+      return nil if len <= 0
+
+      h = output_handle
+      return nil if h.nil? || h.zero?
+
+      coord = (y << 16) | (x & 0xFFFF)
+      buf = "\0" * (len * 2) # WCHAR[n] = UTF-16LE
+      nread = "\0" * 8
+      ok = ReadConsoleOutputCharacterW(h, buf, len, coord, nread)
+      return nil if ok.nil? || ok.zero?
+
+      n = nread.unpack1('L<')
+      return '' if n.zero?
+
+      buf[0, n * 2].force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8)
+    rescue StandardError
+      nil
     end
 
     # Switch the console out of line/echo/processed mode for the duration of
