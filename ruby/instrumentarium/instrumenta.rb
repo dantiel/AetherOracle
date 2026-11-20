@@ -967,6 +967,8 @@ instrument :sessions,
                          the heartbeat window (crashed/orphaned heads).
                close     gracefully mark one session closed (session_id).
                kick      hard-delete one session row (session_id).
+               kill      terminate the session's owning OS process (by pid),
+                         then hard-delete its row (session_id).
                prune     delete all closed rows + rows silent past the prune
                          horizon.
                heartbeat refresh one session's last_seen (session_id).
@@ -979,15 +981,16 @@ instrument :sessions,
            DESC
            params: {
              action:     { type: String, required: false,
-                           enum: %w[list close kick prune heartbeat proceed proceed_stale],
-                           description: 'list (default) | close | kick | prune | heartbeat | ' \
+                           enum: %w[list close kick kill prune heartbeat proceed proceed_stale],
+                           description: 'list (default) | close | kick | kill | prune | heartbeat | ' \
                                         'proceed | proceed_stale' },
              session_id: { type: String, required: false,
-                           description: 'Target session_id for close/kick/heartbeat/proceed' }
+                           description: 'Target session_id for close/kick/kill/heartbeat/proceed' }
            },
            returns: { action: String, sessions: Array, count: Integer, active: Integer,
                       stale: Integer, closed: Integer, pruned: Boolean, session_id: String,
-                      session: Hash, resumed: Integer, error: String } do |action: 'list', session_id: nil|
+                      session: Hash, resumed: Integer, terminated: Boolean, skipped: Boolean,
+                      pid: Integer, error: String } do |action: 'list', session_id: nil|
   act = action.to_s
   case act
   when 'list'
@@ -1010,6 +1013,13 @@ instrument :sessions,
     return { action: 'kick', error: 'session_id required' } if sid.empty?
     Mnemosyne.kick_session(session_id: sid)
     { action: 'kick', session_id: sid }
+  when 'kill'
+    sid = session_id.to_s
+    return { action: 'kill', error: 'session_id required' } if sid.empty?
+    result = Mnemosyne.kill_session(session_id: sid)
+    return { action: 'kill', session_id: sid, error: 'session not found' } unless result
+    { action: 'kill', session_id: sid, pid: result[:pid],
+      terminated: result[:terminated], skipped: result[:skipped] }
   when 'prune'
     Mnemosyne::Hydra.prune!
     { action: 'prune', pruned: true }

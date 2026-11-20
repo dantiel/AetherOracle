@@ -764,6 +764,7 @@ end
     def active_sessions(project: nil, within: Hydra::STALE_AFTER, exclude: nil) = Hydra.active_sessions(project: project, within: within, exclude: exclude)
     def all_sessions(project: nil, exclude: nil) = Hydra.all_sessions(project: project, exclude: exclude)
     def kick_session(session_id:) = Hydra.kick!(session_id: session_id)
+    def kill_session(session_id:) = Hydra.kill!(session_id: session_id)
     def save_session_state(session_id:, state: nil) = Hydra.save_state(session_id: session_id, state: state)
     def load_session_state(session_id:) = Hydra.load_state(session_id: session_id)
     def proceed_session(session_id:) = Hydra.proceed(session_id: session_id)

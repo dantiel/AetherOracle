@@ -1150,9 +1150,10 @@ class Conduit
 
           stream_token_usage json, body[:model]
 
-          log_json(json: json.transform_values do |v|
-            v.to_s.truncate 200
-          end)
+          # log_json is silenced in production, but its argument is still evaluated
+          # eagerly — transforming a non-Hash (nil/Array) response here would crash
+          # the whole divination with `undefined method 'transform_values'`.
+          log_json(json: json.transform_values { |v| v.to_s.truncate 200 }) if json.is_a?(Hash)
         end
     rescue StandardError => e
       handle_api_error e

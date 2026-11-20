@@ -26,7 +26,7 @@ module Toolbelt
     'history' => 'show recent chronicle history (--notes for notes)',
     'search'  => 'search Mnemosyne notes + chronicle (--limit N)',
     'aegis'   => 'view / edit Aegis state (summary, tags, temp, thinking, dir)',
-    'sessions' => 'list / close / kick / prune / heartbeat Hydra sessions',
+    'sessions' => 'monitor / kill / list / close / kick / prune Hydra sessions',
     'seal'    => "list / status / delegate Salomo's executive seals"
   }.freeze
 
@@ -460,9 +460,15 @@ module Toolbelt
     case action
     when 'list', 'ls', 'show'
       sessions_list
+    when 'monitor', 'watch', 'top'
+      sessions_monitor(args)
     when 'prune'
       Mnemosyne::Hydra.prune!
       puts 'pruned closed + stale sessions'
+    when 'kill'
+      target = args.shift
+      abort "Usage: aetheroracle sessions kill <session_id | pid | index>" if target.nil?
+      sessions_kill(target)
     when 'close', 'kick', 'heartbeat'
       sid = args.shift
       abort "Usage: aetheroracle sessions #{action} <session_id>" if sid.nil?
@@ -473,39 +479,232 @@ module Toolbelt
       end
       puts "#{action}: #{sid}"
     else
-      abort "unknown sessions action: #{action} (list | close <id> | kick <id> | prune | heartbeat <id>)"
+      abort "unknown sessions action: #{action} (monitor | list | kill <id> | close <id> | kick <id> | prune | heartbeat <id>)"
     end
   end
 
-  def sessions_list
-    sessions = Mnemosyne.all_sessions
+  # Kill a session for real: terminate its owning OS process (pid) and drop the
+  # registry row. Resolves the target by table index, pid, or session_id
+  # (exact or unique substring of id/label/role).
+  def sessions_kill(target, session: nil)
+    session ||= resolve_session(target)
+    abort "no session matching: #{target}" unless session
+
+    result = Mnemosyne.kill_session(session_id: session[:session_id])
+    if result.nil?
+      puts "kill failed: #{session[:session_id]}"
+    elsif result[:skipped]
+      puts "refusing to kill our own process (pid #{result[:pid]}) — #{session[:session_id]}"
+    else
+      state = result[:terminated] ? 'terminated' : 'process already gone'
+      puts "killed #{session[:session_id]} (pid #{result[:pid]}) — #{state}, row removed"
+    end
+  end
+
+  # Resolve a user target into a session row: a 1-based table index, a pid, an
+  # exact session_id, or a unique substring of id/label/role.
+  def resolve_session(target, sessions = Mnemosyne.all_sessions)
+    return nil if sessions.nil? || sessions.empty?
+    t = target.to_s.strip
+    return nil if t.empty?
+
+    if t =~ /\A\d+\z/
+      n = t.to_i
+      return sessions[n - 1] if n >= 1 && n <= sessions.size
+      by_pid = sessions.find { |s| s[:pid].to_i == n }
+      return by_pid if by_pid
+      return nil
+    end
+
+    exact = sessions.find { |s| s[:session_id].to_s == t }
+    return exact if exact
+
+    matches = sessions.select do |s|
+      s[:session_id].to_s.include?(t) ||
+        s[:label].to_s.include?(t) ||
+        s[:role].to_s.include?(t)
+    end
+    matches.size == 1 ? matches.first : nil
+  end
+
+  # Live session monitor: refreshes the roster every N seconds and accepts a
+  # single-line command prompt — `k <n|id|pid>` kills a session (terminate its
+  # process + drop the row), `q` quits, `r` refreshes now, `h` shows help.
+  # Ctrl+C quits too. When stdin/stdout is not a tty it degrades to one-shot.
+  def sessions_monitor(args)
+    interval = 2.0
+    filter = nil
+    until args.empty?
+      arg = args.shift
+      case arg
+      when '-n', '--interval', '--refresh'
+        interval = (args.shift || 2).to_f
+      when '-h', '--help'
+        puts 'Usage: aetheroracle sessions monitor [-n SECONDS] [FILTER]'
+        return
+      else
+        filter = arg
+      end
+    end
+    interval = 0.5 if interval < 0.5
+
+    interactive = $stdin.tty? && $stdout.tty?
+    queue = Queue.new
+    reader = nil
+    if interactive
+      require 'io/console'
+      $stdin.raw! rescue nil
+      reader = Thread.new do
+        begin
+          loop { queue << ($stdin.getch rescue break) }
+        rescue StandardError, IOError
+          # stdin closed
+        end
+      end
+      reader.abort_on_exception = false
+    end
+
+    cmd = +''
+    snapshot = nil
+    begin
+      loop do
+        snapshot = Mnemosyne.all_sessions
+        snapshot = snapshot.select { |s| matches_session_filter?(s, filter) } if filter && !filter.empty?
+        render_monitor(snapshot, interval, cmd)
+        break unless interactive
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + interval
+        quitting = false
+        loop do
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break if remaining <= 0
+          begin
+            ch = queue.pop(timeout: remaining)
+            break if ch.nil?
+            case ch
+            when "\r", "\n"
+              quitting = !monitor_command(cmd, snapshot)
+              cmd = +''
+              break
+            when "\u0003" # Ctrl+C in raw mode
+              puts "\nbye."
+              quitting = true
+              break
+            when "\e"
+              cmd = +'' # swallow escape sequences
+            when "\u007f", "\b"
+              cmd.chop!
+            else
+              cmd << ch if ch.respond_to?(:ord) && ch.ord >= 32
+            end
+          rescue ThreadError
+            break # refresh deadline reached
+          end
+        end
+        break if quitting
+      end
+    ensure
+      reader&.kill
+      $stdin.cooked! rescue nil if interactive
+    end
+  end
+
+  # Returns true to keep monitoring, false to quit.
+  def monitor_command(cmd, sessions)
+    cmd = cmd.to_s.strip
+    return true if cmd.empty?
+    case cmd
+    when 'q', 'quit', 'exit'
+      puts "\nbye."
+      false
+    when 'h', 'help', '?', 'r', 'refresh'
+      true # help/commands line is always rendered; just refresh
+    when /\Ak(?:ill)?\s+(.+)\z/
+      target = Regexp.last_match(1).strip
+      session = resolve_session(target, sessions)
+      if session
+        sessions_kill(target, session: session)
+      else
+        puts "  no session matching: #{target}"
+        sleep 1
+      end
+      true
+    else
+      puts "  unknown: #{cmd} (k <n|id|pid> · q · r · h)"
+      sleep 1
+      true
+    end
+  end
+
+  def matches_session_filter?(s, filter)
+    f = filter.to_s.downcase
+    return true if f.empty?
+    s[:label].to_s.downcase.include?(f) ||
+      s[:role].to_s.downcase.include?(f) ||
+      s[:session_id].to_s.downcase.include?(f) ||
+      s[:project].to_s.downcase.include?(f)
+  end
+
+  def render_monitor(sessions, interval, cmd)
+    print "\e[H\e[2J\e[3J"
+    dim   = "\e[2m"
+    cyan  = "\e[1;36m"
+    reset = "\e[0m"
+    now = Time.now.strftime('%H:%M:%S')
+    puts "#{cyan}── Hydra Session Monitor ──#{reset}  #{dim}(#{now} · refresh #{format('%.1f', interval)}s · #{sessions.size} shown)#{reset}"
+    if sessions.empty?
+      puts '  no sessions'
+    else
+      sessions.each_with_index do |s, i|
+        puts render_session_line(s, i + 1)
+        puts "  \e[2m#{s[:session_id]}\e[0m"
+      end
+    end
+    puts
+    puts "  #{cyan}commands:#{reset} k <n|id|pid> kill · q quit · r refresh · h help"
+    print "  #{cyan}›#{reset} #{cmd}"
+    $stdout.flush
+  end
+
+  def sessions_list(sessions = nil, indexed: false)
+    sessions ||= Mnemosyne.all_sessions
     if sessions.empty?
       puts 'no sessions'
       return
     end
 
+    puts '── Hydra Sessions ──'
+    sessions.each_with_index do |s, i|
+      puts render_session_line(s, indexed ? i + 1 : nil)
+      puts "  \e[2m#{s[:session_id]}\e[0m"
+    end
+  end
+
+  # One colored status line for a session row. `index` (1-based) prefixes a
+  # table index for the monitor's `k <n>` kill targeting. `◆` marks a row with
+  # a resumable state snapshot (a crashed head that `proceed` can resurrect).
+  def render_session_line(s, index = nil)
     green  = "\e[1;32m"
     yellow = "\e[1;33m"
     red    = "\e[1;31m"
+    cyan   = "\e[1;36m"
     dim    = "\e[2m"
     reset  = "\e[0m"
 
-    puts '── Hydra Sessions ──'
-    sessions.each do |s|
-      color = case s[:effective_status]
-              when 'active' then green
-              when 'stale'  then yellow
-              else red
-              end
-      age = s[:age_seconds].to_i
-      age_s = age < 60 ? "#{age}s" : "#{age / 60}m#{age % 60}s"
-      name = s[:label].to_s.strip
-      name = s[:session_id].to_s if name.empty?
-      summary = s[:aegis_summary].to_s.strip
-      summary = summary.empty? ? '' : "  · #{summary[0, 60]}"
-      puts "#{color}[#{s[:effective_status].ljust(6)}]#{reset} #{name}  #{dim}(#{s[:role]}, pid #{s[:pid]}, port #{s[:port]}, #{age_s} ago)#{reset}#{summary}"
-      puts "  #{dim}#{s[:session_id]}#{reset}"
-    end
+    color = case s[:effective_status]
+            when 'active' then green
+            when 'stale'  then yellow
+            else red
+            end
+    age = s[:age_seconds].to_i
+    age_s = age < 60 ? "#{age}s" : "#{age / 60}m#{age % 60}s"
+    name = s[:label].to_s.strip
+    name = s[:session_id].to_s if name.empty?
+    summary = s[:aegis_summary].to_s.strip
+    summary = summary.empty? ? '' : "  · #{summary[0, 60]}"
+    idx = index ? "#{cyan}#{index.to_s.rjust(2)})#{reset} " : ''
+    flag = s[:resumable] ? ' ◆' : ''
+    "#{idx}#{color}[#{s[:effective_status].ljust(6)}]#{reset} #{name}#{flag}  #{dim}(#{s[:role]}, pid #{s[:pid]}, port #{s[:port]}, #{age_s} ago)#{reset}#{summary}"
   end
 
   def seal(args)

@@ -226,6 +226,50 @@ class Mnemosyne
         nil
       end
 
+      # Terminate the OS process owning a pid. Windows → `taskkill /F /PID`,
+      # everywhere else → SIGKILL. Returns true when the kill was issued (the
+      # process may already have been gone — that still means "not running").
+      def terminate_pid(pid)
+        pid = pid.to_i
+        return false if pid <= 0
+
+        if RUBY_PLATFORM =~ /mswin|mingw|cygwin/
+          system('taskkill', '/F', '/PID', pid.to_s, out: File::NULL, err: File::NULL)
+          $?.success?
+        else
+          Process.kill('KILL', pid)
+          true
+        end
+      rescue Errno::ESRCH, Errno::EPERM, StandardError
+        false
+      end
+
+      # Kill a session for real: terminate its owning OS process (by pid), then
+      # hard-delete the registry row. Unlike `kick!` (row only) or `close`
+      # (status stamp only), this silences the head itself. Refuses to kill the
+      # calling process. Returns an outcome hash, or nil when the row is missing.
+      def kill!(session_id:)
+        sid = session_id.to_s
+        return nil if sid.empty?
+
+        row = Mnemosyne.db.execute(
+          'SELECT session_id, pid FROM aether_sessions WHERE session_id = ?', [sid]
+        ).first
+        return nil unless row
+
+        pid = row['pid'].to_i
+        if pid == Process.pid
+          return { session_id: sid, pid: pid, terminated: false, skipped: true }
+        end
+
+        terminated = terminate_pid(pid)
+        kick!(session_id: sid)
+        { session_id: sid, pid: pid, terminated: terminated }
+      rescue StandardError => e
+        warn "[Hydra] kill! failed: #{e.class}: #{e.message}"
+        nil
+      end
+
       # Persist a session's durable runtime state — its mid-flight Oracle
       # resume_state (messages / tool_results / arts / answer) — as JSON on the
       # registry row, so a crash can be resumed seamlessly. `state: nil` clears
