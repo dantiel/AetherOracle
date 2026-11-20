@@ -26,7 +26,7 @@ module Toolbelt
     'history' => 'show recent chronicle history (--notes for notes)',
     'search'  => 'search Mnemosyne notes + chronicle (--limit N)',
     'aegis'   => 'view / edit Aegis state (summary, tags, temp, thinking, dir)',
-    'sessions' => 'monitor / kill / list / close / kick / prune Hydra sessions',
+    'sessions' => 'Hydra sessions: list / monitor / stale / resume / resume-all / kill / prune',
     'seal'    => "list / status / delegate Salomo's executive seals"
   }.freeze
 
@@ -469,6 +469,14 @@ module Toolbelt
       target = args.shift
       abort "Usage: aetheroracle sessions kill <session_id | pid | index>" if target.nil?
       sessions_kill(target)
+    when 'stale', 'dead'
+      sessions_list(Mnemosyne.stale_sessions)
+    when 'resume', 'proceed'
+      sid = args.shift
+      abort "Usage: aetheroracle sessions resume <session_id>" if sid.nil?
+      sessions_resume(sid)
+    when 'resume_all', 'resume-stale', 'proceed_stale', 'proceed-stale'
+      sessions_resume_stale
     when 'close', 'kick', 'heartbeat'
       sid = args.shift
       abort "Usage: aetheroracle sessions #{action} <session_id>" if sid.nil?
@@ -479,8 +487,27 @@ module Toolbelt
       end
       puts "#{action}: #{sid}"
     else
-      abort "unknown sessions action: #{action} (monitor | list | kill <id> | close <id> | kick <id> | prune | heartbeat <id>)"
+      abort "unknown sessions action: #{action} (list | monitor | stale | resume <id> | resume-all | kill <id> | close <id> | kick <id> | prune | heartbeat <id>)"
     end
+  end
+
+  # Resume a crashed/closed session in this process: re-adopt its identity and
+  # restore its durable state (messages / tool_results / arts / answer), so the
+  # head continues without losing mid-flight progress.
+  def sessions_resume(sid)
+    session = Mnemosyne.proceed_session(session_id: sid)
+    abort "session not found (or not resumable): #{sid}" unless session
+    puts "resumed #{session[:session_id]} (#{session[:label]})"
+  end
+
+  def sessions_resume_stale
+    stale = Mnemosyne.stale_sessions
+    if stale.empty?
+      puts 'no stale sessions'
+      return
+    end
+    resumed = Mnemosyne.proceed_stale_sessions
+    puts "resumed #{resumed.size} of #{stale.size} stale session(s)"
   end
 
   # Kill a session for real: terminate its owning OS process (pid) and drop the

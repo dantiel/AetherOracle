@@ -247,6 +247,8 @@ module AetherOracle
         polymorphic conversation room: an interactive REPL with twelve companion
         voices, slash-commands, live tool telemetry, and syntax-highlighted
         terminal Markdown.
+        In the Kammer: /session-list lists Hydra sessions, /resume-session <id>
+        resurrects a crashed head (state + tool results preserved).
 
         BRAIN tier (needs the brain gems — `gem install aetheroracle`):
           (no args)                  enter the Dialog-Kammer
@@ -274,6 +276,7 @@ module AetherOracle
           search <query> [--limit n] search notes + chronicle
           aegis [show|summary|tags|temp|think|dir]  view/edit Aegis state
           seal list|status|delegate  Salomo's executive seals
+          sessions list|monitor|stale|resume <id>|resume-all|kill <id>|prune   Hydra sessions
 
         LINK tier (any platform with Ruby — no gems):
           peers                      discover oracle peers on the LAN (4550..4610)

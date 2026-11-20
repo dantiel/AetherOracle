@@ -3159,12 +3159,14 @@ class ÆtherChamber
     ['/theme',      'Highlight-Theme wählen'],
     ['/cost',       'Token-Kosten zeigen'],
     ['/mouse',      'Maus-Klicksteuerung an/aus (Aus = native Textauswahl)'],
+    ['/session-list',      'Hydra-Sitzungen anzeigen (aktiv/stale/closed)'],
+    ['/resume-session <id>', 'Abgestürzte Sitzung fortsetzen (Zustand wiederherstellen)'],
     ['/exit',       'Die Kammer verlassen']
   ].freeze
 
   def slash_commands
     %w[/help /aegis /morph /unmorph /personae /file /clear /history /config /context /tools
-       /tool /markdown /highlight /theme /cost /mouse /continue /edit /exit]
+       /tool /markdown /highlight /theme /cost /mouse /session-list /resume-session /continue /edit /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -3193,6 +3195,8 @@ class ÆtherChamber
     when '/mouse'                   then toggle_mouse
     when '/theme'                   then set_theme(arg)
     when '/cost'                    then cost_summary
+    when '/session-list', '/sessions'      then session_list_cmd
+    when '/resume-session', '/resume'      then resume_session_cmd(arg)
     when '/exit', '/quit' then @quit = true
     else
       puts "Unbekannter Befehl: #{cmd}"
@@ -3224,6 +3228,8 @@ class ÆtherChamber
       ['/mouse',             'Maus-Klicksteuerung an/aus'],
       ['/theme <name>',      'Highlight-Theme wählen'],
       ['/cost',              'Token-Kosten der Sitzung zeigen'],
+      ['/session-list',      'Hydra-Sitzungen anzeigen (aktiv/stale/closed)'],
+      ['/resume-session <id>', 'Abgestürzte Sitzung fortsetzen (Zustand + Tool-Ergebnisse erhalten)'],
       ['$',                  'π → ÆtherShell: Nushell-artige Daten-Pipelines (exit zurück)'],
       ['/exit, exit',        'Die Kammer verlassen']
     ]
@@ -3417,6 +3423,60 @@ class ÆtherChamber
     t = a[:tags]
     t = t.split(',') if t.is_a?(String)
     Array(t).map(&:to_s).reject(&:empty?)
+  end
+
+  def session_list_cmd
+    ensure_mnemosyne
+    return unless defined?(Mnemosyne)
+
+    sessions = Mnemosyne.all_sessions
+    if sessions.empty?
+      puts @palette.dim('  Keine Hydra-Sitzungen.')
+      return
+    end
+
+    width = [terminal_width, 110].min
+    rows = sessions.map { |s| session_line(s) }
+    puts AthanorUI.box('Hydra Sessions', rows, width: width, palette: @palette)
+    puts
+    puts @palette.dim("  #{sessions.size} Sitzungen — '/resume-session <id>' setzt eine stale/closed Sitzung fort (Zustand + Tool-Ergebnisse bleiben erhalten).")
+    puts
+  end
+
+  def resume_session_cmd(arg)
+    ensure_mnemosyne
+    return unless defined?(Mnemosyne)
+
+    sid = arg.to_s.strip
+    if sid.empty?
+      puts @palette.warn('  Usage: /resume-session <session_id>')
+      return
+    end
+
+    session = Mnemosyne.proceed_session(session_id: sid)
+    if session
+      puts @palette.success("  Fortgesetzt: #{session[:session_id]} (#{session[:label]}) — Zustand + Tool-Ergebnisse wiederhergestellt.")
+    else
+      puts @palette.fail("  Sitzung nicht gefunden oder nicht fortsetzbar: #{sid}")
+    end
+  end
+
+  def session_line(s)
+    status = s[:effective_status].to_s
+    color = case status
+            when 'active' then @palette.method(:success)
+            when 'stale'  then @palette.method(:warn)
+            else @palette.method(:fail)
+            end
+    age = s[:age_seconds].to_i
+    age_s = age < 60 ? "#{age}s" : "#{age / 60}m#{age % 60}s"
+    name = s[:label].to_s.strip
+    name = s[:session_id].to_s if name.empty?
+    flag = s[:resumable] ? ' ◆' : ''
+    summary = s[:aegis_summary].to_s.strip
+    summary = summary.empty? ? '' : " · #{summary[0, 48]}"
+    id = @palette.dim(s[:session_id].to_s)
+    "#{color.call("[#{status.ljust(6)}]")} #{name}#{flag}  #{@palette.dim("(#{s[:role]}, pid #{s[:pid]}, #{age_s} ago)")}#{summary}  #{id}"
   end
 
   # Ensure Mnemosyne is loaded before reading the Aegis state; `/aegis` may run

@@ -567,10 +567,12 @@ class ÆtherCodexCLI
     puts "  notes [query]                  Recall Mnemosyne notes"
     puts "  note add <content> | note rm <id>"
     puts "  seal list | status <id> | delegate <task_id> <owner>"
+    puts "  sessions list | monitor | stale | resume <id> | resume-all | kill <id> | prune"
     puts
     puts "Chamber slash-commands:"
     puts "  /morph /unmorph /personae /file /clear /config /context /aegis"
     puts "  /tools /markdown /highlight /theme"
+    puts "  /session-list /resume-session <id>"
     puts
     puts "Examples:"
     puts "  ÆtherCodex chamber"
