@@ -6,12 +6,29 @@ class Mnemosyne
   # Chronicle — chronicle
   class Chronicle
     class << self
-        def fetch_history(limit: 7, max_tokens: nil, include_tool_calls: false)
-          # Select all fields including tool_calls_json
+        def fetch_history(limit: 7, max_tokens: nil, include_tool_calls: false, session_id: nil, siblings: false)
+          # Select all fields including tool_calls_json + session provenance
           fields_sql = %w[prompt answer tool_call_count execution_time timestamp tool_calls_json
-                          created_at].join ','
+                          created_at session_id].join ','
+
+          where = []
+          binds = []
+          if siblings
+            # "What did OTHER sessions do?" — every session-bound entry not ours.
+            own = session_id || Mnemosyne.current_session_id
+            where << 'session_id IS NOT NULL'
+            if own
+              where << 'session_id != ?'
+              binds << own
+            end
+          elsif session_id
+            where << 'session_id = ?'
+            binds << session_id
+          end
+          where_sql = where.empty? ? '' : "WHERE #{where.join(' AND ')} "
+
           entries = Mnemosyne.db.execute(
-            "SELECT #{fields_sql} FROM entries ORDER BY id DESC LIMIT ?", [limit]
+            "SELECT #{fields_sql} FROM entries #{where_sql}ORDER BY id DESC LIMIT ?", binds + [limit]
           ).map { |entry| entry.transform_keys!(&:to_sym) }
 
           # Process tool calls with priority-based filtering if requested
@@ -67,7 +84,8 @@ class Mnemosyne
                    tool_calls: [],
                    task_id: nil,
                    step_id: nil,
-                   mode: nil)
+                   mode: nil,
+                   session_id: nil)
           # Set operational mode if specified
           set_operational_mode mode if mode
 
@@ -82,13 +100,14 @@ class Mnemosyne
           # TODO: filter content
           # Calculate tool call count
           actual_tool_call_count = truncated_tool_calls.is_a?(Array) ? truncated_tool_calls.size : 0
+          sid = session_id || Mnemosyne.current_session_id
 
           # Store prompt, answer, and tool_calls in their respective fields
           entry_id = Mnemosyne.db.execute \
             'INSERT INTO entries (prompt, answer, tags, file, selection, execution_time, ' \
-            'tool_call_count, tool_calls_json, created_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)',
+            'tool_call_count, tool_calls_json, session_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)',
             [prompt, answer, Array(tags).join(','), file,
-             attachments.to_json, execution_time, actual_tool_call_count, truncated_tool_calls.to_json]
+             attachments.to_json, execution_time, actual_tool_call_count, truncated_tool_calls.to_json, sid]
           entry_id = Mnemosyne.db.last_insert_row_id
           entry_id
         end
@@ -174,7 +193,7 @@ class Mnemosyne
 
         def search(query, limit: 5)
           entries = Mnemosyne.db.execute \
-            'SELECT prompt, answer, tool_calls_json, created_at FROM entries WHERE ' \
+            'SELECT prompt, answer, tool_calls_json, created_at, session_id FROM entries WHERE ' \
             'tags LIKE ? OR prompt LIKE ? OR file LIKE ? ORDER BY id DESC LIMIT ?',
             ["%#{query}%", "%#{query}%", "%#{query}%", limit]
 

@@ -85,25 +85,28 @@ module Coniunctio
       end
 
       ephemeral = params[:ephemeral]
-      # The Gist Bus: running sibling flows + broadcasts weave into this turn's
-      # conduit. Ephemeral one-shots (flash conjuration) stay silent — they must
-      # never inhale the live flow society, mirroring how they skip Aegis/manifest.
+      # The Red Thread + Gist Bus: sibling sessions, open sub-goals, and running
+      # companion flows weave into this turn's conduit. Ephemeral one-shots
+      # (flash conjuration) stay silent — they must never inhale the live flow
+      # society, mirroring how they skip Aegis/manifest.
       flow = Thread.current[:aether_flow]
-      concurrent_gist = if flow && !ephemeral
+      concurrent_gist = unless ephemeral
                           parts = []
-                          # Process-level society first: sibling sessions sharing
-                          # this project's æther (the persistent Hydra session
-                          # system),
-                          # then the in-process flows (GistBus). Correspondence —
-                          # the whole project breathes as one, sessions and flows
-                          # alike weave into the same conduit.
-                          session_block = Mnemosyne::Hydra.summary_line(
-                            project: flow[:project], exclude: Mnemosyne.current_session_id
+                          # The Red Thread fires on EVERY non-ephemeral turn, not
+                          # just companion flows: sibling sessions (live + recently
+                          # silent/closed) and open sub-goals weave in so a fresh
+                          # prompt sees what the æther has been doing without being
+                          # re-told. The GistBus then adds in-process companion
+                          # flows when they are breathing in this process.
+                          red_thread = Mnemosyne::RedThread.briefing(
+                            project: flow&.dig(:project), exclude: Mnemosyne.current_session_id
                           )
-                          parts << session_block if session_block
-                          flow_block = GistBus.conduit_block(exclude_id: flow[:id], project: flow[:project],
-                                                             companion: flow[:companion])
-                          parts << flow_block if flow_block
+                          parts << red_thread if red_thread
+                          if flow
+                            flow_block = GistBus.conduit_block(exclude_id: flow[:id], project: flow[:project],
+                                                               companion: flow[:companion])
+                            parts << flow_block if flow_block
+                          end
                           parts.join("\n\n") unless parts.empty?
                         end
 

@@ -31,12 +31,13 @@ require_relative 'corpus'
 require_relative 'import'
 require_relative 'ouroboros'
 require_relative 'flash_aegis'
+require_relative 'red_thread'
 require_relative 'atlas'
 
 class Mnemosyne
-  # The migration cascade below stamps `meta.db_version` up to 19; keep the
+  # The migration cascade below stamps `meta.db_version` up to 20; keep the
   # constant in agreement so "is the schema current?" checks stay truthful.
-  DB_VERSION = 19
+  DB_VERSION = 21
 
   # Single shared SQLite connection, reentrantly guarded. Concurrent Magnum Opus
   # task runners each drive their own engine thread; the connection is shared, so
@@ -662,6 +663,52 @@ end
         db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '19')"
       end
 
+      if 20 > db_version
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '20')"
+      end
+
+      if 21 > db_version
+        # Revive the dead entries.session_id column: it existed only in some
+        # live DBs (orphaned by a manual ALTER) — never created by a migration,
+        # never written by Chronicle.record, never read by fetch_history.
+        entry_cols = db.execute('PRAGMA table_info(entries)').map { |r| r['name'] }
+        db.execute 'ALTER TABLE entries ADD COLUMN session_id TEXT' unless entry_cols.include?('session_id')
+        db.execute 'CREATE INDEX IF NOT EXISTS idx_entries_session ON entries (session_id)'
+        db.execute "INSERT OR REPLACE INTO meta (key, value) VALUES ('db_version', '21')"
+      end
+
+      # Self-healing aethernaut_manifest. Its canonical creation block sits
+      # nested inside `if 14 > db_version` (a historical de-indentation that
+      # folded the v15 gate into the v14 gate), so DBs already past v14 never
+      # minted the table while the rest of the cascade ran fine. Recreate the
+      # table (with the session_id binding column) on every open, independent of
+      # the stamped db_version — the same self-healing posture aegis_state gets
+      # below.
+      manifest_table = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='aethernaut_manifest'").first
+      if manifest_table.nil?
+        db.execute <<~SQL
+          CREATE TABLE aethernaut_manifest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT DEFAULT 'suggestion',
+            aspect TEXT DEFAULT 'aegis',
+            glyph TEXT,
+            title TEXT,
+            body TEXT,
+            action TEXT,
+            payload TEXT DEFAULT '{}',
+            status TEXT DEFAULT 'pending',
+            priority INTEGER DEFAULT 0,
+            source TEXT,
+            session_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+      end
+      manifest_cols = db.execute('PRAGMA table_info(aethernaut_manifest)').map { |col| col['name'] }
+      db.execute 'ALTER TABLE aethernaut_manifest ADD COLUMN session_id TEXT' unless manifest_cols.include?('session_id')
+      db.execute 'CREATE INDEX IF NOT EXISTS idx_aethernaut_manifest_session ON aethernaut_manifest (session_id)'
+
       # Self-healing aegis_state. The Aegis orientation always reads/writes the
       # canonical append-only shape below, independent of the stamped
       # db_version. A divergent fork — notably the Swift port, which mints a
@@ -865,15 +912,15 @@ end
 
     # -- AethernautManifest (Pythia's agenda) --
     def agenda(status: nil, limit: nil) = AethernautManifest.agenda(status: status, limit: limit)
-    def enqueue_intent(kind:, title:, aspect: nil, glyph: nil, body: nil, action: nil, payload: {}, priority: 0, source: nil) = AethernautManifest.enqueue(kind: kind, title: title, aspect: aspect, glyph: glyph, body: body, action: action, payload: payload, priority: priority, source: source)
+    def enqueue_intent(kind:, title:, aspect: nil, glyph: nil, body: nil, action: nil, payload: {}, priority: 0, source: nil, session_id: nil) = AethernautManifest.enqueue(kind: kind, title: title, aspect: aspect, glyph: glyph, body: body, action: action, payload: payload, priority: priority, source: source, session_id: session_id)
     def intent_act(intention) = AethernautManifest.act(intention)
     def intent_complete(id) = AethernautManifest.complete(id)
     def intent_dismiss(id, reason: nil) = AethernautManifest.dismiss(id, reason: reason)
     def intent_promote(id, priority) = AethernautManifest.promote(id, priority)
 
     # -- Chronicle --
-    def fetch_history(limit: 7, max_tokens: nil, include_tool_calls: false) = Chronicle.fetch_history(limit: limit, max_tokens: max_tokens, include_tool_calls: include_tool_calls)
-    def record(prompt: '', attachments: [], tags: nil, file: nil, execution_time: 0, tool_call_count: 0, timestamp: nil, answer: '', tool_calls: [], task_id: nil, step_id: nil, mode: nil) = Chronicle.record(prompt: prompt, attachments: attachments, tags: tags, file: file, execution_time: execution_time, tool_call_count: tool_call_count, timestamp: timestamp, answer: answer, tool_calls: tool_calls, task_id: task_id, step_id: step_id, mode: mode)
+    def fetch_history(limit: 7, max_tokens: nil, include_tool_calls: false, session_id: nil, siblings: false) = Chronicle.fetch_history(limit: limit, max_tokens: max_tokens, include_tool_calls: include_tool_calls, session_id: session_id, siblings: siblings)
+    def record(prompt: '', attachments: [], tags: nil, file: nil, execution_time: 0, tool_call_count: 0, timestamp: nil, answer: '', tool_calls: [], task_id: nil, step_id: nil, mode: nil, session_id: nil) = Chronicle.record(prompt: prompt, attachments: attachments, tags: tags, file: file, execution_time: execution_time, tool_call_count: tool_call_count, timestamp: timestamp, answer: answer, tool_calls: tool_calls, task_id: task_id, step_id: step_id, mode: mode, session_id: session_id)
     def truncate_tool_calls_by_priority(tool_calls) = Chronicle.truncate_tool_calls_by_priority(tool_calls)
     def truncate_hash_by_priority(hash, base_limit) = Chronicle.truncate_hash_by_priority(hash, base_limit)
     def get_entry(entry_id) = Chronicle.get_entry(entry_id)

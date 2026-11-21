@@ -39,7 +39,7 @@ class Mnemosyne
     class << self
       # Sign a new intention into the manifest.
       def enqueue(kind:, title:, aspect: nil, glyph: nil, body: nil, action: nil,
-                  payload: {}, priority: 0, source: nil)
+                  payload: {}, priority: 0, source: nil, session_id: nil)
         kind = kind.to_sym
         kind = :suggestion unless KINDS.key?(kind)
         glyph ||= KINDS[kind][:glyph]
@@ -49,12 +49,13 @@ class Mnemosyne
         db = Mnemosyne.db
         db.execute <<~SQL,
           INSERT INTO aethernaut_manifest
-            (kind, aspect, glyph, title, body, action, payload, status, priority, source, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            (kind, aspect, glyph, title, body, action, payload, status, priority, source, session_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         SQL
                     [kind.to_s, aspect, glyph, title.to_s, body.to_s,
                      (action || KINDS[kind][:default_action]).to_s,
-                     JSON.generate(payload || {}), priority.to_i, source.to_s]
+                     JSON.generate(payload || {}), priority.to_i, source.to_s,
+                     session_id&.to_s]
         find(db.last_insert_row_id)
       end
 
@@ -156,6 +157,45 @@ class Mnemosyne
         Mnemosyne.db.get_first_value(
           "SELECT COUNT(*) FROM aethernaut_manifest WHERE status IN (#{placeholders})", statuses
         ).to_i
+      end
+
+      # Intentions signed by (or bound to) one session — the "unterziel → session"
+      # link, so each sub-goal remembers which head was working it.
+      def for_session(session_id, status: ACTIVE_STATUSES, limit: nil)
+        return [] if session_id.to_s.empty?
+
+        statuses = Array(status).map(&:to_s)
+        placeholders = statuses.map { '?' }.join(', ')
+        rows = Mnemosyne.db.execute(
+          "SELECT * FROM aethernaut_manifest WHERE session_id = ? AND status IN (#{placeholders}) " \
+          'ORDER BY priority DESC, id ASC',
+          [session_id.to_s, *statuses]
+        )
+        rows = rows.first(limit.to_i) if limit
+        rows.map { |r| materialize(r) }
+      end
+
+      # Bind an intention to a session, retroactively or at enqueue time.
+      def bind_session(id, session_id)
+        Mnemosyne.db.execute(
+          'UPDATE aethernaut_manifest SET session_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [session_id&.to_s, id]
+        )
+        find(id)
+      end
+
+      # The red thread's goal lens: the open sub-goals still awaiting action,
+      # each with its bound session (if any) — so a fresh head sees the shared
+      # agenda, not a private copy.
+      def thread_block(limit: 5)
+        intentions = agenda(limit: limit)
+        return nil if intentions.empty?
+
+        lines = intentions.map do |i|
+          binding = i[:session_id] ? " [session: #{i[:session_id]}]" : ''
+          "  - #{i[:glyph]} #{i[:title]}#{binding}"
+        end
+        "OPEN SUB-GOALS (AethernautManifest, #{intentions.size}):\n#{lines.join("\n")}"
       end
 
       private

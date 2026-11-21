@@ -373,6 +373,44 @@ class Mnemosyne
         end
         "CONCURRENT SESSIONS (#{sessions.size}): #{parts.join(' | ')}"
       end
+
+      # The red thread's roster lens: recent sessions (live first, then
+      # recently silent/closed), each with its last-known course. Unlike
+      # `summary_line` (live siblings only), this surfaces what a *finished or
+      # orphaned* sibling was last working on — so a fresh head can pick up the
+      # thread without being re-told. `all_sessions` already sorts last_seen
+      # DESC, so the freshest rows are windowed; each is tagged live/stale/closed.
+      def thread_block(project: nil, exclude: nil, limit: 6, max_aegis: 100)
+        rows = all_sessions(project: project, exclude: exclude).first(limit.to_i)
+        return nil if rows.empty?
+
+        live = rows.select { |s| s[:effective_status] == 'active' }
+        gone = rows.reject { |s| s[:effective_status] == 'active' }
+
+        blocks = []
+        unless live.empty?
+          lines = live.map do |s|
+            name = s[:label].to_s.strip
+            name = s[:session_id].to_s if name.empty?
+            aegis = s[:aegis_summary].to_s.strip
+            "  - #{name}#{aegis.empty? ? '' : " — #{aegis[0, max_aegis]}"}"
+          end
+          blocks << "SIBLING SESSIONS — live (#{live.size}):\n#{lines.join("\n")}"
+        end
+
+        unless gone.empty?
+          lines = gone.map do |s|
+            name = s[:label].to_s.strip
+            name = s[:session_id].to_s if name.empty?
+            status = s[:effective_status] == 'stale' ? 'stale' : 'closed'
+            aegis = s[:aegis_summary].to_s.strip
+            "  - #{name} [#{status}]#{aegis.empty? ? '' : " — #{aegis[0, max_aegis]}"}"
+          end
+          blocks << "SIBLING SESSIONS — recently silent/closed (#{gone.size}):\n#{lines.join("\n")}"
+        end
+
+        blocks.join("\n") unless blocks.empty?
+      end
     end
   end
 end
