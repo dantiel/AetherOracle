@@ -1,0 +1,222 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# advance — the commit-advance-all release tool for the AetherOracle ruby brain.
+#
+# Pure stdlib (LINK tier): runs with any Ruby, no gems, no bundle.
+# Turns the oracle's manual release cycle into one console command:
+#
+#   commit   -> git add -A && git commit        (save work)
+#   advance  -> bump version + build/install gem (deploy the bump)
+#   all      -> commit + advance + push         (full ship)
+#
+#   advance status               show version + git status (default)
+#   advance version              print current version
+#   advance commit [-m MSG]      stage all changes and commit
+#   advance advance [p|minor|major]  bump version, rebuild + reinstall gem
+#   advance bump   [p|minor|major]  alias of `advance`
+#   advance all    [p|minor|major]  full release: bump, commit, push
+#   advance push                  push the current branch to origin
+
+require 'open3'
+require 'fileutils'
+
+REPO_ROOT    = File.expand_path('..', __dir__)
+VERSION_FILE = File.join(REPO_ROOT, 'lib', 'aetheroracle', 'version.rb')
+GEMSPEC      = File.join(REPO_ROOT, 'aetheroracle.gemspec')
+
+module Advance
+  module_function
+
+  # --- process helpers ----------------------------------------------------
+
+  def sh(*cmd)
+    cmd = cmd.flatten.compact.map(&:to_s)
+    puts "  $ #{cmd.join(' ')}"
+    out, err, status = Open3.capture3(*cmd, chdir: REPO_ROOT)
+    puts err unless err.to_s.strip.empty?
+    [out + err, status.success?]
+  end
+
+  def git(*args)
+    out, ok = sh('git', *args)
+    [out.strip, ok]
+  end
+
+  def die(msg)
+    warn "[advance] #{msg}"
+    exit 1
+  end
+
+  def ensure_repo!
+    die 'not a git repository' unless File.directory?(File.join(REPO_ROOT, '.git'))
+  end
+
+  # --- version -------------------------------------------------------------
+
+  def version_file_content
+    File.read(VERSION_FILE)
+  end
+
+  def current_version
+    m = version_file_content.match(/VERSION\s*=\s*['"](\d+)\.(\d+)\.(\d+)['"]/)
+    die "cannot parse VERSION in #{VERSION_FILE}" unless m
+    [m[1].to_i, m[2].to_i, m[3].to_i]
+  end
+
+  def version_string(v = current_version)
+    v.join('.')
+  end
+
+  def write_version(major, minor, patch)
+    content = version_file_content.sub(
+      /(VERSION\s*=\s*)['"]\d+\.\d+\.\d+['"]/,
+      "\\1'#{major}.#{minor}.#{patch}'"
+    )
+    File.write(VERSION_FILE, content)
+  end
+
+  def bump(part)
+    major, minor, patch = current_version
+    case part.to_s
+    when 'major' then [major + 1, 0, 0]
+    when 'minor' then [major, minor + 1, 0]
+    else              [major, minor, patch + 1]
+    end
+  end
+
+  # --- git -----------------------------------------------------------------
+
+  def changed_files
+    out, = git('status', '--porcelain')
+    out.lines.map { |l| l.sub(/^..\s*/, '').strip }.reject(&:empty?)
+  end
+
+  def default_message
+    files = changed_files
+    return 'chore: update' if files.empty?
+    head = files.first(6).join(', ')
+    head += " (+#{files.length - 6} more)" if files.length > 6
+    "chore: #{head}"
+  end
+
+  def commit(message)
+    message = message || default_message
+    ensure_repo!
+    die 'nothing to commit (working tree clean)' if changed_files.empty?
+    git('add', '-A') or die 'git add -A failed'
+    git('commit', '-m', message) or die 'git commit failed'
+  end
+
+  def push
+    ensure_repo!
+    branch, ok = git('rev-parse', '--abbrev-ref', 'HEAD')
+    die 'cannot resolve current branch' unless ok
+    die 'detached HEAD — nothing to push' if branch.empty?
+    git('push', 'origin', branch) or die "git push origin #{branch} failed"
+  end
+
+  # --- gem deploy ----------------------------------------------------------
+
+  def gem_filename(version)
+    "aetheroracle-#{version}.gem"
+  end
+
+  def build_gem(version)
+    out, ok = sh('gem', 'build', GEMSPEC)
+    die 'gem build failed' unless ok
+    # `gem build` may emit a slightly different name; resolve the artifact.
+    built = File.join(REPO_ROOT, gem_filename(version))
+    die "built gem #{gem_filename(version)} not found" unless File.file?(built)
+    built
+  end
+
+  def install_gem(gem_path)
+    out, ok = sh('gem', 'install', '--local', '--no-document', gem_path)
+    die 'gem install failed' unless ok
+  end
+
+  # The `advance` step: bump the version, rebuild the gem, reinstall it.
+  # The binstub auto-activates the highest installed version, so this is what
+  # makes a ruby/ change go live in the running editor/daemon after a restart.
+  def advance(part)
+    old = version_string
+    major, minor, patch = bump(part)
+    write_version(major, minor, patch)
+    new = version_string([major, minor, patch])
+    puts "[advance] version #{old} -> #{new}"
+
+    gem_path = build_gem(new)
+    install_gem(gem_path)
+    puts "[advance] installed aetheroracle-#{new}"
+  end
+
+  # --- modes ---------------------------------------------------------------
+
+  def status
+    ensure_repo!
+    puts "[advance] version #{version_string}  (branch #{git('rev-parse', '--abbrev-ref', 'HEAD')[0]})"
+    puts
+    out, = git('status', '--short')
+    puts(out.empty? ? '  working tree clean' : out)
+  end
+
+  def usage
+    puts <<~HELP
+      advance — commit-advance-all release tool (pure stdlib, LINK tier)
+
+        advance                      show version + git status
+        advance version              print current version
+        advance commit [-m MSG]      stage all changes and commit
+        advance advance [LEVEL]      bump version, rebuild + reinstall gem
+        advance bump [LEVEL]         alias of `advance`
+        advance all [LEVEL]          full release: advance + commit + push
+        advance push                 push current branch to origin
+
+      LEVEL: patch (default) | minor | major
+    HELP
+  end
+
+  def run(argv)
+    argv = argv.dup
+    cmd = argv.shift || 'status'
+
+    case cmd
+    when 'version'
+      puts version_string
+    when 'status'
+      status
+    when 'commit'
+      message = nil
+      i = argv.index('-m') || argv.index('--message')
+      message = argv[i + 1] if i
+      commit(message)
+      puts "[advance] committed"
+    when 'advance', 'bump'
+      level = argv.first
+      advance(level)
+    when 'all'
+      level = nil
+      message = nil
+      i = argv.index('-m') || argv.index('--message')
+      message = argv[i + 1] if i
+      level = (argv - ['-m', '--message'] - [message].compact).first
+      advance(level)
+      commit(message || "chore(release): bump to #{version_string}")
+      push
+      puts "[advance] shipped aetheroracle-#{version_string}"
+    when 'push'
+      push
+      puts '[advance] pushed'
+    when 'help', '-h', '--help'
+      usage
+    else
+      warn "[advance] unknown command: #{cmd}"
+      usage
+      exit 1
+    end
+    0
+  end
+end
+
+exit Advance.run(ARGV)
