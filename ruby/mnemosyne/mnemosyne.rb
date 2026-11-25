@@ -212,10 +212,14 @@ class Mnemosyne
       # durable against process death, only an OS crash may lose the tail.
       if mode == 'wal'
         db.execute('PRAGMA synchronous=NORMAL')
-        # Auto-checkpoint much earlier than SQLite's 1000-page default so a
-        # crashed sibling never leaves a multi-hundred-MB -wal for the next
-        # opener to recover/checkpoint (the "instances freeze at open" hang).
-        db.execute('PRAGMA wal_autocheckpoint=200')
+        # Auto-checkpoint DISABLED (0). With wal_autocheckpoint=N>0, once the WAL
+        # exceeds N pages EVERY commit fires a synchronous PASSIVE checkpoint that
+        # re-copies the (possibly multi-GB) WAL while holding the write lock -- so
+        # a pinned read-mark (an orphaned/stuck sibling session) turns every other
+        # session's `remember`/BEGIN IMMEDIATE into a busy_timeout queue and the
+        # turn appears to hang. We checkpoint explicitly instead, non-blocking
+        # PASSIVE, at safe points (reset_connection!, corpus.sound! end).
+        db.execute('PRAGMA wal_autocheckpoint=0')
       end
       mode
     rescue SQLite3::Exception
@@ -305,6 +309,22 @@ class Mnemosyne
       db.execute("PRAGMA wal_checkpoint(#{mode})")
     rescue StandardError
       nil
+    end
+
+    # Throttle for end-of-turn WAL checkpoints (seconds). With
+    # wal_autocheckpoint=0 the WAL only shrinks when someone asks — corpus.sound!
+    # and reset_connection! do it, but a long-lived daemon that only ever chats
+    # would grow the WAL without bound and slowly re-introduce the very commit
+    # stalls we disabled. This runs a non-blocking PASSIVE checkpoint at most
+    # every CHECKPOINT_EVERY seconds; PASSIVE never waits on a sibling reader, so
+    # a pinned read-mark can't turn it into a hang.
+    CHECKPOINT_EVERY = 30.0
+
+    def checkpoint_if_due!
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return if now - Thread.current[:mnemosyne_last_checkpoint].to_f < CHECKPOINT_EVERY
+      Thread.current[:mnemosyne_last_checkpoint] = now
+      checkpoint!(:passive)
     end
 
     def migrate(db)
@@ -721,7 +741,7 @@ end
       aegis_sql = aegis_table && aegis_table['sql'].to_s
       aegis_columns = db.execute('PRAGMA table_info(aegis_state)').map { |col| col['name'] }
       canonical_columns = %w[id tags summary temperature created_at working_dir thinking reasoning_effort model thinking_str]
-      singleton = aegis_sql.include?('CHECK (id = 1)') || aegis_sql.include?('CHECK(id=1)')
+      singleton = aegis_sql.to_s.include?('CHECK (id = 1)') || aegis_sql.to_s.include?('CHECK(id=1)')
       missing = %w[tags summary temperature created_at working_dir thinking_str] - aegis_columns
 
       if aegis_table.nil?
@@ -774,6 +794,87 @@ end
         db.execute "INSERT INTO aegis_state (#{canonical_columns[1..].join(', ')}) SELECT #{selects.join(', ')} FROM aegis_state_legacy"
         db.execute 'DROP TABLE aegis_state_legacy'
       end
+
+      # Self-healing token substrate (Stufe 2/3 of the cascade). `fragments`
+      # and `memory_tokens` are canonically created inside `if 11 > db_version`;
+      # a divergent fork (notably the Swift port, which stamps its own meta
+      # version at or above every gate) can leave a DB past v11 with neither
+      # table while the rest of the cascade ran fine, so every vector query
+      # dies with "no such table: memory_tokens". Recreate both on every open,
+      # un-gated -- the same self-healing posture aethernaut_manifest and
+      # aegis_state get above. `memory_tokens` carries the v12 `kind` channel
+      # column; the indexes are idempotent.
+      fragments_table = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='fragments'").first
+      if fragments_table.nil?
+        db.execute <<~SQL
+          CREATE TABLE fragments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT,
+            tags TEXT,
+            links TEXT,
+            context_path TEXT,
+            ttl INTEGER DEFAULT 3600,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        SQL
+      end
+
+      tokens_table = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='memory_tokens'").first
+      if tokens_table.nil?
+        db.execute <<~SQL
+          CREATE TABLE memory_tokens (
+            unit_type TEXT NOT NULL,
+            unit_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            weight REAL NOT NULL,
+            kind TEXT DEFAULT 'content'
+          );
+        SQL
+      end
+      token_cols = db.execute('PRAGMA table_info(memory_tokens)').map { |col| col['name'] }
+      db.execute "ALTER TABLE memory_tokens ADD COLUMN kind TEXT DEFAULT 'content'" unless token_cols.include?('kind')
+      db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_token ON memory_tokens (token)'
+      db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_unit ON memory_tokens (unit_type, unit_id)'
+      db.execute 'CREATE INDEX IF NOT EXISTS idx_memory_tokens_kind ON memory_tokens (kind)'
+
+      # Self-healing session_id type normalization. The sqlite3 gem binds an
+      # ASCII-8BIT (BINARY-encoded) Ruby String as a BLOB; legacy code built
+      # session ids from Socket.gethostname (BINARY on Windows) and stored them
+      # as BLOB. A BLOB session_id never `=` a TEXT bind under SQLite's UNIQUE /
+      # WHERE, so Hydra.register's `ON CONFLICT(session_id)` misses the old row
+      # and INSERTS a duplicate (same label, fresh id), while fetch_history /
+      # load_state silently return empty. Collapse value-duplicates, then cast
+      # every remaining BLOB to TEXT. Runs on every open (ungated) so a still-
+      # running legacy process re-introducing BLOB rows is cleaned on next boot.
+      begin
+        dups = db.execute(<<~SQL)
+          SELECT CAST(session_id AS TEXT) AS sid
+            FROM aether_sessions
+           GROUP BY CAST(session_id AS TEXT)
+          HAVING COUNT(*) > 1
+        SQL
+        dups.each do |d|
+          sid = d['sid'].to_s
+          rows = db.execute(
+            'SELECT id, status, state_json, last_seen FROM aether_sessions WHERE CAST(session_id AS TEXT) = ?',
+            [sid]
+          )
+          next if rows.size <= 1
+          keep = rows.max_by do |r|
+            [ (r['status'] == 'active' ? 1 : 0),
+              (r['state_json'].to_s.empty? ? 0 : 1),
+              r['last_seen'].to_s ]
+          end
+          rows.each do |r|
+            next if r['id'] == keep['id']
+            db.execute('DELETE FROM aether_sessions WHERE id = ?', [r['id']])
+          end
+        end
+        db.execute "UPDATE aether_sessions SET session_id = CAST(session_id AS TEXT) WHERE typeof(session_id) = 'blob'"
+        db.execute "UPDATE entries SET session_id = CAST(session_id AS TEXT) WHERE typeof(session_id) = 'blob'"
+      rescue SQLite3::Exception
+        nil
+      end
     end
 
     def tokenize(text)
@@ -809,7 +910,7 @@ end
     def heartbeat_session(session_id: nil, aegis_summary: nil) = Hydra.heartbeat(session_id: session_id, aegis_summary: aegis_summary)
     def close_session(session_id: nil) = Hydra.close(session_id: session_id)
     def active_sessions(project: nil, within: Hydra::STALE_AFTER, exclude: nil) = Hydra.active_sessions(project: project, within: within, exclude: exclude)
-    def all_sessions(project: nil, exclude: nil) = Hydra.all_sessions(project: project, exclude: exclude)
+    def all_sessions(project: nil, exclude: nil, hide_empty: false) = Hydra.all_sessions(project: project, exclude: exclude, hide_empty: hide_empty)
     def kick_session(session_id:) = Hydra.kick!(session_id: session_id)
     def kill_session(session_id:) = Hydra.kill!(session_id: session_id)
     def save_session_state(session_id:, state: nil) = Hydra.save_state(session_id: session_id, state: state)

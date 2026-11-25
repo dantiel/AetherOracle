@@ -27,6 +27,7 @@ _daemon_probe.rb
 tmp_shell_smoke.rb
 grep_out*.txt
 probe_*.rb
+probe_*.txt
 kill_ae.ps1
 
 # Scratch artifacts (stray shell-redirect outputs)

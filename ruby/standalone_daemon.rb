@@ -242,6 +242,27 @@ class TurnGate
   end
 end
 
+# Recursively coerce every String to valid UTF-8 (invalid bytes → U+FFFD) so no
+# frame can ever raise inside `to_json`. Command output on German/CP850 Windows
+# arrives as ASCII-8BIT with high bytes; one such byte used to kill the frame
+# and leave the client waiting forever.
+def deep_scrub(obj)
+  case obj
+  when String
+    begin
+      obj.encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+    rescue StandardError
+      obj.scrub('?')
+    end
+  when Hash
+    obj.each_with_object({}) { |(k, v), h| h[deep_scrub(k)] = deep_scrub(v) }
+  when Array
+    obj.map { |v| deep_scrub(v) }
+  else
+    obj
+  end
+end
+
 class PipeStream
   def initialize(out = FRAME_IO)
     @out = out
@@ -259,9 +280,18 @@ class PipeStream
       payload:    event['result'],
       request_id: Thread.current[:aether_request_id]
     }
+    # `event['result']` may carry raw command output (CP850 bytes); scrub it so
+    # `to_json` cannot raise and kill the status frame mid-flight.
+    frame = deep_scrub(frame)
+    # Route to the request's own transport: in ÆtherLimen socket mode the
+    # worker carries `Thread.current[:aether_sink]` (the connection's socket);
+    # only STDIN/STDOUT mode falls back to the daemon's stdout. Writing to
+    # STDOUT unconditionally here dropped every status frame (tool_starting /
+    # tool_completed / thinking) once the app moved to the socket transport.
+    sink = Thread.current[:aether_sink] || @out
     FRAME_MUTEX.synchronize do
-      @out.write(frame.to_json + "\n")
-      @out.flush
+      sink.write(frame.to_json + "\n")
+      sink.flush
     end
   rescue StandardError => e
     warn "PipeStream#send failed: #{e.message}"
@@ -380,7 +410,7 @@ class StandaloneDaemon
   # wait behind a running computation: the UI's confirm has to answer at once.
   CONTROL_COMMANDS = %w[
     ping activate_context interrupt pause_turn resume_turn weave_turn
-    aegis history get_note remove_note usage
+    aegis history sessions get_note remove_note usage
     list_tasks create_task remove_task recall user_response
     seal_create seal_list seal_status seal_delegate
     task_detail tokenize
@@ -427,7 +457,7 @@ class StandaloneDaemon
     # carried into the worker). One brain, many eyes, one sink per request.
     sink = Thread.current[:aether_sink] || FRAME_IO
     FRAME_MUTEX.synchronize do
-      sink.write(obj.to_json + "\n")
+      sink.write(deep_scrub(obj).to_json + "\n")
       sink.flush
     end
   rescue StandardError => e
@@ -989,7 +1019,9 @@ class StandaloneDaemon
     when 'remove_note'
       Mnemosyne.remove_note(args['id'])
     when 'history'
-      Mnemosyne.fetch_history(limit: args.fetch('limit', 7), include_tool_calls: args.fetch('include_tool_calls', false))
+      history_with_state_fallback(args)
+    when 'sessions'
+      list_sessions
 
     # -- Aegis --
     when 'aegis'
@@ -1102,6 +1134,159 @@ class StandaloneDaemon
     else
       { error: "Unknown command: #{command}" }
     end
+  end
+
+  # Enumerate this project's sessions from the Hydra registry — one row per
+  # session with its turn count and a first-prompt preview — so the native
+  # editor can offer "continue a previous session". Reads the durable state_json
+  # transcript because legacy chronicle rows predate session_id attribution;
+  # the registry is the authoritative session list for this project's db.
+  def list_sessions
+    rows = Mnemosyne.db.execute(<<~SQL).map { |r| r.transform_keys(&:to_sym) }
+      SELECT session_id, label, aegis_summary, status, started_at, last_seen, state_json,
+             CAST((julianday('now') - julianday(last_seen)) * 86400 AS INTEGER) AS age_seconds
+        FROM aether_sessions
+       WHERE state_json IS NOT NULL AND state_json != ''
+       ORDER BY last_seen DESC
+    SQL
+
+    rows.map do |s|
+      first_prompt, turns = summarize_session_state(s[:state_json])
+      {
+        session_id: s[:session_id],
+        label: s[:label],
+        first_prompt: first_prompt,
+        turns: turns,
+        aegis_summary: s[:aegis_summary],
+        status: s[:status],
+        live: s[:status] == 'active' && s[:age_seconds].to_i <= Mnemosyne::Hydra::STALE_AFTER,
+        started_at: s[:started_at],
+        last_seen: s[:last_seen]
+      }
+    end
+  end
+
+  # Extract a first-user-prompt preview + turn count from a session's durable
+  # state_json (OpenAI-style role/content messages). Returns ['', 0] when the
+  # snapshot is empty or unparseable.
+  def summarize_session_state(json)
+    return ['', 0] if json.nil? || json.to_s.strip.empty?
+
+    state = Mnemosyne.safe_parse_json(json, nil)
+    return ['', 0] unless state.is_a?(Hash)
+
+    messages = state['messages'] || state[:messages]
+    return ['', 0] unless messages.is_a?(Array)
+
+    first_prompt = ''
+    turns = 0
+    messages.each do |m|
+      m = m.transform_keys(&:to_sym) if m.respond_to?(:transform_keys)
+      role = m[:role].to_s
+      text = case (c = m[:content])
+             when String then c
+             when Array  then c.map { |p| p.is_a?(Hash) ? (p['text'] || p[:text] || p['content'] || p[:content]).to_s : p.to_s }.join(' ')
+             else c.to_s
+             end
+      text = text.to_s.strip
+      first_prompt = text if role == 'user' && first_prompt.empty? && !text.empty?
+      turns += 1 if role == 'user' || (role == 'assistant' && !text.empty?)
+    end
+    [first_prompt, turns]
+  rescue StandardError
+    ['', 0]
+  end
+
+  # `history` with a state_json fallback: legacy sessions never attributed their
+  # chronicle rows (entries.session_id is NULL), so the session-scoped query is
+  # empty. Fall back to the durable crash-resume transcript (state_json) and
+  # rebuild {prompt, answer, tool_calls, logs} entries so the editor can restore
+  # a session's conversation — including the tool calls of a turn that is still
+  # in flight (the oracle checkpoints state_json every tool round).
+  def history_with_state_fallback(args)
+    limit = args.fetch('limit', 7)
+    include_tool_calls = args.fetch('include_tool_calls', false)
+    sid = args['session_id']
+
+    entries = Mnemosyne.fetch_history(limit: limit, include_tool_calls: include_tool_calls, session_id: sid)
+    return entries unless entries.nil? || entries.empty?
+    return [] if sid.nil? || sid.to_s.empty?
+
+    state = Mnemosyne::Hydra.load_state(session_id: sid)
+    return [] unless state.is_a?(Hash)
+
+    reconstruct_history_from_state(state, include_tool_calls: include_tool_calls)
+  end
+
+  # Rebuild chronicle-shaped entries from a crash-resume transcript. Each `user`
+  # message opens a turn; the `assistant` text that follows closes it; `tool`
+  # messages consume the ordered tool_results list so each turn keeps its
+  # instrumentum cards (matching the editor's live renderer). `answer` is the
+  # final partial answer of an interrupted turn.
+  def reconstruct_history_from_state(state, include_tool_calls: false)
+    messages = state[:messages] || state['messages'] || []
+    return [] unless messages.is_a?(Array) && !messages.empty?
+
+    tool_results = state[:tool_results] || state['tool_results'] || []
+    prelude = state[:arts] && (state[:arts][:prelude] || state[:arts]['prelude'])
+    logs = Array(prelude).map { |t| { type: 'prelude', data: t.to_s } }
+
+    entries = []
+    cur = nil
+    tr_idx = 0
+
+    flush = lambda do
+      if cur && (!cur[:prompt].to_s.empty? || !cur[:answer].to_s.empty? ||
+                 (include_tool_calls && !cur[:tool_calls].empty?))
+        entries << cur
+      end
+      cur = nil
+    end
+
+    messages.each do |m|
+      m = m.transform_keys(&:to_sym) if m.respond_to?(:transform_keys)
+      role = m[:role].to_s
+      text = state_text(m[:content])
+
+      case role
+      when 'user'
+        flush.call
+        cur = { prompt: text, answer: '', tool_calls: [], logs: [], created_at: Time.now }
+      when 'assistant'
+        cur ||= { prompt: '', answer: '', tool_calls: [], logs: [], created_at: Time.now }
+        cur[:answer] = text unless text.empty?
+      when 'tool'
+        next unless include_tool_calls && cur
+        tr = tool_results[tr_idx]
+        if tr
+          tr = tr.transform_keys(&:to_sym) if tr.respond_to?(:transform_keys)
+          cur[:tool_calls] << tr
+          tr_idx += 1
+        end
+      end
+    end
+
+    # An interrupted turn leaves a pending prompt with no assistant text yet —
+    # surface it so the editor still shows what was asked (and any tool calls).
+    if cur && (!cur[:prompt].to_s.empty? || (include_tool_calls && !cur[:tool_calls].empty?))
+      cur[:answer] = state[:answer].to_s if cur[:answer].to_s.empty?
+      entries << cur
+    end
+
+    # Prelude logs ride on the final entry (the running turn's reasoning).
+    entries.last[:logs] = logs if entries.any? && !logs.empty?
+
+    entries
+  end
+
+  # OpenAI message content → plain text (string | array of text parts).
+  def state_text(content)
+    return '' if content.nil?
+    return content if content.is_a?(String)
+    if content.is_a?(Array)
+      return content.map { |p| p.is_a?(Hash) ? (p['text'] || p[:text] || p['content'] || p[:content]).to_s : p.to_s }.join(' ')
+    end
+    content.to_s
   end
 
   # Salomo Rex' Autonomie-Loop: drive the critical path one bounded step at a time.

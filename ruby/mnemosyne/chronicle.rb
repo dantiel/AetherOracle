@@ -23,7 +23,7 @@ class Mnemosyne
             end
           elsif session_id
             where << 'session_id = ?'
-            binds << session_id
+            binds << session_id.to_s.force_encoding(Encoding::UTF_8)
           end
           where_sql = where.empty? ? '' : "WHERE #{where.join(' AND ')} "
 
@@ -101,6 +101,7 @@ class Mnemosyne
           # Calculate tool call count
           actual_tool_call_count = truncated_tool_calls.is_a?(Array) ? truncated_tool_calls.size : 0
           sid = session_id || Mnemosyne.current_session_id
+          sid = sid.to_s.force_encoding(Encoding::UTF_8) if sid
 
           # Store prompt, answer, and tool_calls in their respective fields
           entry_id = Mnemosyne.db.execute \

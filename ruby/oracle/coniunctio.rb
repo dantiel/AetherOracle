@@ -133,9 +133,12 @@ module Coniunctio
 
 
     def fetch_and_format_history
-      # Fetch general chat history with tool calls included
+      # Fetch this session's history with tool calls included. Scoped by the live
+      # head so one session does not inhale every other's transcript; when no
+      # session is bound, current_session_id is nil and the query stays global.
       Mnemosyne.fetch_history(limit: MAX_HISTORY_MESSAGES, max_tokens: MAX_HISTORY_TOKENS,
-                              include_tool_calls: true)
+                              include_tool_calls: true,
+                              session_id: Mnemosyne.current_session_id)
                .reverse.flat_map.with_index(&method(:format_history_entry)).reverse
     end
 

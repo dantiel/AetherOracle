@@ -110,13 +110,17 @@ class Oracle
     # `Mnemosyne.current_session_id`).
     STATE_PERSIST_EVERY = 5.0
 
-    def persist_session_state(state, session_id: nil)
+    def persist_session_state(state, session_id: nil, force: false)
       sid = session_id || Thread.current[:hydra_session_id] || Mnemosyne.current_session_id
       return if sid.nil? || sid.to_s.empty?
       return unless defined?(Mnemosyne::Hydra) && Mnemosyne::Hydra.respond_to?(:save_state)
 
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      return if now - Thread.current[:oracle_last_state_persist].to_f < STATE_PERSIST_EVERY
+      # A forced persist (after a tool round or an assistant message) must not be
+      # starved by the throttle: it snapshots a half-turn that would otherwise be
+      # lost when the very next API call errors. The 5s throttle only applies to
+      # the cheap "nothing new yet" persist at the top of each loop iteration.
+      return if !force && now - Thread.current[:oracle_last_state_persist].to_f < STATE_PERSIST_EVERY
 
       Thread.current[:oracle_last_state_persist] = now
       Mnemosyne::Hydra.save_state(session_id: sid, state: state)
@@ -133,6 +137,9 @@ class Oracle
 
       Mnemosyne::Hydra.save_state(session_id: sid, state: nil)
       Thread.current[:oracle_last_state_persist] = 0.0
+      # Bound the WAL now that auto-checkpoint is off — a clean turn is the
+      # natural, infrequent point to ask for a non-blocking PASSIVE checkpoint.
+      Mnemosyne.checkpoint_if_due! if Mnemosyne.respond_to?(:checkpoint_if_due!)
     rescue StandardError
       nil
     end
@@ -220,6 +227,7 @@ class Oracle
     rescue Oracle::RestartException => e
       raise Oracle::RestartException, (ErrorHandler.handle_restart_exception e)
     rescue StandardError => e
+      Mnemosyne.checkpoint_if_due! if Mnemosyne.respond_to?(:checkpoint_if_due!)
       ErrorHandler.handle_divination_error e, tool_results
     ensure
       # One-shot flash revert: restore the prior thinking level unless the oracle
@@ -330,6 +338,17 @@ class Oracle
         arts = collect_prelude_content arts, content
         stream_reasoning_content arts
 
+        # Persist the half-turn the moment the assistant has spoken (incl. any
+        # tool call), so a crash/error inside the subsequent tool execution can't
+        # strand a transcript with a tool_calls message but no tool result.
+        Thread.current[:pause_state] = {
+          messages: messages,
+          tool_results: tool_results,
+          arts: arts,
+          answer: answer
+        }
+        persist_session_state(Thread.current[:pause_state], force: true)
+
         # In reasoning mode, we should NOT process tool calls - reasoning models only provide reasoning
         unless reasoning
           tool_call_result = process_tool_calls tcalls, messages, tool_results, content, exec, arts, stream
@@ -340,6 +359,16 @@ class Oracle
           end
 
           if true == tool_call_result
+            # Tool round completed — snapshot the result so a resume doesn't
+            # re-execute the same call. Force: the 5s throttle must not swallow
+            # the freshest state right before the next (possibly failing) API call.
+            Thread.current[:pause_state] = {
+              messages: messages,
+              tool_results: tool_results,
+              arts: arts,
+              answer: answer
+            }
+            persist_session_state(Thread.current[:pause_state], force: true)
             next
           end
         end

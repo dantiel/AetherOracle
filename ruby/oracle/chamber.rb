@@ -214,6 +214,7 @@ class ÆtherChamber
     @quit = false
     @pending_turn = nil
     @prefill = nil
+    @session_has_content = false
   end
 
   # ------------------------------------------------------------------ run --
@@ -254,7 +255,7 @@ class ÆtherChamber
         break if @quit
       end
     end
-    Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
+    release_session_on_exit
     release_veil!
     farewell
   end
@@ -272,6 +273,97 @@ class ÆtherChamber
     Mnemosyne.register_session(session_id: sid, label: "Chamber·#{Process.pid}",
                                role: 'chamber', project: CONFIG.project_root,
                                pid: Process.pid)
+  rescue StandardError
+    nil
+  end
+
+  # Persist the mid-flight resume_state of an aborted/failed turn onto the
+  # session row so a later /resume-session can restore it and /continue can
+  # pick the turn back up (not just reload its history). Best-effort.
+  def persist_pending_turn(input, persona, resume_state)
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:save_session_state)
+    sid = Mnemosyne.current_session_id
+    return if sid.nil? || sid.to_s.empty?
+
+    @session_has_content = true
+    Mnemosyne.save_session_state(session_id: sid, state: {
+      pending_prompt: input,
+      persona: persona,
+      resume_state: resume_state || {}
+    })
+  rescue StandardError
+    nil
+  end
+
+  # A cleanly finished turn leaves nothing in flight: clear the durable snapshot.
+  def clear_persisted_turn
+    return unless defined?(Mnemosyne) && Mnemosyne.respond_to?(:save_session_state)
+    sid = Mnemosyne.current_session_id
+    return if sid.nil? || sid.to_s.empty?
+
+    Mnemosyne.save_session_state(session_id: sid, state: nil)
+  rescue StandardError
+    nil
+  end
+
+  # Rebuild @pending_turn from a persisted unfinished turn so /continue resumes
+  # the interrupted computation. Returns the restored turn or nil.
+  def restore_pending_turn(state)
+    return nil unless state.is_a?(Hash)
+
+    prompt = state[:pending_prompt] || state['pending_prompt']
+
+    # A chamber-wrapped snapshot (abort/error) carries pending_prompt plus a
+    # nested resume_state. A session *ended mid-turn* (exit/kill) instead left
+    # the Oracle's raw crash-resume snapshot ({messages:, tool_results:, arts:,
+    # answer:}) — no wrapper. Recover the last user prompt from that snapshot so
+    # /continue still resumes the interrupted turn, not just its history.
+    if prompt.nil? || prompt.to_s.strip.empty?
+      messages = state[:messages] || state['messages']
+      return nil unless messages.is_a?(Array) && !messages.empty?
+
+      prompt = last_user_prompt(messages)
+      return nil if prompt.nil? || prompt.to_s.strip.empty?
+
+      @pending_turn = { prompt: prompt, persona: nil, error: nil, aborted: true,
+                        resume_state: state }
+      return @pending_turn
+    end
+
+    persona = state[:persona] || state['persona']
+    resume_state = state[:resume_state] || state['resume_state'] || {}
+    @pending_turn = { prompt: prompt.to_s, persona: persona, error: nil, aborted: true,
+                      resume_state: resume_state }
+  end
+
+  # The most recent non-empty user message in a crash-resume transcript — the
+  # prompt that was in flight when the turn died. Tool results live under
+  # `role: 'tool'`, so a `user` role is a genuine prompt (or, in rare retry
+  # paths, a system-injected continuation nudge).
+  def last_user_prompt(messages)
+    Array(messages).reverse_each do |m|
+      m = m.transform_keys(&:to_sym) if m.respond_to?(:transform_keys)
+      next unless m[:role].to_s == 'user'
+
+      txt = extract_message_text(m[:content])
+      return txt unless txt.to_s.strip.empty?
+    end
+    nil
+  end
+
+  # On exit, an empty session (no completed turn, no unfinished state) is a
+  # phantom head — delete it rather than leave another stale row. A session that
+  # produced anything is closed (kept resumable).
+  def release_session_on_exit
+    return unless defined?(Mnemosyne)
+    sid = Mnemosyne.current_session_id
+    return if sid.nil? || sid.to_s.empty?
+
+    if @session_has_content
+      Mnemosyne.close_session if Mnemosyne.respond_to?(:close_session)
+    elsif Mnemosyne.respond_to?(:kick_session)
+      Mnemosyne.kick_session(session_id: sid)
+    end
   rescue StandardError
     nil
   end
@@ -326,6 +418,7 @@ class ÆtherChamber
     if result[:aborted]
       @pending_turn = { prompt: input, persona: persona, error: nil, aborted: true,
                         resume_state: result[:pause_state] }
+      persist_pending_turn(input, persona, result[:pause_state])
       puts
       puts @palette.warn('  Zug abgebrochen.')
       puts @palette.dim('  /edit bearbeitet die letzte Eingabe, /continue setzt fort.')
@@ -339,6 +432,7 @@ class ÆtherChamber
       err = result[:error] || build_turn_error(answer)
       @pending_turn = { prompt: input, persona: persona, error: err,
                         resume_state: result[:pause_state] }
+      persist_pending_turn(input, persona, result[:pause_state])
       if err
         warn "\e[31m!! #{err.class}: #{err.message}\e[0m"
       else
@@ -349,6 +443,8 @@ class ÆtherChamber
     end
 
     @pending_turn = nil
+    @session_has_content = true
+    clear_persisted_turn
     answer, text_suggestions = CompanionPrograms.extract_companion_suggestions(answer)
     emit_answer(answer)
     @history << { prompt: input, answer: answer, tool_calls: tool_results, created_at: Time.now }
@@ -366,13 +462,35 @@ class ÆtherChamber
   # checkpoint (messages + accumulated tool calls), it is handed back to the
   # oracle as `resume_state`, so /continue keeps every tool call already made and
   # only re-issues the step that failed — a true continuation, not a restart.
-  def continue_turn
+  def continue_turn(remark = nil)
     turn = @pending_turn
     if turn.nil? || turn[:prompt].to_s.strip.empty?
       puts 'Kein unvollendeter Zug zum Fortsetzen.'
       return
     end
     resume_state = turn[:resume_state] || turn[:pause_state]
+
+    # Optional practitioner remark ("/continue <bemerkung>") — woven in as an
+    # extra user message so the resumed turn can be steered mid-flight. With a
+    # mid-flight checkpoint the remark is appended to the saved transcript;
+    # without one it is folded into the re-submitted prompt.
+    remark = remark.to_s.strip
+    unless remark.empty?
+      if resume_state
+        msgs = resume_state[:messages] || resume_state['messages']
+        if msgs.is_a?(Array)
+          resume_state = resume_state.dup
+          msgs = msgs.dup
+          msgs << { role: 'user', content: remark }
+          resume_state[:messages] = msgs
+          resume_state['messages'] = msgs
+        end
+      else
+        prompt = turn[:prompt].to_s.strip
+        turn = turn.merge(prompt: "#{prompt}\n\n#{remark}")
+      end
+    end
+
     if resume_state
       done = Array(resume_state[:tool_results]).size
       puts @palette.dim("  → Fortsetzen: #{turn[:prompt].to_s.strip[0, 60]} (#{done} Werkzeugaufruf(e) werden wiederaufgenommen)")
@@ -1470,13 +1588,26 @@ class ÆtherChamber
               return nil
             when :literal
               ch = (input[:char] || '').to_s
-              if ch.match?(/\A[1-9]\z/)
-                n = ch.to_i - 1
-                return confirm_select_choice(options[n]) if n < options.size
-              elsif single_key && (match = single_key_match(options, ch))
-                return confirm_select_choice(match)
-              elsif allow_custom && ch.match?(/\A[[:graph:]]\z/)
-                custom = +ch
+              # Windows scan-code leak: when the native reader is unavailable
+              # the arrow cluster can surface as bare scan codes (H=up, P=down,
+              # K=left, M=right). Re-map them so the menu navigates instead of
+              # swallowing them as free-text "other" input. Only the first char
+              # is interpreted here — once a custom answer has begun, letters
+              # type literally.
+              case ch
+              when 'H' then idx = (idx - 1) % options.size
+              when 'P' then idx = (idx + 1) % options.size
+              when 'M' then return confirm_select_choice(options[idx])
+              when 'K' then nil # left — no vertical effect in this menu
+              else
+                if ch.match?(/\A[1-9]\z/)
+                  n = ch.to_i - 1
+                  return confirm_select_choice(options[n]) if n < options.size
+                elsif single_key && (match = single_key_match(options, ch))
+                  return confirm_select_choice(match)
+                elsif allow_custom && ch.match?(/\A[[:graph:]]\z/)
+                  custom = +ch
+                end
               end
             end
           when :literal, :paste
@@ -1609,6 +1740,127 @@ class ÆtherChamber
     parts.join(' - ')
   end
 
+  # Fullscreen, scrolling selector for long rosters (the session chooser).
+  # Swaps to the alternate screen buffer, paints a title plus a scrollable
+  # window over the options, and returns the chosen label (nil on Esc). Arrow
+  # keys auto-scroll the window; PgUp/PgDn/Home/End jump; Enter confirms.
+  def fullscreen_select_menu(options, allow_custom: true, single_key: false, title: nil)
+    return read_select_plain(options, allow_custom:, single_key:) unless $stdin.tty?
+    return interactive_select_menu(options, allow_custom:, single_key:) if options.size <= 8
+
+    idx = 0
+    top = 0
+    choice = nil
+    fallback = false
+    use_win = win_console_available?
+    if use_win
+      begin
+        ÆtherWinConsole.begin_raw_input
+      rescue StandardError
+        ÆtherWinConsole.disable!
+        use_win = false
+      end
+    end
+
+    STDOUT.print "\e[?1049h\e[2J\e[H"
+    begin
+      loop do
+        rows = [terminal_height.to_i - 3, 1].max
+        top = idx if idx < top
+        top = idx - rows + 1 if idx >= top + rows
+        redraw_fullscreen_menu(options, idx, top, rows, title:)
+        input = use_win ? ÆtherWinConsole.next_input : tty_editor_input
+        break if input.nil?
+        next unless input.is_a?(Hash)
+
+        if input[:kind] == :key
+          case input[:action]
+          when :up, :ctrl_up            then idx = (idx - 1) % options.size
+          when :down, :ctrl_down        then idx = (idx + 1) % options.size
+          when :page_up                 then idx = [idx - rows, 0].max
+          when :page_down               then idx = [idx + rows, options.size - 1].min
+          when :home, :ctrl_home        then idx = 0
+          when :end, :ctrl_end          then idx = options.size - 1
+          when :enter, :return, :right  then choice = options[idx]; break
+          when :escape, :ctrl_c         then choice = nil; break
+          when :literal
+            ch = (input[:char] || '').to_s
+            if ch.match?(/\A[1-9]\z/)
+              n = ch.to_i - 1
+              choice = options[n] if n < options.size
+              break if choice
+            elsif single_key && (match = single_key_match(options, ch))
+              choice = match
+              break
+            elsif allow_custom && ch.match?(/\A[[:graph:]]\z/)
+              choice = ch
+              break
+            end
+          end
+        elsif input[:kind] == :literal || input[:kind] == :paste
+          text = input[:text].to_s.gsub(/\r?\n/, ' ')
+          next if text.empty?
+          if text.match?(/\A[1-9]\z/) && text.to_i <= options.size
+            choice = options[text.to_i - 1]
+            break
+          elsif single_key && (match = single_key_match(options, text))
+            choice = match
+            break
+          elsif allow_custom
+            choice = text
+            break
+          end
+        end
+      end
+    rescue ÆtherWinConsole::ConsoleInputError
+      ÆtherWinConsole.disable!
+      use_win = false
+      ÆtherWinConsole.end_raw_input
+      fallback = true
+    ensure
+      STDOUT.print "\e[?1049l"
+      ÆtherWinConsole.end_raw_input if use_win
+    end
+
+    return read_select_plain(options, allow_custom:, single_key:) if fallback
+
+    if choice.nil?
+      STDOUT.print "\n"
+    else
+      STDOUT.puts "  #{@palette.accent('->')} #{choice}"
+    end
+    choice
+  end
+
+  # Paint one window of the fullscreen selector: title, the visible slice of
+  # options (cursor-marked), padding to a stable height, and a scroll hint.
+  def redraw_fullscreen_menu(options, idx, top, rows, title:)
+    out = +''
+    unless title.nil? || title.to_s.empty?
+      out << "  #{@palette.accent(title.to_s)}\n\n"
+    end
+
+    visible = options[top, rows] || []
+    visible.each_with_index do |opt, i|
+      real = top + i
+      marker = real == idx ? @palette.accent('>') : ' '
+      label = real == idx ? opt : @palette.dim(opt)
+      out << "   #{marker} #{truncate_visible(label, [terminal_width - 6, 20].max)}\n"
+    end
+    (visible.size...rows).each { out << "\n" }
+
+    if options.size > rows
+      pos = "#{top + 1}-#{[top + rows, options.size].min}/#{options.size}"
+      out << @palette.dim("  #{pos} · ↑↓/PgUp/PgDn scrollen · Enter fortsetzen · Esc abbrechen")
+    else
+      out << @palette.dim('  ↑↓ wählen · Enter fortsetzen · Esc abbrechen')
+    end
+
+    STDOUT.print "\e[H\e[J"
+    STDOUT.print out
+    STDOUT.flush
+  end
+
   def interactive_line_read
     STDOUT.print "  #{@palette.accent('>')} "
     STDOUT.flush
@@ -1644,6 +1896,10 @@ class ÆtherChamber
     if HAVE_WIN_CONSOLE
       begin
         ÆtherWinConsole.force_utf8!
+        # Turn on ANSI/VT processing so the fullscreen selector's alternate
+        # screen buffer (\e[?1049h) actually swaps on classic conhost (cmd.exe);
+        # Windows Terminal already implies it, cmd.exe does not.
+        ÆtherWinConsole.enable_virtual_terminal!
       rescue StandardError
         nil
       end
@@ -2112,7 +2368,7 @@ class ÆtherChamber
   def tty_decode_action(char)
     case char
     when "\e[Z", "\e[1;2Z", "\eOZ", "\e[1;2z" then :back_tab
-    when "\xE0\x0F", "\x00\x0F" then :back_tab # _getch extended scan code (Shift+Tab)
+    when "\u00E0\x0F", "\u0000\x0F" then :back_tab # _getch extended scan code (Shift+Tab)
     when "\e[1;5D", "\eb", "\e[1;3D" then :word_left
     when "\e[1;5C", "\ef", "\e[1;3C" then :word_right
     when "\e[3;5~", "\x17", "\e\x7f", "\e\b" then :word_backspace
@@ -2124,6 +2380,13 @@ class ÆtherChamber
     when "\e[H", "\e[1~", "\eOH" then :home
     when "\e[F", "\e[4~", "\eOF" then :end
     when "\e[3~" then :delete
+    # Windows extended-key arrow cluster (U+00E0 = the _getch extended prefix,
+    # U+0000 = its null variant). complete_extended_key rejoins the prefix with
+    # the scan code as codepoints, so match codepoints here — not raw bytes.
+    when "\u00E0H", "\u0000H" then :up
+    when "\u00E0P", "\u0000P" then :down
+    when "\u00E0K", "\u0000K" then :left
+    when "\u00E0M", "\u0000M" then :right
     end
   end
 
@@ -3146,7 +3409,7 @@ class ÆtherChamber
     ['/unmorph',    'Begleiter entfernen'],
     ['/personae',   'Alle zwölf Begleiter auflisten'],
     ['/file',       'Datei an die nächste Frage heften'],
-    ['/continue',          'Unvollendeten Zug fortsetzen'],
+    ['/continue [bemerkung]', 'Unvollendeten Zug fortsetzen (+ optionale Anmerkung)'],
     ['/edit',              'Letzte Eingabe erneut bearbeiten'],
     ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
     ['/edit',       'Letzte Eingabe erneut bearbeiten'],
@@ -3160,13 +3423,13 @@ class ÆtherChamber
     ['/cost',       'Token-Kosten zeigen'],
     ['/mouse',      'Maus-Klicksteuerung an/aus (Aus = native Textauswahl)'],
     ['/session-list',      'Hydra-Sitzungen anzeigen (aktiv/stale/closed)'],
-    ['/resume-session <id>', 'Abgestürzte Sitzung fortsetzen (Zustand wiederherstellen)'],
+    ['/resume-session <id|pid|#>', 'Sitzung fortsetzen (Zustand + Verlauf laden)'],
     ['/exit',       'Die Kammer verlassen']
   ].freeze
 
   def slash_commands
     %w[/help /aegis /morph /unmorph /personae /file /clear /history /config /context /tools
-       /tool /markdown /highlight /theme /cost /mouse /session-list /resume-session /continue /edit /exit]
+       /tool /markdown /highlight /theme /cost /mouse /session-list /resume-session /session-resume /continue /edit /exit]
   end
 
   # ---------------------------------------------------------------- slash --
@@ -3183,7 +3446,7 @@ class ÆtherChamber
     when '/personae', '/companions' then list_personae
     when '/file'                    then attach_file(arg)
     when '/clear'                   then clear_history
-    when '/continue'                then continue_turn
+    when '/continue'                then continue_turn(arg)
     when '/edit', '/re'             then edit_last_prompt
     when '/history'                 then show_history(arg)
     when '/config'                  then config_summary
@@ -3196,7 +3459,7 @@ class ÆtherChamber
     when '/theme'                   then set_theme(arg)
     when '/cost'                    then cost_summary
     when '/session-list', '/sessions'      then session_list_cmd
-    when '/resume-session', '/resume'      then resume_session_cmd(arg)
+    when '/resume-session', '/session-resume', '/resume' then resume_session_cmd(arg)
     when '/exit', '/quit' then @quit = true
     else
       puts "Unbekannter Befehl: #{cmd}"
@@ -3217,7 +3480,7 @@ class ÆtherChamber
       ['/',                  'Befehls-Picker öffnen'],
       ['Tab / Shift-Tab',    'Fokus-Positionen durchlaufen'],
       ['/clear',             'Gesprächsverlauf löschen'],
-      ['/continue',          'Unvollendeten Zug fortsetzen'],
+      ['/continue [bemerkung]', 'Unvollendeten Zug fortsetzen (+ optionale Anmerkung)'],
       ['/history [n|flags]', 'Verlauf zeigen (Sitzung + Chronik)'],
       ['/config',            'Konfiguration zeigen'],
       ['/context',           'Abgeleiteten Kontext zeigen'],
@@ -3229,7 +3492,8 @@ class ÆtherChamber
       ['/theme <name>',      'Highlight-Theme wählen'],
       ['/cost',              'Token-Kosten der Sitzung zeigen'],
       ['/session-list',      'Hydra-Sitzungen anzeigen (aktiv/stale/closed)'],
-      ['/resume-session <id>', 'Abgestürzte Sitzung fortsetzen (Zustand + Tool-Ergebnisse erhalten)'],
+      ['/resume',            'Sitzungs-Auswahl: unfertige Züge durchsehen + fortsetzen'],
+      ['/resume-session <id|pid|#>', 'Sitzung direkt fortsetzen (Zustand + Verlauf laden)'],
       ['$',                  'π → ÆtherShell: Nushell-artige Daten-Pipelines (exit zurück)'],
       ['/exit, exit',        'Die Kammer verlassen']
     ]
@@ -3299,17 +3563,19 @@ class ÆtherChamber
   def show_history(arg)
     session_only = false
     chronicle_only = false
+    global = false
     limit = 7
     arg.to_s.split.each do |a|
       case a
       when '--session', '-s'   then session_only = true
       when '--chronicle', '-c' then chronicle_only = true
+      when '--global', '-g', '--all' then global = true
       when /\A\d+\z/           then limit = a.to_i
       end
     end
 
     render_session_history unless chronicle_only
-    render_chronicle(limit)  unless session_only
+    render_chronicle(limit, global: global)  unless session_only
   end
 
   # A prominent, bordered + background-filled block for the practitioner's
@@ -3338,7 +3604,7 @@ class ÆtherChamber
     end
   end
 
-  def render_chronicle(limit)
+  def render_chronicle(limit, global: false)
     unless defined?(Mnemosyne)
       begin
         require_relative '../mnemosyne/mnemosyne'
@@ -3347,12 +3613,17 @@ class ÆtherChamber
         return
       end
     end
-    entries = Mnemosyne.fetch_history(limit: limit)
+    # Scoped to the live head by default so /history reflects the session being
+    # continued; --global/-g reveals the cross-session chronicle instead. When no
+    # session is bound, current_session_id is nil and the query stays global.
+    sid = global ? nil : Mnemosyne.current_session_id
+    scope = global ? 'global' : 'session'
+    entries = Mnemosyne.fetch_history(limit: limit, session_id: sid)
     if entries.nil? || entries.empty?
-      puts "\e[1mChronik (persistent)\e[0m -- keine Einträge"
+      puts "\e[1mChronik (persistent, #{scope})\e[0m -- keine Einträge"
       return
     end
-    puts "\e[1mChronik (persistent)\e[0m -- letzte #{entries.size}"
+    puts "\e[1mChronik (persistent, #{scope})\e[0m -- letzte #{entries.size}"
     entries.each do |e|
       stamp = e[:created_at] || e[:timestamp]
       puts "-- #{stamp}  (#{e[:tool_call_count].to_i} tools)"
@@ -3429,7 +3700,7 @@ class ÆtherChamber
     ensure_mnemosyne
     return unless defined?(Mnemosyne)
 
-    sessions = Mnemosyne.all_sessions
+    sessions = Mnemosyne.all_sessions(hide_empty: true)
     if sessions.empty?
       puts @palette.dim('  Keine Hydra-Sitzungen.')
       return
@@ -3447,18 +3718,220 @@ class ÆtherChamber
     ensure_mnemosyne
     return unless defined?(Mnemosyne)
 
-    sid = arg.to_s.strip
-    if sid.empty?
-      puts @palette.warn('  Usage: /resume-session <session_id>')
+    ref = arg.to_s.strip
+    if ref.empty?
+      resume_chooser
       return
     end
 
-    session = Mnemosyne.proceed_session(session_id: sid)
-    if session
-      puts @palette.success("  Fortgesetzt: #{session[:session_id]} (#{session[:label]}) — Zustand + Tool-Ergebnisse wiederhergestellt.")
-    else
-      puts @palette.fail("  Sitzung nicht gefunden oder nicht fortsetzbar: #{sid}")
+    target = resolve_session(ref)
+    unless target
+      puts @palette.fail("  Sitzung nicht gefunden: #{ref} — nutze '/session-list' für ids/pids.")
+      return
     end
+
+    sid = target[:session_id]
+
+    # Unload the current session before adopting another: the chamber process
+    # switches identity, so the old row is marked closed and future writes flow
+    # to the adopted session.
+    old_sid = Mnemosyne.current_session_id
+    if old_sid && old_sid.to_s != sid.to_s && Mnemosyne.respond_to?(:close_session)
+      Mnemosyne.close_session(session_id: old_sid)
+    end
+
+    session = Mnemosyne.proceed_session(session_id: sid)
+    unless session
+      puts @palette.fail("  Sitzung nicht fortsetzbar: #{sid}")
+      return
+    end
+
+    # Adopt the target as the live head: subsequent records, heartbeats and
+    # Aegis writes route to this session via both identity markers.
+    Mnemosyne.current_session_id = sid
+    Thread.current[:hydra_session_id] = sid
+
+    imported = import_session_history(sid, state: session[:state])
+    note = imported.positive? ? "#{imported} Züge in den Kontext geladen" : 'kein Verlauf vorhanden'
+
+    # A session interrupted mid-turn carries a persisted resume_state: restore
+    # it so /continue finishes the exact unfinished turn, not just its history.
+    if restore_pending_turn(session[:state])
+      note += " · unvollendeter Zug wiederhergestellt — /continue setzt fort"
+    end
+
+    puts @palette.success("  Fortgesetzt: #{sid} (#{session[:label]}) — Zustand wiederhergestellt, #{note}.")
+  end
+
+  # Interactive session chooser: lists every sibling session (except the live
+  # head), previews each one's last unfinished turn, and resumes the selection.
+  def resume_chooser
+    sessions = Mnemosyne.all_sessions(hide_empty: true)
+    current = Mnemosyne.current_session_id.to_s
+
+    candidates = sessions.reject { |s| s[:session_id].to_s == current }
+    if candidates.empty?
+      puts @palette.dim('  Keine anderen Hydra-Sitzungen zum Fortsetzen.')
+      return
+    end
+
+    labels = candidates.map { |s| session_choice_label(s) }
+    choice = fullscreen_select_menu(
+      labels,
+      allow_custom: false,
+      single_key: false,
+      title: "Hydra-Sitzungen fortsetzen — #{candidates.size} verfügbar"
+    )
+    return unless choice
+
+    idx = labels.index(choice)
+    return unless idx
+
+    target = candidates[idx]
+    return unless target
+
+    resume_session_cmd(target[:session_id].to_s)
+  end
+
+  # A plain-text (ANSI-free) label for the interactive chooser: status, name,
+  # age, Aegis silhouette and — when the session carries an unfinished turn —
+  # a preview of what it was doing when it was interrupted.
+  def session_choice_label(s)
+    status = s[:effective_status].to_s
+    age = s[:age_seconds].to_i
+    age_s = age < 60 ? "#{age}s" : "#{age / 60}m#{age % 60}s"
+    name = s[:label].to_s.strip
+    name = s[:session_id].to_s if name.empty?
+    summary = s[:aegis_summary].to_s.strip
+
+    head = "[#{status.ljust(6)}] #{name} · #{age_s} ago"
+    head += " · #{summary[0, 40]}" unless summary.empty?
+
+    preview = unfinished_turn_preview(s)
+    preview ? "#{head}  ◆ #{preview}" : head
+  end
+
+  # Summarise the durable resume_state's last unfinished turn: the partial
+  # answer if one exists, else the most recent user prompt, plus the last tool
+  # call and how many results had already accumulated. Returns nil when the
+  # session has no in-flight state (a cleanly finished turn clears state_json).
+  def unfinished_turn_preview(s)
+    return nil unless s[:resumable]
+
+    state = Mnemosyne.load_session_state(session_id: s[:session_id])
+    return nil unless state.is_a?(Hash)
+
+    messages = state[:messages] || state['messages'] || []
+    tool_results = state[:tool_results] || state['tool_results'] || []
+    answer = state[:answer] || state['answer']
+
+    last_prompt = nil
+    last_tool = nil
+    Array(messages).each do |m|
+      m = m.transform_keys(&:to_sym) if m.respond_to?(:transform_keys)
+      txt = extract_message_text(m[:content])
+      last_prompt = txt if m[:role].to_s == 'user' && !txt.empty?
+      tc = m[:tool_calls]
+      next unless tc.is_a?(Array) && !tc.empty?
+
+      fn = tc.last.is_a?(Hash) ? (tc.last[:function] || tc.last['function']) : nil
+      last_tool = fn.is_a?(Hash) ? (fn[:name] || fn['name']).to_s : tc.last.to_s
+      last_tool = last_tool.to_s.strip
+    end
+
+    parts = []
+    if answer && !answer.to_s.strip.empty?
+      parts << "Teilantwort: #{collapse_text(answer.to_s, 64)}"
+    elsif last_prompt && !last_prompt.empty?
+      parts << "Aufgabe: #{collapse_text(last_prompt, 64)}"
+    else
+      parts << 'Turn unterbrochen'
+    end
+    parts << "Tool: #{last_tool}" if last_tool && !last_tool.empty?
+    parts << "#{Array(tool_results).size} Ergebnisse" if Array(tool_results).size.positive?
+
+    parts.join(' · ')
+  rescue StandardError
+    nil
+  end
+
+  def collapse_text(text, max)
+    text.to_s.gsub(/\s+/, ' ').strip[0, max]
+  end
+
+  # Resolve a /resume-session argument to a session row: exact session_id first,
+  # then pid, then a 1-based index into the /session-list ordering.
+  def resolve_session(ref)
+    return nil if ref.to_s.strip.empty?
+
+    all = Mnemosyne.all_sessions
+    return nil if all.empty?
+
+    exact = all.find { |s| s[:session_id].to_s == ref }
+    return exact if exact
+
+    by_pid = all.find { |s| s[:pid].to_s == ref }
+    return by_pid if by_pid
+
+    idx = ref.to_i
+    return all[idx - 1] if idx >= 1 && idx <= all.size
+
+    nil
+  end
+
+  # Adopt a session's conversation: load its Chronicle history into @history so
+  # the next prompt genuinely continues that thread (not just re-stamps the row).
+  def import_session_history(sid, state: nil)
+    entries = Mnemosyne.fetch_history(session_id: sid, limit: 100, include_tool_calls: true)
+    unless entries.nil? || entries.empty?
+      @history = entries.map do |e|
+        { prompt: e[:prompt], answer: e[:answer], tool_calls: e[:tool_calls] || [], created_at: e[:created_at] }
+      end
+      return @history.size
+    end
+
+    # Legacy sessions predate session_id attribution: every chronicle row carries
+    # NULL, so the session-scoped query is empty. Fall back to the crash-resume
+    # state (state_json.messages) — the full durable transcript — and weave it
+    # back into @history so the next prompt genuinely continues that thread.
+    messages = state && (state[:messages] || state['messages'])
+    return 0 unless messages.is_a?(Array) && !messages.empty?
+
+    @history = messages_to_history(messages)
+    @history.size
+  end
+
+  # Convert durable crash-resume messages (OpenAI-style role/content) back into
+  # the chamber's @history shape ({prompt:, answer:}). System/tool noise is
+  # dropped. A function-calling transcript interleaves empty tool-call-only
+  # assistant messages and `tool` results, so we key off non-empty text: each
+  # answer pairs with the most recent user prompt (or its own text as a fallback).
+  def messages_to_history(messages)
+    history = []
+    pending_prompt = nil
+    messages.each do |m|
+      m = m.transform_keys(&:to_sym) if m.respond_to?(:transform_keys)
+      role = m[:role].to_s
+      content = extract_message_text(m[:content])
+      case role
+      when 'user'
+        pending_prompt = content unless content.empty?
+      when 'assistant'
+        next if content.empty?
+        history << { prompt: pending_prompt || content, answer: content, tool_calls: [], created_at: Time.now }
+        pending_prompt = nil
+      end
+    end
+    history
+  end
+
+  def extract_message_text(content)
+    return '' if content.nil?
+    return content if content.is_a?(String)
+    if content.is_a?(Array)
+      return content.map { |p| p.is_a?(Hash) ? (p[:text] || p['text'] || p[:content] || p['content']).to_s : p.to_s }.join("\n")
+    end
+    content.to_s
   end
 
   def session_line(s)

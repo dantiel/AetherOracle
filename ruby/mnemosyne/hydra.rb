@@ -34,7 +34,11 @@ class Mnemosyne
       # restarts and multiple shells never collide on the same registry row.
       def generate_id
         host = Socket.gethostname.to_s.gsub(/[^a-zA-Z0-9_-]/, '-')[0, 24]
-        "#{host}-#{Process.pid}-#{SecureRandom.hex(4)}"
+        # Session ids are pure ASCII, but the sqlite3 gem binds an ASCII-8BIT
+        # (BINARY-encoded) String as a BLOB. A BLOB session_id never `=` a TEXT
+        # literal/bind, so `fetch_history(session_id:)` and `load_state` silently
+        # miss the row. Force UTF-8 so every write lands as TEXT.
+        "#{host}-#{Process.pid}-#{SecureRandom.hex(4)}".force_encoding(Encoding::UTF_8)
       end
 
       # JSON round-trips stringify symbol keys; the Oracle's resume_state
@@ -83,7 +87,7 @@ class Mnemosyne
             status     = 'active',
             last_seen  = CURRENT_TIMESTAMP
         SQL
-          [session_id.to_s, label.to_s, role.to_s, project.to_s, port, pid.to_i]
+          [session_id.to_s.force_encoding(Encoding::UTF_8), label.to_s, role.to_s, project.to_s, port, pid.to_i]
         session_id.to_s
       rescue StandardError
         nil
@@ -93,6 +97,7 @@ class Mnemosyne
       # registry's cached silhouette of that session's current orientation.
       def heartbeat(session_id: nil, aegis_summary: nil)
         sid = session_id || Mnemosyne.current_session_id
+        sid = sid.to_s.force_encoding(Encoding::UTF_8) if sid
         return nil if sid.nil? || sid.to_s.empty?
 
         if aegis_summary
@@ -119,6 +124,7 @@ class Mnemosyne
       # Mark a session closed (its process is shutting down or switching project).
       def close(session_id: nil)
         sid = session_id || Mnemosyne.current_session_id
+        sid = sid.to_s.force_encoding(Encoding::UTF_8) if sid
         return nil if sid.nil? || sid.to_s.empty?
 
         Mnemosyne.db.execute(<<~SQL, [sid.to_s])
@@ -175,7 +181,7 @@ class Mnemosyne
       # anything silent past the heartbeat window; this is the debug view that
       # surfaces the invisible: orphaned rows from crashed processes still
       # stamped 'active' but long dead. `stale` = alive past STALE_AFTER.
-      def all_sessions(project: nil, exclude: nil)
+      def all_sessions(project: nil, exclude: nil, hide_empty: false)
         conditions = []
         params = []
 
@@ -186,6 +192,9 @@ class Mnemosyne
         unless exclude.to_s.empty?
           conditions << 'session_id != ?'
           params << exclude.to_s
+        end
+        if hide_empty
+          conditions << "state_json IS NOT NULL AND state_json != ''"
         end
 
         where = conditions.empty? ? '' : "WHERE #{conditions.join(' AND ')}"
@@ -216,7 +225,7 @@ class Mnemosyne
       # Force-remove a session row (crashed head, orphaned editor, stuck slot).
       # Hard delete — unlike `close`, which only stamps status='closed'.
       def kick!(session_id:)
-        sid = session_id.to_s
+        sid = session_id.to_s.force_encoding(Encoding::UTF_8)
         return nil if sid.empty?
 
         Mnemosyne.db.execute('DELETE FROM aether_sessions WHERE session_id = ?', [sid])
@@ -276,7 +285,7 @@ class Mnemosyne
       # the snapshot (a clean turn leaves nothing in flight). Also refreshes the
       # heartbeat, since a checkpoint implies the head is alive.
       def save_state(session_id:, state: nil)
-        sid = session_id.to_s
+        sid = session_id.to_s.force_encoding(Encoding::UTF_8)
         return nil if sid.empty?
 
         json = state.nil? ? nil : JSON.generate(serialize_state(state))
@@ -296,7 +305,7 @@ class Mnemosyne
       # Read a session's durable state back (the last persisted resume_state),
       # or nil when the row is missing or carries no snapshot.
       def load_state(session_id:)
-        sid = session_id.to_s
+        sid = session_id.to_s.force_encoding(Encoding::UTF_8)
         return nil if sid.empty?
 
         row = Mnemosyne.db.execute(
@@ -316,7 +325,7 @@ class Mnemosyne
       # to continue seamlessly. The dead pid is replaced by the adopting
       # process, so the row is genuinely alive again.
       def proceed(session_id:)
-        sid = session_id.to_s
+        sid = session_id.to_s.force_encoding(Encoding::UTF_8)
         return nil if sid.empty?
 
         row = Mnemosyne.db.execute(
