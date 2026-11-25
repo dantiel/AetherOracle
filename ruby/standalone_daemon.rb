@@ -1550,6 +1550,16 @@ class StandaloneDaemon
   end
 
   def handle_oracle(args)
+    # Per-window sessions: the editor stamps each turn with its own session id.
+    # Adopt it as this flow's head so the chronicle inscribe, the crash-resume
+    # checkpoint and the Hydra registry row all route to the same conversation.
+    # Falls back to the daemon's own head when the caller passes none.
+    sid = args['session_id'].to_s
+    unless sid.empty?
+      Thread.current[:hydra_session_id] = sid
+      Mnemosyne.register_session(session_id: sid, role: 'oracle', project: $project_root, pid: Process.pid)
+    end
+
     params = {}
     params[:prompt] = args['message'] || args['prompt'] if args['message'] || args['prompt']
     params[:messages] = args['messages'] if args['messages']

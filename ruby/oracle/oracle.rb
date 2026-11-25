@@ -221,7 +221,13 @@ class Oracle
         return [result || '<<empty>>', arts, tool_results]
       end
 
-      clear_session_state
+      # A clean turn persists its full transcript (messages/tool_results/arts/
+      # answer) as the session's durable state — not nil — so the Hydra registry
+      # keeps the conversation listable + resumable (/session-list and
+      # list_sessions both filter state_json != ''). Crash-resume "proceed"
+      # restores this very snapshot, so the whole conversation survives.
+      persist_session_state({ messages: messages, tool_results: tool_results, arts: arts, answer: result }, force: true)
+      Mnemosyne.checkpoint_if_due! if Mnemosyne.respond_to?(:checkpoint_if_due!)
 
       [result || '<<empty>>', arts, tool_results]
     rescue Oracle::RestartException => e

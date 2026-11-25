@@ -1068,6 +1068,7 @@ end
                            tool_calls: tool_calls,
                            task_id: args[:task_id],
                            step_id: args[:step_id],
+                           session_id: args[:session_id] || Thread.current[:hydra_session_id],
                            mode: args[:mode])
         ensure
           $stdout = real_stdout if real_stdout
